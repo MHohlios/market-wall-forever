@@ -383,33 +383,3 @@ function ns.MaybeAutoScan()
     end
   end)
 end
-
--- If the user runs Auctionator's own replicate scan, reuse its data so the cooldown is not wasted
-function ns.InitAuctionatorHook()
-  if not (Auctionator and Auctionator.EventBus and Auctionator.FullScan and Auctionator.FullScan.Events) then return end
-  local listener = {}
-  function listener:ReceiveEvent(eventName, scanData)
-    if eventName ~= Auctionator.FullScan.Events.ScanComplete or type(scanData) ~= "table" then return end
-    if ns.fullScanRunning or state.running then return end
-    local maps, names = {}, {}
-    for i = 1, #scanData do
-      local info = scanData[i] and scanData[i].replicateInfo
-      if info then
-        local name, qty, buyout, itemID = info[1], info[3], info[10], info[17]
-        if itemID and qty and qty > 0 and buyout and buyout > 0 then
-          local unit = math.ceil(buyout / qty)
-          local map = maps[itemID]
-          if not map then map = {} maps[itemID] = map end
-          map[unit] = (map[unit] or 0) + qty
-          if name and name ~= "" then names[itemID] = name end
-        end
-      end
-    end
-    MarketWallDB.lastReplicate = time()
-    ns.fullScanRunning = true
-    Finalize(maps, names, time())
-  end
-  pcall(function()
-    Auctionator.EventBus:Register(listener, { Auctionator.FullScan.Events.ScanComplete })
-  end)
-end

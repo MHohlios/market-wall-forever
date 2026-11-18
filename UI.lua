@@ -49,16 +49,17 @@ end
 -------------------------------------------------------------------------------
 -- Generic list: sortable headers with hover help, icon per row
 -------------------------------------------------------------------------------
-local function CreateList(parent)
+local function CreateList(parent, rows)
+  local size = rows or ROWS
   local list = CreateFrame("Frame", nil, parent)
   list.headers, list.rows, list.data, list.offset = {}, {}, {}, 0
   list:EnableMouseWheel(true)
   list:SetScript("OnMouseWheel", function(self, delta)
-    local maxOffset = math.max(0, #self.data - ROWS)
+    local maxOffset = math.max(0, #self.data - size)
     self.offset = math.max(0, math.min(maxOffset, self.offset - delta * 3))
     self:Refresh()
   end)
-  for i = 1, ROWS do
+  for i = 1, size do
     local row = CreateFrame("Button", nil, list)
     row:SetHeight(ROW_H)
     row:SetPoint("TOPLEFT", 0, -22 - (i - 1) * ROW_H)
@@ -119,7 +120,7 @@ local function CreateList(parent)
       local col = columns[c]
       local header = Header(c)
       local cellX = (c == 1) and (x + 22) or x
-      for i = 1, ROWS do
+      for i = 1, size do
         local row = self.rows[i]
         if not row.cells[c] then row.cells[c] = MakeText(row, "GameFontHighlightSmall") end
         local cell = row.cells[c]
@@ -154,20 +155,20 @@ local function CreateList(parent)
   function list:SetData(data, emptyText)
     self.data = data
     self.emptyText = emptyText
-    local maxOffset = math.max(0, #data - ROWS)
+    local maxOffset = math.max(0, #data - size)
     if self.offset > maxOffset then self.offset = maxOffset end
     self:Refresh()
   end
 
   function list:Refresh()
     local data = self.data
-    for i = 1, ROWS do
+    for i = 1, size do
       local row = self.rows[i]
       local entry = data[i + self.offset]
       row.entry = entry
       if entry then
         for c = 1, #self.columns do row.cells[c]:SetText(entry.cells[c] or "") end
-        row.icon:SetTexture(ns.Icon(entry.id))
+        row.icon:SetTexture(entry.id and ns.Icon(entry.id) or nil)
         row:SetAlpha(entry.dim and 0.45 or 1)
         if entry.highlight then
           row.bg:SetColorTexture(0.18, 0.32, 0.45, 0.45)
@@ -187,7 +188,7 @@ local function CreateList(parent)
       self.count:SetText("")
     else
       self.empty:Hide()
-      local last = math.min(#data, self.offset + ROWS)
+      local last = math.min(#data, self.offset + size)
       self.count:SetText(string.format("%d to %d of %d (mouse wheel scrolls)", self.offset + 1, last, #data))
     end
   end
@@ -358,15 +359,13 @@ local function CreateChart(parent)
     line:Show()
   end
 
-  -- lows: optional Auctionator daily lows from before MarketWall had data (grey line, context only)
-  function chart:Draw(series, buy, sell, stats, lows)
+  function chart:Draw(series, buy, sell, stats)
     for i = 1, #self.lines do self.lines[i]:Hide() end
     for i = 1, #self.bars do self.bars[i]:Hide() end
     self.used, self.usedBars = 0, 0
     self.band:Hide()
-    lows = lows or {}
     local width, height = self:GetWidth(), self:GetHeight()
-    if #series == 0 and #lows == 0 then
+    if #series == 0 then
       self.note:SetText("No history yet. Scan this item to start recording.")
       self.note:Show()
       for i = 1, 3 do self.yLabels[i]:SetText("") end
@@ -383,20 +382,12 @@ local function CreateChart(parent)
     end
     span(buy) span(sell)
     if stats and stats.n >= 3 then span(stats.p25) span(stats.p75) end
-    if #series > 0 then
-      -- stray cheap listings in the old lows must not squash the chart
-      local floorV, ceilV = lo * 0.6, hi * 1.4
-      for i = 1, #lows do span(math.max(floorV, math.min(ceilV, lows[i].m))) end
-    else
-      for i = 1, #lows do span(lows[i].m) end
-    end
     local pad = math.max((hi - lo) * 0.12, hi * 0.03, 1)
     lo, hi = math.max(0, lo - pad), hi + pad
     local function Y(v) return math.max(0, math.min(height, (v - lo) / (hi - lo) * height)) end
 
     local t0, t1 = math.huge, -math.huge
     for i = 1, #series do if series[i].t < t0 then t0 = series[i].t end if series[i].t > t1 then t1 = series[i].t end end
-    for i = 1, #lows do if lows[i].t < t0 then t0 = lows[i].t end if lows[i].t > t1 then t1 = lows[i].t end end
     local function X(t) if t1 <= t0 then return width / 2 end return (t - t0) / (t1 - t0) * width end
 
     -- supply bars along the bottom
@@ -430,14 +421,6 @@ local function CreateChart(parent)
     if buy then Line(0, Y(buy), width, Y(buy), 0.49, 0.75, 1, 0.9, 1) end
     if sell then Line(0, Y(sell), width, Y(sell), 1, 0.69, 0.34, 0.9, 1) end
 
-    -- Auctionator's older daily lows, grey
-    if #lows == 1 then
-      Line(X(lows[1].t) - 4, Y(lows[1].m), X(lows[1].t) + 4, Y(lows[1].m), 0.6, 0.63, 0.63, 0.9, 2)
-    end
-    for i = 2, #lows do
-      Line(X(lows[i - 1].t), Y(lows[i - 1].m), X(lows[i].t), Y(lows[i].m), 0.6, 0.63, 0.63, 0.9, 1.5)
-    end
-
     if #series == 1 then
       local x = math.max(6, math.min(width - 6, X(series[1].t)))
       Line(x - 6, Y(series[1].w), x + 6, Y(series[1].w), 1, 1, 1, 1, 3)
@@ -453,11 +436,14 @@ local function CreateChart(parent)
     self.xFirst:SetText(date("%b %d %H:%M", t0))
     self.xLast:SetText(date("%b %d %H:%M", t1))
     local legend = "White: wall price   " .. BLUE .. "Blue: buy below|r   " .. ORANGE .. "Orange: sell at|r   " .. GOLD .. "Gold band: normal range|r   Bars: supply"
-    if #lows > 0 then legend = legend .. "\n" .. GREY .. "Grey: Auctionator's daily lowest listing from before MarketWall (context only, not the wall price)|r" end
     self.legend:SetText(legend)
   end
   return chart
 end
+ns.widgets = {
+  MakeButton = MakeButton, MakeText = MakeText, MakeEdit = MakeEdit, ShowTip = ShowTip, HideTip = HideTip,
+  CreateList = CreateList, CreateChart = CreateChart, ListHeight = function(rows) return 22 + rows * ROW_H end,
+}
 
 -------------------------------------------------------------------------------
 -- Item page
@@ -574,17 +560,7 @@ local function RefreshItem()
     .. GREY .. "    (needs 3 scans per slot; blue is cheaper than normal)|r"
   page.facts:SetText(table.concat(lines, "\n"))
 
-  -- older Auctionator lows are only drawn for the time before MarketWall's own first point
-  local series = ns.Series(id)
-  local lows = ns.AuctionatorLows(id)
-  if #series > 0 then
-    local first, kept = series[1].t, {}
-    for i = 1, #lows do
-      if lows[i].t < first - 43200 then kept[#kept + 1] = lows[i] end
-    end
-    lows = kept
-  end
-  page.chart:Draw(series, limits.buy, limits.sell, stats, lows)
+  page.chart:Draw(ns.Series(id), limits.buy, limits.sell, stats)
 end
 
 local function SaveLimit(field, box)
@@ -599,51 +575,6 @@ local function SaveLimit(field, box)
   end
   box:ClearFocus()
   RefreshItem()
-end
-
--- Hand the item to Auctionator's Selling tab. Falls back to just opening the tab.
-local function SellWithAuctionator(id)
-  local location
-  if C_Container and C_Container.GetContainerNumSlots and ItemLocation then
-    for bag = 0, 5 do
-      for slot = 1, (C_Container.GetContainerNumSlots(bag) or 0) do
-        if C_Container.GetContainerItemID(bag, slot) == id then
-          location = ItemLocation:CreateFromBagAndSlot(bag, slot)
-          break
-        end
-      end
-      if location then break end
-    end
-  end
-  if not location then
-    ns.Print("You have no " .. ns.Name(id) .. " in your bags to sell.")
-    return
-  end
-  local limits = Limits(id)
-  local pos = ns.R().pos[id]
-  local note = "Selling " .. ns.Name(id) .. "."
-  if limits.sell then note = note .. " Your sell price: " .. ns.Money(limits.sell) .. "." end
-  if pos and pos.qty > 0 then
-    note = note .. " Break-even: " .. ns.Money(math.ceil((pos.cost / pos.qty) / (1 - ns.Cfg("ahCut")))) .. "."
-  end
-  ns.Print(note)
-  if not AuctionatorTabs_Selling then
-    ns.Print("Auctionator's Selling tab was not found. Sell it from the normal Sell tab.")
-    return
-  end
-  AuctionatorTabs_Selling:Click()
-  pcall(function()
-    local link = C_Item.GetItemLink(location)
-    AuctionatorBagCacheFrame:CacheLinkInfo(link, function()
-      local info = Auctionator.Groups.Utilities.ToPostingItem(AuctionatorBagCacheFrame:GetByLinkInstant(link, true))
-      info.itemLink = link
-      info.location = location
-      info.count = C_AuctionHouse.GetAvailablePostCount(location)
-      ui.sellSource = ui.sellSource or {}
-      Auctionator.EventBus:RegisterSource(ui.sellSource, "MarketWallSell")
-      Auctionator.EventBus:Fire(ui.sellSource, Auctionator.Selling.Events.BagItemClicked, info)
-    end)
-  end)
 end
 
 local function BuildItemPage(parent)
@@ -726,13 +657,13 @@ local function BuildItemPage(parent)
     end
     RefreshItem()
   end)
-  page.sellButton = MakeButton(page, "Sell with Auctionator", 220)
+  page.sellButton = MakeButton(page, "Sell", 220)
   page.sellButton:SetPoint("TOPLEFT", right, -402)
   page.sellButton:SetScript("OnClick", function()
-    if ui.itemID then SellWithAuctionator(ui.itemID) end
+    if ui.itemID then ns.ShowSell(ui.itemID) end
   end)
   page.sellButton:SetScript("OnEnter", function(self)
-    ShowTip(self, "Sell with Auctionator", "Opens Auctionator's Selling tab with this item from your bags selected. Your sell price and break-even are printed in chat.")
+    ShowTip(self, "Sell", "Opens the Sell page with this item from your bags selected.")
   end)
   page.sellButton:SetScript("OnLeave", HideTip)
   return page
@@ -865,10 +796,11 @@ end
 function ui.Show(view)
   ui.view = view
   if not ui.frame then return end
-  local isItem, isSettings = (view == "item"), (view == "settings")
-  local isList = not isItem and not isSettings
+  local isItem, isSettings, isSell = (view == "item"), (view == "settings"), (view == "sell")
+  local isList = not isItem and not isSettings and not isSell
   ui.item:SetShown(isItem)
   ui.settings:SetShown(isSettings)
+  ui.sell:SetShown(isSell)
   ui.list:SetShown(isList)
   ui.footer:SetShown(view == "watch")
   ui.hint:SetShown(isList)
@@ -912,6 +844,8 @@ function ns.RefreshUI()
     RefreshItem()
   elseif view == "settings" then
     RefreshSettings()
+  elseif view == "sell" then
+    ns.RefreshSell()
   elseif view == "watch" then
     ListView("watch", WatchData(),
       "Your watchlist is empty.\nType an item name below, or shift-click an item into the box, then press Add.",
@@ -972,7 +906,7 @@ local function Build()
 
   ui.nav = {}
   local previous
-  for _, def in ipairs({ { "watch", "Watchlist" }, { "snipes", "Snipes" }, { "dips", "Dips" }, { "settings", "Settings" } }) do
+  for _, def in ipairs({ { "watch", "Watchlist" }, { "snipes", "Snipes" }, { "dips", "Dips" }, { "sell", "Sell" }, { "settings", "Settings" } }) do
     local b = MakeButton(f, def[2], 90)
     if previous then b:SetPoint("LEFT", previous, "RIGHT", 4, 0) else b:SetPoint("TOPLEFT", 8, -6) end
     b:SetScript("OnClick", function() ui.Show(def[1]) end)
@@ -1039,6 +973,8 @@ local function Build()
   ui.item:Hide()
   ui.settings = BuildSettings(f)
   ui.settings:Hide()
+  ui.sell = ns.BuildSellPage(f)
+  ui.sell:Hide()
 
   -- item names and icons arrive late; redraw at most twice a second while that happens.
   -- The same tick keeps the status line and the cooldown on the Full scan button current.
@@ -1075,6 +1011,36 @@ local function Build()
   if ChatFrameUtil and ChatFrameUtil.InsertLink then hooksecurefunc(ChatFrameUtil, "InsertLink", Insert) end
 end
 
+-- The Market tab. Blizzard's tab-group functions taint the bags, so the tab only borrows
+-- the auction house's tab button template and switches the display itself.
+local function CreateTab(frame)
+  local tabs = AuctionHouseFrame.Tabs
+  if not (tabs and tabs[1]) then
+    ns.Print("Could not add the Market tab to the auction house.")
+    return
+  end
+  local tab = CreateFrame("Button", "MarketWallTab", AuctionHouseFrame, "AuctionHouseFrameDisplayModeTabTemplate")
+  tab:SetText("Market")
+  PanelTemplates_TabResize(tab, 20, nil, 70)
+  tab:SetPoint("TOPLEFT", tabs[#tabs], "TOPRIGHT", 3, 0)
+  PanelTemplates_DeselectTab(tab)
+  tab:SetScript("OnClick", function()
+    AuctionHouseFrame:SetDisplayMode({})
+    AuctionHouseFrame.displayMode = nil
+    for _, blizzardTab in ipairs(tabs) do PanelTemplates_DeselectTab(blizzardTab) end
+    PanelTemplates_SelectTab(tab)
+    AuctionHouseFrame:SetTitle("MarketWall")
+    frame:Show()
+  end)
+  -- any of Blizzard's own tabs sets a real display mode: step aside
+  hooksecurefunc(AuctionHouseFrame, "SetDisplayMode", function(_, mode)
+    if mode and #mode > 0 then
+      frame:Hide()
+      PanelTemplates_DeselectTab(tab)
+    end
+  end)
+end
+
 function ns.OnAuctionHouseShow()
   if not AuctionHouseFrame then
     C_Timer.After(0.2, ns.OnAuctionHouseShow)
@@ -1082,17 +1048,7 @@ function ns.OnAuctionHouseShow()
   end
   if not ui.frame then
     Build()
-    local lib = LibStub and LibStub("LibAHTab-1-0", true)
-    if lib then
-      lib:CreateTab("MarketWallTab", ui.frame, "Market", "Market")
-    else
-      -- no tab library: fall back to a toggle button on the auction house frame
-      local toggle = MakeButton(AuctionHouseFrame, "Market", 80)
-      toggle:SetPoint("TOPRIGHT", AuctionHouseFrame, "TOPRIGHT", -30, -1)
-      toggle:SetFrameStrata("HIGH")
-      ui.frame:SetFrameStrata("HIGH")
-      toggle:SetScript("OnClick", function() ui.frame:SetShown(not ui.frame:IsShown()) end)
-    end
+    CreateTab(ui.frame)
   end
   ns.MaybeAutoScan()
 end

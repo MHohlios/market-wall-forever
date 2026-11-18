@@ -194,21 +194,26 @@ function ns.Cycle(id)
   return result
 end
 
--- Auctionator's older daily lows for an item: lowest listing only, shown for context and never
--- used for the wall price or the normal range. Returns { {t=, m=}, ... } oldest first.
-function ns.AuctionatorLows(id)
-  local out = {}
-  pcall(function()
-    local history = Auctionator.Database:GetPriceHistory(tostring(id))
-    local day0 = Auctionator.Constants.SCAN_DAY_0
-    for i = 1, #history do
-      local h = history[i]
-      local day = tonumber(h.rawDay)
-      if day and h.minSeen then
-        out[#out + 1] = { t = day * 86400 + day0 + 43200, m = h.minSeen }
-      end
-    end
-  end)
-  table.sort(out, function(a, b) return a.t < b.t end)
-  return out
+-- The most recent recorded wall price and its day, or nil when the item has no history
+function ns.LatestWall(id)
+  local days = ns.R().days[id]
+  if not days then return nil end
+  local latestDay
+  for day in pairs(days) do
+    if not latestDay or day > latestDay then latestDay = day end
+  end
+  if latestDay then return days[latestDay][D_WALL], latestDay end
+end
+
+-- How a price compares with the item's median wall: the difference (-0.1 is 10% under)
+-- and "low", "high" or "normal". Nil until there are 3 days of history.
+function ns.Versus(price, stats)
+  if not price or stats.n < 3 then return nil end
+  local diff = price / stats.median - 1
+  return diff, (diff < -0.03 and "low") or (diff > 0.03 and "high") or "normal"
+end
+
+function ns.VersusText(diff, word)
+  local colored = (word == "low" and "|cff7cc0fflow|r") or (word == "high" and "|cffffb057high|r") or word
+  return string.format("%+d%% (%s)", ns.Round(diff * 100), colored)
 end

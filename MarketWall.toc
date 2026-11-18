@@ -3,7 +3,6 @@
 ## Notes: Wall-price history, watchlist, snipes and dips for the auction house. Adds a Market tab.
 ## Author: Mike
 ## Version: 0.1.0
-## Dependencies: Auctionator
 ## SavedVariables: MarketWallDB
 ## Category-enUS: Auctions
 
@@ -12,5 +11,7 @@ Wall.lua
 Data.lua
 Scan.lua
 Buy.lua
+Disenchant.lua
 UI.lua
+Sell.lua
 Tooltip.lua

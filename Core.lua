@@ -18,6 +18,7 @@ ns.cfgDefaults = {
   sound = true,
   autoScan = true,         -- start the daily full scan when the auction house opens
   staleMinutes = 60,       -- watchlist prices older than this are greyed out
+  sellDuration = 2,        -- last auction duration picked on the Sell page: 1 = 12h, 2 = 24h, 3 = 48h
 }
 
 local function Print(...)
@@ -222,7 +223,6 @@ frame:SetScript("OnEvent", function(_, event, arg1)
     ns.realmData = nil
     ns.R()
     if ns.InitTooltip then ns.InitTooltip() end
-    if ns.InitAuctionatorHook then ns.InitAuctionatorHook() end
   elseif event == "AUCTION_HOUSE_SHOW" then
     ns.ahOpen = true
     if ns.OnAuctionHouseShow then ns.OnAuctionHouseShow() end
