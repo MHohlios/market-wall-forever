@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: MarketWall
+## Notes: Wall-price history, watchlist, snipes and dips for the auction house. Adds a Market tab.
+## Author: Mike
+## Version: 0.1.0
+## Dependencies: Auctionator
+## SavedVariables: MarketWallDB
+## Category-enUS: Auctions
+
+Core.lua
+Wall.lua
+Data.lua
+Scan.lua
+Buy.lua
+UI.lua
+Tooltip.lua

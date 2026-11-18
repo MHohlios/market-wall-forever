@@ -1,0 +1,280 @@
+-- MarketWall: core, settings, helpers
+local ADDON, ns = ...
+MarketWall = ns
+
+ns.cfgDefaults = {
+  wallShare = 0.05,        -- share of total supply a price level needs (cumulative) to count as the wall
+  wallMinUnits = 5,        -- minimum units for a wall on thin items
+  ahCut = 0.05,            -- auction house cut on sales
+  minSupply = 20,          -- full-scan snipes/dips need at least this many units listed
+  minSnipeProfit = 100,    -- copper, total profit after cut
+  minSnipeDiscount = 0.10, -- snipe units must average this far under the wall
+  dipPct = 0.10,           -- wall must be this far under its median to be a dip
+  minHistoryDays = 5,      -- days of data an item needs before it can appear in Snipes or Dips
+  baselineDays = 14,       -- days used for the normal price
+  retainDays = 30,         -- daily history kept for unwatched items
+  minRecordSupply = 5,     -- unwatched items with fewer units are not recorded
+  maxSnaps = 400,          -- per-scan snapshots kept per watched item
+  sound = true,
+  autoScan = true,         -- start the daily full scan when the auction house opens
+  staleMinutes = 60,       -- watchlist prices older than this are greyed out
+}
+
+local function Print(...)
+  print("|cfff5c518MarketWall|r:", ...)
+end
+ns.Print = Print
+
+function ns.Round(x)
+  return math.floor(x + 0.5)
+end
+
+function ns.Money(c)
+  if not c then return "-" end
+  c = ns.Round(c)
+  local neg = c < 0
+  if neg then c = -c end
+  local g = math.floor(c / 10000)
+  local s = math.floor((c % 10000) / 100)
+  local k = c % 100
+  local out
+  if g > 0 then
+    out = string.format("|cffffd100%dg|r |cffc7c7cf%ds|r |cffeda55f%dc|r", g, s, k)
+  elseif s > 0 then
+    out = string.format("|cffc7c7cf%ds|r |cffeda55f%dc|r", s, k)
+  else
+    out = string.format("|cffeda55f%dc|r", k)
+  end
+  if neg then out = "-" .. out end
+  return out
+end
+
+-- Accepts "80c", "1s 20c", "2g", "1g5s", or a plain copper number
+function ns.ParseMoney(text)
+  if not text then return nil end
+  text = string.lower((text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")))
+  local plain = tonumber(text)
+  if plain then return math.floor(plain) end
+  local total, found = 0, false
+  for num, unit in string.gmatch(text, "(%d+)%s*([gsc])") do
+    found = true
+    num = tonumber(num)
+    if unit == "g" then total = total + num * 10000
+    elseif unit == "s" then total = total + num * 100
+    else total = total + num end
+  end
+  if found then return total end
+  return nil
+end
+
+-- Days are counted in local time, so "today" flips at your midnight, not at midnight UTC
+local tzOffset
+local function Offset()
+  if tzOffset then return tzOffset end
+  local ok, value = pcall(function()
+    local now = time()
+    return time(date("*t", now)) - time(date("!*t", now))
+  end)
+  tzOffset = (ok and type(value) == "number") and value or 0
+  return tzOffset
+end
+
+function ns.DayOf(t)
+  return math.floor((t + Offset()) / 86400)
+end
+
+function ns.DayStart(day)
+  return day * 86400 - Offset()
+end
+
+function ns.Today()
+  return ns.DayOf(time())
+end
+
+function ns.Ago(t)
+  if not t then return "never" end
+  local s = time() - t
+  if s < 90 then return "just now" end
+  if s < 3600 then return math.floor(s / 60) .. " min ago" end
+  if s < 86400 then return math.floor(s / 3600) .. "h ago" end
+  return math.floor(s / 86400) .. "d ago"
+end
+
+function ns.Icon(id)
+  if C_Item and C_Item.GetItemIconByID then
+    local icon = C_Item.GetItemIconByID(id)
+    if icon then return icon end
+  end
+  if C_Item and C_Item.GetItemInfoInstant then
+    local _, _, _, _, icon = C_Item.GetItemInfoInstant(id)
+    if icon then return icon end
+  end
+  return 134400
+end
+
+function ns.ColorName(id)
+  local name = ns.Name(id)
+  local quality = C_Item and C_Item.GetItemQualityByID and C_Item.GetItemQualityByID(id)
+  local color = quality and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality]
+  if color and color.hex then return color.hex .. name .. "|r" end
+  if color and color.r then
+    return string.format("|cff%02x%02x%02x%s|r", color.r * 255, color.g * 255, color.b * 255, name)
+  end
+  return name
+end
+
+ns.session = { qty = 0, cost = 0, resale = 0, buys = 0 }
+
+local function SessionSummary()
+  local s = ns.session
+  if s.buys > 0 then
+    local text = string.format("This visit: %d purchase(s), %d units, %s spent.", s.buys, s.qty, ns.Money(s.cost))
+    if s.resale > 0 then
+      text = text .. " Expected profit at your sell prices: " .. ns.Money(s.resale - s.cost) .. "."
+    end
+    Print(text)
+  end
+  ns.session = { qty = 0, cost = 0, resale = 0, buys = 0 }
+end
+
+function ns.Realm()
+  return (GetNormalizedRealmName and GetNormalizedRealmName()) or (GetRealmName and GetRealmName()) or "Unknown"
+end
+
+-- Per-realm data table
+function ns.R()
+  if ns.realmData then return ns.realmData end
+  local db = MarketWallDB
+  local key = ns.Realm()
+  db.realms[key] = db.realms[key] or {}
+  local r = db.realms[key]
+  r.names = r.names or {}   -- [itemID] = name
+  r.watch = r.watch or {}   -- [itemID] = { buy=, sell=, added=, cur={t,w,m,q,under,cost} }
+  r.days = r.days or {}     -- [itemID] = { [day] = { wall, lowWall, highWall, units, minPrice } }
+  r.snaps = r.snaps or {}   -- [itemID] = { {t, wall, minPrice, units}, ... } watched items only
+  r.pos = r.pos or {}       -- [itemID] = { qty=, cost= } bought through the addon
+  ns.realmData = r
+  return r
+end
+
+function ns.Cfg(key)
+  local v = MarketWallDB and MarketWallDB.cfg and MarketWallDB.cfg[key]
+  if v == nil then v = ns.cfgDefaults[key] end
+  return v
+end
+
+function ns.Name(id)
+  local r = ns.R()
+  if r.names[id] then return r.names[id] end
+  local name
+  if C_Item and C_Item.GetItemInfo then name = C_Item.GetItemInfo(id) elseif GetItemInfo then name = GetItemInfo(id) end
+  if name then
+    r.names[id] = name
+    return name
+  end
+  if C_Item and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(id) end
+  return "item:" .. id
+end
+
+-- Resolve user text to an item ID: link, number, or name known from scans
+function ns.ResolveItem(text)
+  if not text or text == "" then return nil end
+  local id = tonumber(string.match(text, "item:(%d+)")) or tonumber(text)
+  if id then return id end
+  local want = string.lower(strtrim(text))
+  local r = ns.R()
+  local exact, partial, count = nil, nil, 0
+  local matches = {}
+  for itemID, name in pairs(r.names) do
+    local lname = string.lower(name)
+    if lname == want then exact = itemID end
+    if string.find(lname, want, 1, true) then
+      partial = itemID
+      count = count + 1
+      if #matches < 8 then matches[#matches + 1] = name end
+    end
+  end
+  if exact then return exact end
+  if count == 1 then return partial end
+  if C_Item and C_Item.GetItemInfoInstant then
+    local instant = C_Item.GetItemInfoInstant(text)
+    if instant then return instant end
+  end
+  if count > 1 then
+    table.sort(matches)
+    return nil, "Several items match: " .. table.concat(matches, ", ") .. (count > #matches and ", ..." or "")
+  end
+  return nil, "Item not found. Shift-click the item into the box, or run a full scan first so names are known."
+end
+
+local frame = CreateFrame("Frame")
+frame:RegisterEvent("ADDON_LOADED")
+frame:RegisterEvent("PLAYER_LOGIN")
+frame:RegisterEvent("AUCTION_HOUSE_SHOW")
+frame:RegisterEvent("AUCTION_HOUSE_CLOSED")
+frame:SetScript("OnEvent", function(_, event, arg1)
+  if event == "ADDON_LOADED" and arg1 == ADDON then
+    MarketWallDB = MarketWallDB or {}
+    MarketWallDB.version = MarketWallDB.version or 1
+    MarketWallDB.cfg = MarketWallDB.cfg or {}
+    MarketWallDB.realms = MarketWallDB.realms or {}
+  elseif event == "PLAYER_LOGIN" then
+    ns.realmData = nil
+    ns.R()
+    if ns.InitTooltip then ns.InitTooltip() end
+    if ns.InitAuctionatorHook then ns.InitAuctionatorHook() end
+  elseif event == "AUCTION_HOUSE_SHOW" then
+    ns.ahOpen = true
+    if ns.OnAuctionHouseShow then ns.OnAuctionHouseShow() end
+  elseif event == "AUCTION_HOUSE_CLOSED" then
+    ns.ahOpen = false
+    if ns.OnAuctionHouseClosed then ns.OnAuctionHouseClosed() end
+    SessionSummary()
+  end
+end)
+
+SLASH_MARKETWALL1 = "/mw"
+SLASH_MARKETWALL2 = "/marketwall"
+SlashCmdList["MARKETWALL"] = function(msg)
+  msg = strtrim(msg or "")
+  local cmd, rest = string.match(msg, "^(%S*)%s*(.-)$")
+  cmd = string.lower(cmd or "")
+  if cmd == "add" then
+    local id, err = ns.ResolveItem(rest)
+    if id then ns.Watch(id) Print("Watching " .. ns.Name(id)) else Print(err or "Item not found.") end
+  elseif cmd == "remove" then
+    local id = ns.ResolveItem(rest)
+    if id then ns.Unwatch(id) Print("Removed " .. ns.Name(id)) end
+  elseif cmd == "scan" then
+    ns.StartWatchScan()
+  elseif cmd == "full" then
+    ns.StartFullScan()
+  elseif cmd == "set" then
+    local key, value = string.match(rest, "^(%S+)%s+(%S+)$")
+    if key and ns.cfgDefaults[key] ~= nil then
+      local default = ns.cfgDefaults[key]
+      if type(default) == "boolean" then
+        MarketWallDB.cfg[key] = (value == "true" or value == "on" or value == "1")
+      else
+        MarketWallDB.cfg[key] = tonumber(value) or default
+      end
+      Print(key .. " = " .. tostring(MarketWallDB.cfg[key]))
+    else
+      Print("Settings:")
+      for k, d in pairs(ns.cfgDefaults) do
+        print("  " .. k .. " = " .. tostring(ns.Cfg(k)) .. " (default " .. tostring(d) .. ")")
+      end
+    end
+  elseif cmd == "resetpos" then
+    local id = ns.ResolveItem(rest)
+    if id then ns.R().pos[id] = nil Print("Position cleared for " .. ns.Name(id)) end
+  else
+    Print("Open the auction house and use the Market tab. Commands:")
+    print("  /mw add <item link, id or name>   watch an item")
+    print("  /mw remove <item>                 stop watching")
+    print("  /mw scan                          scan the watchlist")
+    print("  /mw full                          full market scan")
+    print("  /mw set <setting> <value>         change a setting, /mw set lists them")
+    print("  /mw resetpos <item>               clear your tracked position")
+  end
+end
