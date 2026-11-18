@@ -1,5 +1,5 @@
 -- MarketWall: pure price logic. No game API in this file so it can be tested outside the game.
-local ADDON, ns = ...
+local _, ns = ...
 local W = {}
 ns.Wall = W
 

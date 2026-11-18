@@ -1,5 +1,5 @@
 -- MarketWall: watchlist scans (targeted searches) and full market scans (replicate)
-local ADDON, ns = ...
+local _, ns = ...
 local W = ns.Wall
 
 local COMMODITY_SORTS = { { sortOrder = 0, reverseSort = false } }

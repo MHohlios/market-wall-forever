@@ -1,5 +1,5 @@
 -- MarketWall: market, vendor and disenchant prices on item tooltips
-local ADDON, ns = ...
+local _, ns = ...
 
 local GREY = "|cffa3acac"
 

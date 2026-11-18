@@ -1,5 +1,5 @@
 -- MarketWall: buying. Every purchase is confirmed by a click, as the game requires.
-local ADDON, ns = ...
+local _, ns = ...
 local W = ns.Wall
 
 local pending
@@ -66,7 +66,7 @@ local function AfterPurchase(id)
   end)
 end
 
-buyer:SetScript("OnEvent", function(_, event, unitPrice, totalPrice)
+buyer:SetScript("OnEvent", function(_, event, _unitPrice, totalPrice)
   if not pending then return end
   if event == "COMMODITY_PRICE_UPDATED" then
     if not totalPrice or totalPrice > pending.maxTotal then

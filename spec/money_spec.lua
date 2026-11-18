@@ -1,0 +1,62 @@
+local addon = require("spec.helpers.addon")
+
+describe("money", function()
+  local ns
+  before_each(function() ns = addon.Load() end)
+
+  local function Plain(text)
+    return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
+  end
+
+  describe("Money", function()
+    it("shows a dash for no price", function()
+      assert.equal("-", ns.Money(nil))
+    end)
+
+    it("shows copper-only prices without empty gold or silver", function()
+      assert.equal("5c", Plain(ns.Money(5)))
+      assert.equal("0c", Plain(ns.Money(0)))
+    end)
+
+    it("keeps zero silver and copper once there is gold", function()
+      assert.equal("2g 0s 0c", Plain(ns.Money(20000)))
+    end)
+
+    it("rounds fractional copper and carries into silver", function()
+      assert.equal("1s 0c", Plain(ns.Money(99.6)))
+    end)
+
+    it("puts the sign in front of negative amounts", function()
+      assert.equal("-1s 5c", Plain(ns.Money(-105)))
+    end)
+  end)
+
+  describe("ParseMoney", function()
+    it("reads each unit and mixed amounts", function()
+      assert.equal(80, ns.ParseMoney("80c"))
+      assert.equal(120, ns.ParseMoney("1s 20c"))
+      assert.equal(20000, ns.ParseMoney("2g"))
+      assert.equal(10500, ns.ParseMoney("1g5s"))
+      assert.equal(10000, ns.ParseMoney("1G"))
+    end)
+
+    it("reads a plain copper number, dropping fractions", function()
+      assert.equal(123, ns.ParseMoney("123"))
+      assert.equal(12, ns.ParseMoney("12.7"))
+    end)
+
+    it("reads its own formatted output back", function()
+      for _, copper in ipairs({ 7, 105, 20000, 123456 }) do
+        assert.equal(copper, ns.ParseMoney(ns.Money(copper)))
+      end
+    end)
+
+    it("rejects malformed text", function()
+      assert.is_nil(ns.ParseMoney(nil))
+      assert.is_nil(ns.ParseMoney(""))
+      assert.is_nil(ns.ParseMoney("abc"))
+      assert.is_nil(ns.ParseMoney("5x"))
+      assert.is_nil(ns.ParseMoney("g"))
+    end)
+  end)
+end)

@@ -1,0 +1,26 @@
+local addon = require("spec.helpers.addon")
+
+describe("loading the addon", function()
+  it("lists only files that exist", function()
+    local files = addon.TocFiles()
+    assert.is_true(#files > 0)
+    for _, file in ipairs(files) do
+      local handle = io.open(file)
+      assert.is_truthy(handle, file .. " is in the TOC but missing")
+      handle:close()
+    end
+  end)
+
+  it("loads every TOC file in order without error", function()
+    local ns = addon.Load()
+    assert.is_table(ns.Wall)
+    assert.is_function(ns.BuildSellPage)    -- from Sell.lua
+    assert.is_function(ns.InitTooltip)      -- from Tooltip.lua, the last TOC file
+  end)
+
+  it("creates its SavedVariables on ADDON_LOADED", function()
+    local _, fire = addon.Load()
+    fire("ADDON_LOADED", addon.ADDON)
+    assert.same({ version = 1, cfg = {}, realms = {} }, MarketWallDB)
+  end)
+end)

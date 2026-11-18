@@ -1,7 +1,7 @@
 -- MarketWall: the Sell page, laid out like Auctionator's Selling tab.
 -- Top: what you are posting (left) and the item's last 7 days with its key numbers (right).
 -- Bottom: what you can sell (left) and the auctions listed right now (right).
-local ADDON, ns = ...
+local _, ns = ...
 local W = ns.Wall
 local ui = ns.ui
 
@@ -94,6 +94,7 @@ local function TrendText(diff)
   if diff > FLAT then return ORANGE .. "up " .. pct .. "|r" end
   return "flat"
 end
+ns.SellTrend = { WeekSummary = WeekSummary, TrendText = TrendText }   -- exposed for tests
 
 local function IsCommodity(location)
   return C_AuctionHouse.GetItemCommodityStatus(location) == Enum.ItemCommodityStatus.Commodity

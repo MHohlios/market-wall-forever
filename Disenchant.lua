@@ -4,7 +4,7 @@
 --   1. your own disenchants, read from Disenchantry's log once an item kind has 20 of them
 --   2. Forever estimates: specific new crafted items, and new rares (IDs from 200000)
 --   3. the classic disenchanting tables (original-era item levels, which Forever uses)
-local ADDON, ns = ...
+local _, ns = ...
 
 local WEAPON, ARMOR = 2, 4
 local UNCOMMON, RARE, EPIC = 2, 3, 4
@@ -83,7 +83,7 @@ local function NewRareEstimate(level, weapon)
   return { { 14344, 0.995, 1 }, { 20725, 0.005, 1 } }
 end
 
-local function ClassicTable(id, quality, level, weapon)
+local function ClassicTable(quality, level, weapon)
   if quality == UNCOMMON then
     local row = Find(UNCOMMON_ROWS, level)
     if not row then return nil end
@@ -161,7 +161,7 @@ local function Outcomes(id)
     if estimate then return estimate, "estimate" end
     return nil
   end
-  local classic = ClassicTable(id, quality, level, weapon)
+  local classic = ClassicTable(quality, level, weapon)
   if classic then return classic, "table" end
 end
 
