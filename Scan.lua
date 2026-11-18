@@ -126,9 +126,32 @@ local function Retry()
   end
 end
 
+-- Scanned gear whose item data was still loading when the full scan ended: { [itemID] = price }
+local loadingGear = {}
+
+-- Prices one item from loadingGear now its data has arrived, and slots any deal into the
+-- Disenchant list by profit. The Market tab redraws on the same event.
+local function AddLoadedGear(id)
+  local price = loadingGear[id]
+  if not price then return end
+  loadingGear[id] = nil
+  if not next(loadingGear) then scanner:UnregisterEvent("GET_ITEM_INFO_RECEIVED") end
+  local deal = ns.FindDisenchantDeals({ [id] = price }, ns.Cfg("ahCut"), ns.Cfg("minDisenchantProfit"), ns.Cfg("minDisenchantPct"))[1]
+  if not deal then return end
+  local at = #ns.disenchants + 1
+  for i, d in ipairs(ns.disenchants) do
+    if deal.profit > d.profit then at = i break end
+  end
+  table.insert(ns.disenchants, at, deal)
+end
+
 scanner:SetScript("OnEvent", function(_, event, arg1)
   if event == "REPLICATE_ITEM_LIST_UPDATE" then
     ns.OnReplicateReady()
+    return
+  end
+  if event == "GET_ITEM_INFO_RECEIVED" then
+    AddLoadedGear(arg1)
     return
   end
   local a = state.active
@@ -330,7 +353,12 @@ local function Finalize(maps, names, stamp)
       end
       ns.snipes, ns.dips = snipes, dips
       -- after the loop, so materials are priced at today's walls
-      ns.disenchants = ns.FindDisenchantDeals(gearPrices, cut, ns.Cfg("minDisenchantProfit"), ns.Cfg("minDisenchantPct"))
+      ns.disenchants, loadingGear = ns.FindDisenchantDeals(gearPrices, cut, ns.Cfg("minDisenchantProfit"), ns.Cfg("minDisenchantPct"))
+      if next(loadingGear) then
+        scanner:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+      else
+        scanner:UnregisterEvent("GET_ITEM_INFO_RECEIVED")
+      end
       ns.hiddenSnipes, ns.bestHistory = hidden, bestHistory
       ns.lastFullScan = stamp
       r.lastFull = stamp

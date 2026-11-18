@@ -93,6 +93,64 @@ describe("FindDisenchantDeals", function()
   end)
 end)
 
+describe("a full scan's Disenchant list", function()
+  local ns, fire, loaded, tickers
+
+  before_each(function()
+    ns, fire = addon.Load()
+    fire("ADDON_LOADED", addon.ADDON)
+    MarketWallDB.cfg.minDisenchantProfit, MarketWallDB.cfg.minDisenchantPct = 0, 0
+    local prices = { [STRANGE_DUST] = 100, [LESSER_MAGIC_ESSENCE] = 1000 }
+    ns.LatestWall = function(id) return prices[id] end
+    loaded = false
+    _G.C_Item = {
+      GetItemInfoInstant = function() return 1001, "", "", "", 0, ARMOR end,
+      GetItemInfo = function()
+        if loaded then return "item", "link", UNCOMMON, 10, 1, "", "", 1, "", 0, 0, ARMOR end
+      end,
+    }
+    _G.C_AuctionHouse = {
+      GetNumReplicateItems = function() return 1 end,
+      GetReplicateItemInfo = function()   -- one auction of item 1001 at 300c
+        return "item", nil, 1, nil, nil, nil, nil, nil, nil, 300, nil, nil, nil, nil, nil, nil, 1001
+      end,
+    }
+    -- tickers run once the code that started them has stored them
+    tickers = {}
+    _G.C_Timer = { NewTicker = function(_, fn)
+      local ticker = { Cancel = function(self) self.cancelled = true end }
+      tickers[#tickers + 1] = { ticker = ticker, fn = fn }
+      return ticker
+    end }
+    _G.GetTime, _G.GetBuildInfo = os.time, function() return "1.15.0", "12345" end
+  end)
+
+  after_each(function()
+    _G.C_Item, _G.C_AuctionHouse, _G.C_Timer, _G.GetTime, _G.GetBuildInfo = nil, nil, nil, nil, nil
+  end)
+
+  local function RunTickers()
+    local i = 1
+    while tickers[i] do
+      local t = tickers[i]
+      while not t.ticker.cancelled do t.fn() end
+      i = i + 1
+    end
+  end
+
+  it("adds gear whose item data arrives after the scan ends", function()
+    ns.fullScanRunning = true
+    ns.OnReplicateReady()
+    RunTickers()
+    assert.same({}, ns.disenchants)
+
+    loaded = true
+    fire("GET_ITEM_INFO_RECEIVED", 1001, true)
+    assert.equal(1, #ns.disenchants)
+    assert.equal(300, ns.disenchants[1].price)
+  end)
+end)
+
 describe("DisenchantSkill", function()
   local ns = addon.Load()
 

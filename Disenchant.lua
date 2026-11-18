@@ -203,10 +203,12 @@ function ns.IsGear(id)
 end
 
 -- One disenchant deal: uncommon or better weapons and armor whose disenchant value, after the
--- cut on reselling the materials, beats the price by both thresholds. Nil otherwise.
+-- cut on reselling the materials, beats the price by both thresholds. Nil otherwise, and true
+-- as well while the item's data is still loading.
 local function Deal(id, price, cut, minProfit, minPct)
   local _, _, quality, level, _, _, _, _, _, _, _, classID = C_Item.GetItemInfo(id)
-  if not (quality and quality >= UNCOMMON and (classID == WEAPON or classID == ARMOR)) then return nil end
+  if not quality then return nil, true end
+  if not (quality >= UNCOMMON and (classID == WEAPON or classID == ARMOR)) then return nil end
   local value, note = ns.DisenchantValue(id)
   if not value then return nil end
   value = value * (1 - cut)
@@ -217,14 +219,20 @@ local function Deal(id, price, cut, minProfit, minPct)
     odds = ODDS_FROM[note] or note or "classic table", skill = ns.DisenchantSkill(level) }
 end
 
--- prices: { [itemID] = cheapest buyout }. Returns the deals, most profit first.
+-- prices: { [itemID] = cheapest buyout }. Returns the deals, most profit first, and the
+-- prices of items whose data is still loading, to try again once it arrives.
 function ns.FindDisenchantDeals(prices, cut, minProfit, minPct)
-  local deals = {}
+  local deals, loading = {}, {}
   for id, price in pairs(prices) do
-    deals[#deals + 1] = Deal(id, price, cut, minProfit, minPct)
+    local deal, isLoading = Deal(id, price, cut, minProfit, minPct)
+    if deal then
+      deals[#deals + 1] = deal
+    elseif isLoading then
+      loading[id] = price
+    end
   end
   table.sort(deals, function(a, b) return a.profit > b.profit end)
-  return deals
+  return deals, loading
 end
 
 local ENCHANTING_SKILL_LINE = 333
