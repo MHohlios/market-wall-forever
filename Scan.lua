@@ -297,6 +297,7 @@ local function Finalize(maps, names, stamp)
   for id, name in pairs(names) do r.names[id] = name end
   local snipes, dips = {}, {}
   local gearPrices = {}   -- cheapest buyout of each weapon and armor item, for disenchant deals
+  local supplied = {}     -- items with at least minSupply units listed, for mob values
   local hidden, bestHistory = 0, 0
   local minDays = ns.Cfg("minHistoryDays")
   local cut = ns.Cfg("ahCut")
@@ -313,6 +314,7 @@ local function Finalize(maps, names, stamp)
       local wall, minPrice = ns.Record(id, ladder, total, stamp)
       ns.UpdateBait(id, ladder, wall, stats, stamp)
       if ns.IsGear(id) then gearPrices[id] = ladder[1].p end
+      if total >= minSupply then supplied[id] = true end
       if wall then
         if r.watch[id] then
           ns.ladders[id] = { ladder = ladder, total = total, t = stamp, kind = "scan" }
@@ -362,6 +364,7 @@ local function Finalize(maps, names, stamp)
       ns.hiddenSnipes, ns.bestHistory = hidden, bestHistory
       ns.lastFullScan = stamp
       r.lastFull = stamp
+      r.supplied = supplied
       ns.fullScanRunning = false
       Status(string.format("Full scan complete: %d items, %d snipes, %d dips", #ids, #snipes, #dips))
       ns.Print(string.format("Full scan complete: %d items recorded, %d snipes, %d dips.", #ids, #snipes, #dips))

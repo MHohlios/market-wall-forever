@@ -15,7 +15,6 @@ local LOOTED, EMPTY, UNSEEN = ns.Kills.LOOTED, ns.Kills.EMPTY, ns.Kills.UNSEEN
 local K_OUTCOME, K_COIN, K_DROPS, K_GATHER = 2, 3, 4, 5   -- [1] is the time
 local KEEP_KILLS = 1000
 local SKINNING_SKILL_LINE, SKINNING_SPELL = 393, 8613
-Mobs.KEEP_KILLS = KEEP_KILLS
 
 local function Merge(into, drops)
   for id, qty in pairs(drops) do into[id] = (into[id] or 0) + qty end
@@ -29,7 +28,7 @@ end
 local OUTCOME_COUNTER = { [LOOTED] = "looted", [EMPTY] = "empty", [UNSEEN] = "unseen" }
 
 -- Stores one settled kill event. Returns the kill record.
-function Mobs.Add(mobs, event, keep)
+function Mobs.Add(mobs, event)
   local mob = mobs[event.npc]
   if not mob then mob = NewMob() mobs[event.npc] = mob end
   if event.name then mob.name = event.name end
@@ -50,7 +49,7 @@ function Mobs.Add(mobs, event, keep)
   end
   local kills = mob.kills
   kills[#kills + 1] = record
-  while #kills > (keep or KEEP_KILLS) do table.remove(kills, 1) end
+  while #kills > KEEP_KILLS do table.remove(kills, 1) end
   return record
 end
 
@@ -99,9 +98,9 @@ local function Lenses(prices, opts, unpriced)
     local p = cache[id]
     if p then return p end
     local vendor = prices.vendor(id) or 0
-    local wall, units = prices.wall(id)
+    local wall, supplied = prices.wall(id)
     local market
-    if wall and (units or 0) >= opts.minSupply then
+    if wall and supplied then
       market = wall * (1 - opts.cut)
     elseif wall then
       market = vendor                       -- thin market
@@ -134,15 +133,16 @@ end
 
 -- Value per kill under every lens, from the stored kills at current prices. Unseen kills are
 -- left out; 0c kills count. Below opts.minKills seen kills only the counts are returned.
--- prices: vendor(id), wall(id) -> wall, units, disenchant(id) -> copper or nil when not allowed
--- opts: cut, minSupply, disenchant, skinning (include in Optimal), rareShare, minKills
+-- prices: vendor(id), wall(id) -> wall and whether it has real supply,
+-- disenchant(id) -> copper or nil when not allowed
+-- opts: cut, disenchant, skinning (include in Optimal), rareShare, minKills
 function Mobs.Stats(mob, prices, opts)
   local seen = {}
   for _, kill in ipairs(mob.kills) do
     if kill[K_OUTCOME] ~= UNSEEN then seen[#seen + 1] = kill end
   end
   local stats = { name = mob.name, kills = #mob.kills, lifetime = mob.life.kills, seen = #seen }
-  if #seen < opts.minKills then return stats end
+  if #seen < math.max(1, opts.minKills) then return stats end
 
   local unpriced = {}
   local lens = Lenses(prices, opts, unpriced)
@@ -205,13 +205,20 @@ end
 function Mobs.GameOptions()
   return {
     cut = ns.Cfg("ahCut"),
-    minSupply = ns.Cfg("minSupply"),
     disenchant = Included("mobDisenchant", function() return (ns.EnchantingSkill() or 0) > 0 end),
     skinning = Included("mobSkinning",
       function() return (ns.ProfessionSkill(SKINNING_SKILL_LINE, SKINNING_SPELL, "Skinning") or 0) > 0 end),
     rareShare = ns.Cfg("mobRareShare"),
     minKills = ns.Cfg("mobMinKills"),
   }
+end
+
+-- Real supply: what a live search newer than the last full scan saw, else whether the last
+-- full scan listed at least minSupply units
+function Mobs.HasSupply(id, r, ladders, minSupply)
+  local live = ladders[id]
+  if live and live.t > (r.lastFull or 0) then return live.total >= minSupply end
+  return r.supplied[id] == true
 end
 
 -- Disenchanting counts only for items this character has the skill for, unless set to "always"
@@ -221,10 +228,7 @@ function Mobs.GamePrices()
   return {
     vendor = function(id) return ItemInfo(id, 11) end,
     wall = function(id)
-      local wall, day, units = ns.LatestWall(id)
-      local lastFull = ns.R().lastFull
-      if wall and lastFull and day < ns.DayOf(lastFull) then units = 0 end   -- gone by the last full scan
-      return wall, units
+      return ns.LatestWall(id), Mobs.HasSupply(id, ns.R(), ns.ladders, ns.Cfg("minSupply"))
     end,
     disenchant = function(id)
       local level = ItemInfo(id, 4)

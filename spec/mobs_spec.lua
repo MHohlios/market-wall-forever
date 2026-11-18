@@ -54,22 +54,27 @@ describe("Mobs", function()
     end)
   end)
 
-  describe("GamePrices", function()
-    local DAY = 86400
+  describe("real supply", function()
+    local DAY, MIN = 86400, 20
+    local t = 1700000000
 
-    it("reads supply as gone once a later scan finds none", function()
-      local t = os.time()
+    it("prices at the wall when the last full scan had plenty", function()
+      local r = { lastFull = t, supplied = { [LINEN] = true } }
+      assert.is_true(M.HasSupply(LINEN, r, {}, MIN))
+      ns.R().lastFull, ns.R().supplied = t, { [LINEN] = true }
       ns.Record(LINEN, { { p = 100, q = 30 } }, 30, t)
-      assert.same({ 100, 30 }, { M.GamePrices().wall(LINEN) })
-      ns.Record(LINEN, {}, 0, t + 1)
-      assert.same({ 100, 0 }, { M.GamePrices().wall(LINEN) })
+      assert.same({ 100, true }, { M.GamePrices().wall(LINEN) })
     end)
 
-    it("reads supply as gone when the last full scan did not list the item", function()
-      local t = os.time()
-      ns.Record(LINEN, { { p = 100, q = 30 } }, 30, t - 2 * DAY)
-      ns.R().lastFull = t
-      assert.same({ 100, 0 }, { M.GamePrices().wall(LINEN) })
+    it("falls back when a later full scan the same day no longer lists the item", function()
+      local r = { lastFull = t + 3600, supplied = {} }   -- replaced whole by the later scan
+      assert.is_false(M.HasSupply(LINEN, r, { [LINEN] = { total = 30, t = t } }, MIN))
+    end)
+
+    it("falls back when a live search the next day finds it thin", function()
+      local r = { lastFull = t, supplied = { [LINEN] = true } }
+      assert.is_false(M.HasSupply(LINEN, r, { [LINEN] = { total = 3, t = t + DAY } }, MIN))
+      assert.is_true(M.HasSupply(LINEN, r, { [LINEN] = { total = 30, t = t + DAY } }, MIN))
     end)
   end)
 
@@ -92,14 +97,20 @@ describe("Mobs", function()
 
     before_each(function()
       vendor = { [LINEN] = 10, [FANG] = 50, [RING] = 100, [LEATHER] = 20, [DUSTLESS] = 7 }
-      walls = { [LINEN] = { 100, 50 }, [FANG] = { 200, 3 }, [RING] = { 1000, 40 }, [LEATHER] = { 40, 100 } }
+      walls = { [LINEN] = { 100, true }, [FANG] = { 200, false }, [RING] = { 1000, true }, [LEATHER] = { 40, true } }
       de = { [RING] = 5000 }
-      opts = { cut = 0.05, minSupply = 20, disenchant = false, skinning = false, rareShare = 0.02, minKills = 3 }
+      opts = { cut = 0.05, disenchant = false, skinning = false, rareShare = 0.02, minKills = 3 }
     end)
 
     it("shows only counts below the minimum kills", function()
       local stats = M.Stats(Mob({ { K.LOOTED, 0, { [LINEN] = 1 } }, { K.UNSEEN }, { K.UNSEEN } }), Prices(), opts)
       assert.same({ name = "Wolf", kills = 3, lifetime = 3, seen = 1 }, stats)
+    end)
+
+    it("needs at least one seen kill even with minimum kills set to 0", function()
+      opts.minKills = 0
+      local stats = M.Stats(Mob({ { K.UNSEEN } }), Prices(), opts)
+      assert.same({ name = "Wolf", kills = 1, lifetime = 1, seen = 0 }, stats)
     end)
 
     it("gives median and average per lens, counting 0c kills and leaving out unseen ones", function()
@@ -118,7 +129,7 @@ describe("Mobs", function()
       local stats = M.Stats(Mob({
         { K.LOOTED, 0, { [FANG] = 1 } }, { K.LOOTED, 0, { [FANG] = 1 } }, { K.LOOTED, 0, { [DUSTLESS] = 1 } },
       }), Prices(), opts)
-      assert.equal(50, stats.market.median)            -- FANG has 3 units listed, under minSupply
+      assert.equal(50, stats.market.median)            -- FANG has thin supply
       assert.same({ [DUSTLESS] = true }, stats.market.unpriced)
       assert.near(100 / 3, stats.market.average, 1e-9)  -- DUSTLESS counts 0c
     end)

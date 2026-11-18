@@ -149,6 +149,16 @@ describe("a full scan's Disenchant list", function()
     assert.equal(1, #ns.disenchants)
     assert.equal(300, ns.disenchants[1].price)
   end)
+
+  -- not a Disenchant list check, but this is where a full scan already runs end to end
+  it("replaces the set of well-supplied items, for mob values", function()
+    MarketWallDB.cfg.minSupply = 1
+    ns.R().supplied = { [999] = true }
+    ns.fullScanRunning = true
+    ns.OnReplicateReady()
+    RunTickers()
+    assert.same({ [1001] = true }, ns.R().supplied)
+  end)
 end)
 
 describe("DisenchantSkill", function()
