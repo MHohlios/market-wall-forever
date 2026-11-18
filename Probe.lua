@@ -7,7 +7,7 @@ local _, ns = ...
 local MONEY_WINDOW = 2    -- seconds either side of a money change that count as its context
 local POLL_SECONDS = 0.25 -- how often the targeted unit is checked for death
 local PARTY_SECONDS = 10  -- how often party1 is probed
-local MAX_SAMPLES, MAX_SIGNATURES, MAX_VALUES = 3, 5, 12
+local MAX_SAMPLES, MAX_SIGNATURES = 3, 5
 local MAX_LOOTS, MAX_MONEY, MAX_DEATHS, MAX_SPELLS, MAX_SLOTS = 100, 200, 100, 100, 20
 local MAX_ERROR = 160
 local SAMPLE_ITEM = 2589  -- Linen Cloth, for the item-info checks
@@ -109,9 +109,8 @@ local function Pack(...)
 end
 
 local function Signature(values, first)
-  local parts, last = {}, math.min(values.n, first + MAX_VALUES - 1)
-  for i = first, last do parts[#parts + 1] = Describe(values[i]) end
-  if values.n > last then parts[#parts + 1] = "+" .. (values.n - last) end
+  local parts = {}
+  for i = first, values.n do parts[#parts + 1] = Describe(values[i]) end
   return table.concat(parts, ",")
 end
 

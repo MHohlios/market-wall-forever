@@ -147,6 +147,16 @@ describe("probe", function()
       assert.equal(1, MarketWallDB.probe.apis.GetMoney.returns["table*"])
     end)
 
+    it("detects a secret value after many plain ones", function()
+      local secret = {}
+      Stub("issecretvalue", function(v) return v == secret end)
+      Stub("GetItemInfo", function() return 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, secret end)
+      ns.ProbeCommand("start")
+      local api = MarketWallDB.probe.apis.GetItemInfo
+      assert.equal(1, api.secret)
+      assert.equal(string.rep("number,", 12) .. "table*", next(api.returns))
+    end)
+
     it("records an API that errors and one that is missing", function()
       Stub("GetProfessions", function() error("blocked") end)
       ns.ProbeCommand("start")
