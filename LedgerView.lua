@@ -91,14 +91,17 @@ local function Net(roll)
   return net
 end
 
--- The books' gold at the end of each period with a change, a point { t, w } each; t is the
--- period's end, or now for the current one. A book counts from the period it opened in.
+-- The books' gold at the end of each period with a change or an opening, a point { t, w }
+-- each; t is the period's end, or now for the current one. A book counts from the period it
+-- opened in.
 function L.Balance(books, kind, now)
   local field, keys, seen = FIELD[kind], {}, {}
+  local function Add(key)
+    if not seen[key] then seen[key] = true keys[#keys + 1] = key end
+  end
   for _, book in ipairs(books) do
-    for key in pairs(book[field]) do
-      if not seen[key] then seen[key] = true keys[#keys + 1] = key end
-    end
+    Add(L.PeriodOf(kind, book.opening[1]))
+    for key in pairs(book[field]) do Add(key) end
   end
   table.sort(keys)
   local balances, series = {}, {}
@@ -109,11 +112,6 @@ function L.Balance(books, kind, now)
       if L.PeriodOf(kind, book.opening[1]) <= key then total = total + balances[i] end
     end
     series[#series + 1] = { t = math.min(now, L.PeriodStart(kind, L.Step(kind, key, 1))), w = total }
-  end
-  if #series == 0 and #books > 0 then
-    local total = 0
-    for _, book in ipairs(books) do total = total + book.opening[2] end
-    series[1] = { t = now, w = total }
   end
   return series
 end
