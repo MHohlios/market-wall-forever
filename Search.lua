@@ -266,8 +266,11 @@ local function Build()
   f:RegisterEvent("AUCTION_HOUSE_SHOW")
   f:RegisterEvent("AUCTION_HOUSE_CLOSED")
   f:SetScript("OnEvent", function(_, event)
-    if event == "AUCTION_HOUSE_SHOW" and selectedID then
-      C_Timer.After(0, function() LoadListings(selectedID) end)   -- after Core marks the house open
+    -- a hidden window loads nothing; ToggleSearch loads the listings when it opens
+    if event == "AUCTION_HOUSE_SHOW" and selectedID and f:IsShown() then
+      C_Timer.After(0, function()   -- after Core marks the house open
+        if f:IsShown() then LoadListings(selectedID) end
+      end)
     end
     f.dirty = true
   end)
