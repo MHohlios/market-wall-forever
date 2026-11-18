@@ -186,7 +186,9 @@ function PV.CreateView(parent, layout)
   function view:Redraw()
     if not self.id then return end
     local facts = PV.Facts(self.id, time())
-    self.chart:Draw(PV.InRange(facts.series, self.days, facts.now), self.buy, self.sell, facts.stats)
+    -- the range switch reaches back past the snapshots into the daily history
+    local series = layout.ranges and ns.Series(self.id, true) or facts.series
+    self.chart:Draw(PV.InRange(series, self.days, facts.now), self.buy, self.sell, facts.stats)
     for i, cell in ipairs(PV.Cells(facts, layout.cells)) do
       self.cells[i].label:SetText(cell.label)
       self.cells[i].value:SetText(cell.value)

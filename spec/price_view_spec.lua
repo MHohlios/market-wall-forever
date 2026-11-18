@@ -70,6 +70,32 @@ describe("price view", function()
     end)
   end)
 
+  describe("chart series", function()
+    local ID = 4321
+
+    local function Walls(points)
+      local out = {}
+      for i, p in ipairs(points) do out[i] = p.w end
+      return out
+    end
+
+    before_each(function()
+      local today, now = ns.Today(), time()
+      ns.R().days[ID] = { [today - 40] = { 50, 50, 50, 10, 50 }, [today - 20] = { 80, 80, 80, 10, 80 }, [today] = { 110, 110, 110, 10, 110 } }
+      ns.R().snaps[ID] = { { now - 3600, 100, 100, 10 }, { now - 60, 110, 110, 10 } }
+    end)
+
+    it("draws only the snapshots by default, as the Sell page always has", function()
+      assert.same({ 100, 110 }, Walls(ns.Series(ID)))
+    end)
+
+    it("keeps the daily history from before the first snapshot for the range switch", function()
+      local series = ns.Series(ID, true)
+      assert.same({ 50, 80, 100, 110 }, Walls(series))
+      assert.same({ 80, 100, 110 }, Walls(PV.InRange(series, 30, time())))
+    end)
+  end)
+
   describe("stats grid", function()
     local ID = 12359
     local today
