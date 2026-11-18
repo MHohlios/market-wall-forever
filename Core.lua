@@ -13,6 +13,8 @@ ns.cfgDefaults = {
   minDisenchantProfit = 5000, -- copper per item, disenchant value after cut minus price
   minDisenchantPct = 0.20,    -- that profit as a share of the price
   disenchantShowAll = false,  -- Disenchant list also shows items above your Enchanting skill
+  salvagerMode = "auto",      -- Salvager's disenchant bonus: "auto" (while the buff is up), "on", "off"
+  salvagerBonus = 0,          -- that bonus, in percent; both start from Disenchantry's on first import
   minHistoryDays = 5,      -- days of data an item needs before it can appear in Snipes or Dips
   baselineDays = 14,       -- days used for the normal price
   retainDays = 30,         -- daily history kept for unwatched items
@@ -245,12 +247,14 @@ frame:SetScript("OnEvent", function(_, event, arg1)
     MarketWallDB.cfg = MarketWallDB.cfg or {}
     MarketWallDB.realms = MarketWallDB.realms or {}
     MarketWallDB.mobs = MarketWallDB.mobs or {}   -- kill records per mob, see Mobs.lua
+    MarketWallDB.disenchants = MarketWallDB.disenchants or {}   -- your disenchant results, see DisenchantLog.lua
   elseif event == "PLAYER_LOGIN" then
     ns.realmData = nil
     ns.R()
     if ns.InitTooltip then ns.InitTooltip() end
     if ns.InitMinimapButton then ns.InitMinimapButton() end
     if ns.Kills then ns.Kills.Start() end
+    if ns.DisenchantLog then ns.DisenchantLog.Start() end
   elseif event == "AUCTION_HOUSE_SHOW" then
     ns.ahOpen = true
     if ns.OnAuctionHouseShow then ns.OnAuctionHouseShow() end

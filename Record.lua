@@ -5,7 +5,9 @@
 --   loot    a corpse or container you looted: guid, npc, coin, drops
 --   gather  skinning or other gathering: guid, npc (nil for a node), drops
 --   fish    a fishing catch: coin, drops
--- source is "npc:<id>", "object:<id>" or "fishing". drops are raw { [itemID] = quantity }.
+--   disenchant  one of your disenchants: item, quality, level, classID, salvager, materials
+--               (see DisenchantLog.lua)
+-- source is "npc:<id>", "object:<id>", "item:<id>" or "fishing". drops are raw { [itemID] = quantity }.
 local _, ns = ...
 
 local Recording = {}

@@ -1,7 +1,8 @@
 -- MarketWall: expected disenchant value, priced from MarketWall's own material walls.
 -- Outcome data adapted from Disenchantry (MIT, see LICENSES/Disenchantry.txt). Where an item's
 -- odds come from, best first:
---   1. your own disenchants, read from Disenchantry's log once an item kind has 20 of them
+--   1. your own disenchants, from MarketWall's disenchant log (DisenchantLog.lua), once an item
+--      kind has 20 of them
 --   2. Forever estimates: specific new crafted items, and new rares (IDs from 200000)
 --   3. the classic disenchanting tables (original-era item levels, which Forever uses)
 local _, ns = ...
@@ -11,6 +12,7 @@ local UNCOMMON, RARE, EPIC = 2, 3, 4
 local NEW_ITEM_ID = 200000      -- Forever's own items start here
 local MIN_SAMPLES = 20          -- Disenchantry's threshold for trusting your own results
 local SALVAGER_BUFF = 1283701   -- Forever buff that raises disenchant yields
+local SALVAGER_MODES = { auto = true, on = true, off = true }
 
 -- Each outcome: { materialID, chance (0-1), average quantity }
 
@@ -108,39 +110,33 @@ local function ClassicTable(quality, level, weapon)
   end
 end
 
--- Disenchantry's Salvager setting: "on", "off", or by default whenever the buff is up
-local function SalvagerActive()
-  local db = DisenchantryDB
-  if type(db) ~= "table" or db.salvagerMode == "off" then return false end
-  if db.salvagerMode == "on" then return true end
+function ns.HasSalvagerBuff()
   if not (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) then return false end
   local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, SALVAGER_BUFF)
   return ok and type(aura) == "table"
 end
 
+-- The salvagerMode setting: "on", "off", or "auto" (the default) whenever the buff is up
+local function SalvagerActive()
+  local mode = ns.Cfg("salvagerMode")
+  if not SALVAGER_MODES[mode] then mode = ns.cfgDefaults.salvagerMode end
+  if mode == "off" then return false end
+  return mode == "on" or ns.HasSalvagerBuff()
+end
+
 local function SalvagerBonus()
   if not SalvagerActive() then return 0 end
-  local bonus = tonumber(DisenchantryDB.salvagerBonusPercent) or 0
+  local bonus = tonumber(ns.Cfg("salvagerBonus")) or 0
   return math.max(0, math.min(1000, bonus)) / 100
 end
 
--- Your own results, from Disenchantry's log. Its key is the game build plus the item's kind.
-local function Observed(id, quality, level, classID)
-  local samples = type(DisenchantryDB) == "table" and DisenchantryDB.disenchantSamples
-  if type(samples) ~= "table" then return nil end
-  local version, build = GetBuildInfo()
-  local key = table.concat({ version or "", build or "", id, quality, level, classID,
-    SalvagerActive() and "salvager" or "normal" }, ":")
-  local sample = samples[key]
-  if type(sample) ~= "table" or type(sample.count) ~= "number" or sample.count < MIN_SAMPLES
-    or type(sample.materials) ~= "table" then
-    return nil
-  end
+-- Your own results for the item's kind, under the current Salvager setting
+local function Observed(quality, level, classID)
+  local sample = ns.DisenchantLog.Sample(quality, level, classID, SalvagerActive())
+  if not sample or sample.count < MIN_SAMPLES then return nil end
   local out = {}
   for materialID, m in pairs(sample.materials) do
-    if type(m) == "table" and type(m.hits) == "number" and m.hits > 0 and type(m.total) == "number" then
-      out[#out + 1] = { materialID, m.hits / sample.count, m.total / m.hits }
-    end
+    if m.hits > 0 then out[#out + 1] = { materialID, m.hits / sample.count, m.total / m.hits } end
   end
   if #out > 0 then return out, sample.count end
 end
@@ -151,7 +147,7 @@ local function Outcomes(id)
   local _, _, quality, level, _, _, _, _, _, _, _, classID = C_Item.GetItemInfo(id)
   if not (quality and level and classID) then return nil end
 
-  local observed, samples = Observed(id, quality, level, classID)
+  local observed, samples = Observed(quality, level, classID)
   if observed then return observed, "observed", samples end
   if CRAFT_ESTIMATES[id] then return CRAFT_ESTIMATES[id], "estimate" end
   if classID ~= WEAPON and classID ~= ARMOR then return nil end

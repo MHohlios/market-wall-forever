@@ -34,7 +34,7 @@ read_globals = {
   -- Frames and constants
   "LibStub",                -- only to find Auctionator's tabs, when it is installed
   "UIParent", "UISpecialFrames", "Minimap", "GameTooltip", "ItemRefTooltip", "ITEM_QUALITY_COLORS", "NUM_BAG_SLOTS", "YES", "NO",
-  -- Disenchantry's SavedVariables, read for your own disenchant results
+  -- Disenchantry's SavedVariables, imported at login (DisenchantLog.lua)
   "DisenchantryDB",
 }
 

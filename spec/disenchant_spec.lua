@@ -1,10 +1,9 @@
 local addon = require("spec.helpers.addon")
 
-local ARMOR, CONSUMABLE = 4, 0
+local WEAPON, ARMOR, CONSUMABLE = 2, 4, 0
 local UNCOMMON, RARE = 2, 3
 local STRANGE_DUST, LESSER_MAGIC_ESSENCE, SMALL_RADIANT_SHARD = 10940, 10938, 11084
 local LOW_CRAFT_ID = 250620     -- one of Forever's crafted items with an estimate
-local VERSION, BUILD = "1.15.0", "12345"
 
 describe("DisenchantValue", function()
   local ns, items
@@ -21,25 +20,26 @@ describe("DisenchantValue", function()
         return "item", "link", item.quality, item.level, 1, "", "", 1, "", 0, 0, item.classID
       end,
     }
-    _G.GetBuildInfo = function() return VERSION, BUILD end
-    _G.DisenchantryDB = nil
+    _G.MarketWallDB = { cfg = {}, disenchants = { samples = {} } }
   end)
 
   after_each(function()
-    _G.C_Item, _G.GetBuildInfo, _G.DisenchantryDB = nil, nil, nil
+    _G.C_Item, _G.MarketWallDB, _G.C_UnitAuras = nil, nil, nil
   end)
 
   local function Item(id, quality, level, classID)
     items[id] = { quality = quality, level = level, classID = classID }
   end
 
-  -- Disenchantry's log holding one item's results, under its Salvager setting if given
-  local function Observe(id, count, materials, settings)
-    local item, db = items[id], settings or {}
-    local mode = db.salvagerMode == "on" and "salvager" or "normal"
-    local key = table.concat({ VERSION, BUILD, id, item.quality, item.level, item.classID, mode }, ":")
-    db.disenchantSamples = { [key] = { count = count, materials = materials } }
-    _G.DisenchantryDB = db
+  -- MarketWall's log holding the results for an item's kind, under Salvager or not
+  local function Observe(id, count, materials, salvager)
+    local item = items[id]
+    local key = ns.DisenchantLog.KindKey(item.quality, item.level, item.classID, salvager)
+    MarketWallDB.disenchants.samples[key] = { count = count, materials = materials }
+  end
+
+  local function Salvager(mode, bonus)
+    MarketWallDB.cfg.salvagerMode, MarketWallDB.cfg.salvagerBonus = mode, bonus
   end
 
   it("prices green armor from the classic table", function()
@@ -72,16 +72,52 @@ describe("DisenchantValue", function()
     assert.same({ 700, "estimate" }, { ns.DisenchantValue(LOW_CRAFT_ID) })
   end)
 
-  it("adds the Salvager bonus to table values", function()
+  it("pools results across items of the same kind", function()
+    Item(1001, UNCOMMON, 26, ARMOR)
+    Item(1002, UNCOMMON, 30, ARMOR)   -- same quality, item levels 26-30 and armor
+    Observe(1001, 20, { [STRANGE_DUST] = { hits = 20, total = 40 } })
+    assert.same({ 200, "your 20 disenchants" }, { ns.DisenchantValue(1002) })
+  end)
+
+  it("keeps weapons, armor and item-level buckets apart", function()
+    Item(1001, UNCOMMON, 26, ARMOR)
+    Item(1002, UNCOMMON, 26, WEAPON)
+    Item(1003, UNCOMMON, 31, ARMOR)
+    Observe(1001, 20, { [STRANGE_DUST] = { hits = 20, total = 40 } })
+    local _, weaponNote = ns.DisenchantValue(1002)
+    local _, higherNote = ns.DisenchantValue(1003)
+    assert.not_equal("your 20 disenchants", weaponNote)
+    assert.not_equal("your 20 disenchants", higherNote)
+  end)
+
+  it("adds the Salvager bonus to table values when set on", function()
     Item(1001, UNCOMMON, 10, ARMOR)
-    _G.DisenchantryDB = { salvagerMode = "on", salvagerBonusPercent = 50 }
+    Salvager("on", 50)
     assert.near(630, (ns.DisenchantValue(1001)), 1e-6)
+  end)
+
+  it("adds the Salvager bonus on auto only while the buff is up", function()
+    Item(1001, UNCOMMON, 10, ARMOR)
+    Salvager("auto", 50)
+    local buff = false
+    _G.C_UnitAuras = { GetPlayerAuraBySpellID = function() return buff and {} or nil end }
+    assert.near(420, (ns.DisenchantValue(1001)), 1e-6)
+    buff = true
+    assert.near(630, (ns.DisenchantValue(1001)), 1e-6)
+  end)
+
+  it("never adds the Salvager bonus when set off", function()
+    Item(1001, UNCOMMON, 10, ARMOR)
+    Salvager("off", 50)
+    _G.C_UnitAuras = { GetPlayerAuraBySpellID = function() return {} end }
+    assert.near(420, (ns.DisenchantValue(1001)), 1e-6)
   end)
 
   it("does not add the Salvager bonus again to your own Salvager results", function()
     Item(1001, UNCOMMON, 10, ARMOR)
-    Observe(1001, 25, { [STRANGE_DUST] = { hits = 25, total = 75 } },
-      { salvagerMode = "on", salvagerBonusPercent = 50 })
+    Salvager("on", 50)
+    Observe(1001, 25, { [STRANGE_DUST] = { hits = 25, total = 75 } }, true)
+    Observe(1001, 25, { [STRANGE_DUST] = { hits = 25, total = 25 } }, false)
     assert.same({ 300, "your 25 disenchants" }, { ns.DisenchantValue(1001) })
   end)
 

@@ -41,6 +41,11 @@ function Kills.ParseGUID(guid)
   if kind == "GameObject" then return "object", id end
 end
 
+-- Loot that came out of an item: a disenchant (DisenchantLog.lua's) or an opened container
+function Kills.IsItemSource(guid)
+  return type(guid) == "string" and string.find(guid, "^Item%-") ~= nil
+end
+
 local function SourceOf(kind, id)
   return kind and (kind .. ":" .. id) or "unknown"
 end
@@ -244,6 +249,9 @@ function Kills.NewTracker(emit, canLoot)
       return
     end
     local shares = Kills.SplitLoot(slots)
+    for guid in pairs(shares) do
+      if Kills.IsItemSource(guid) then shares[guid] = nil end   -- never a mob's loot
+    end
     if pickPocket and not self:FromCorpse(shares) then
       return   -- a living mob's pockets, not its drops
     end
@@ -349,6 +357,7 @@ local HANDLERS = {
     local slots = ReadLootWindow()
     slotCount, cleared = #slots, {}
     tracker:Loot(slots, Readable(IsFishingLoot()) == true, time(), Readable(UnitGUID("target")))
+    if ns.DisenchantLog then ns.DisenchantLog.tracker:Loot(slots, time()) end
   end,
   LOOT_SLOT_CLEARED = function(slot) cleared[slot] = true end,
   LOOT_CLOSED = function()
