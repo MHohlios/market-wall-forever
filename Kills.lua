@@ -229,14 +229,13 @@ function Kills.NewTracker(emit, canLoot)
   -- corpse of a window with nothing in it.
   function tracker:Loot(slots, fishing, t, target)
     self.window = {}
+    -- a cast explains only the first window after it
+    local gathering, pickPocket = Within(self.lastGather, t), Within(self.lastPickPocket, t)
+    self.lastGather, self.lastPickPocket = nil, nil
     if fishing then
       local total = Kills.TotalLoot(slots)
       emit({ t = t, kind = "fish", source = "fishing", coin = total.coin, drops = total.drops })
       return
-    end
-    local shares = Kills.SplitLoot(slots)
-    if Within(self.lastPickPocket, t) and not self:FromCorpse(shares) then
-      return   -- a living mob's pockets, not its drops
     end
     local opened = target and self.pending[target]
     if #slots == 0 and opened then   -- slots without readable sources leave the kill pending
@@ -244,7 +243,10 @@ function Kills.NewTracker(emit, canLoot)
       Settle(opened, Kills.EMPTY, "loot")
       return
     end
-    local gathering = Within(self.lastGather, t)
+    local shares = Kills.SplitLoot(slots)
+    if pickPocket and not self:FromCorpse(shares) then
+      return   -- a living mob's pockets, not its drops
+    end
     for guid, share in pairs(shares) do
       local kind, id = Kills.ParseGUID(guid)
       local state = self.corpses[guid] and self.corpses[guid].loot
