@@ -271,6 +271,64 @@ describe("Bait", function()
     it("buys nothing under the bait price", function()
       assert.same({ qty = 0, cost = 0, leaving = 0, blocked = 0 }, B.Plan(ladder, 29, record, true))
     end)
+
+    it("keeps the bait a search saw after a later scan changes or clears the record", function()
+      local seen = B.Snapshot(ladder, record)
+      record.p, record.u = 25, 3                  -- a scan found a new cheapest level
+      assert.is_nil(B.Update(record, W.SortLadder({ [100] = 200 }), 100, History(), MIN_DAYS, 2))
+      local plan = B.Plan(seen.ladder, 35, seen.bait, true)
+      assert.same({ 1, 30 }, { plan.leaving, plan.leaveAt })
+    end)
+  end)
+
+  describe("Leave bait after a full scan", function()
+    local ID = 7
+    local pending, purchases, page
+
+    -- Frames whose Create* methods return frames, so the Bait Detect page can be built
+    local function PageFrames()
+      local plainFrame = CreateFrame
+      local function NewPageFrame(...)
+        local frame = plainFrame(...)
+        frame.CreateTexture = function() return NewPageFrame() end
+        frame.CreateFontString = function() return NewPageFrame() end
+        frame.IsVisible = function() return true end
+        return frame
+      end
+      _G.CreateFrame = NewPageFrame
+    end
+
+    before_each(function()
+      local fire
+      ns, fire = addon.Load()
+      fire("ADDON_LOADED", addon.ADDON)
+      B, W = ns.Bait, ns.Wall
+      PageFrames()
+      page = ns.BuildBaitPage(CreateFrame("Frame"))
+      ns.ahOpen = true
+      pending, purchases = nil, {}
+      _G.GetTime = function() return 100 end
+      _G.GetMoney = function() return 1e9 end
+      _G.C_AuctionHouse = { IsThrottledMessageSystemReady = function() return true end }
+      ns.SearchNow = function(_, onDone) pending = onDone return true end
+      ns.StartCommodityPurchase = function(id, qty) purchases[#purchases + 1] = { id, qty } return {} end
+      ns.R().bait[ID] = { p = 30, u = 1, q = 15, w = 100, first = 1, last = 1, seen = 2 }
+    end)
+    after_each(function() _G.C_AuctionHouse, _G.GetTime, _G.GetMoney = nil, nil, nil end)
+
+    it("still leaves the bait the live search saw when a re-plan follows a full scan", function()
+      page.list.onClick({ id = ID })              -- selecting searches; the bait price is the limit
+      local ladder, total = W.SortLadder({ [30] = 15, [100] = 200 })
+      ns.ladders[ID] = { ladder = ladder, total = total, t = os.time(), kind = "commodity" }
+      pending(true)
+
+      ns.R().bait[ID] = nil                       -- a full scan cleared the record
+      page.take.scripts.OnClick()                 -- Buy bait, then back to Leave bait: re-plans
+      page.leave.scripts.OnClick()
+
+      ns.BaitPress()
+      assert.same({ { ID, 14 } }, purchases)
+    end)
   end)
 
   describe("price quote", function()

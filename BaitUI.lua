@@ -31,6 +31,7 @@ local page
 local selectedID
 local button = B.NewButton()
 local thresholds, buyBait, spent = {}, {}, {}   -- per item, this session
+local searched = {}                              -- per item: B.Snapshot of its last live search
 local searches = {}                              -- GetTime() of each search, last minute only
 local lastSearch                                 -- GetTime() of the last search, for any item
 
@@ -55,10 +56,10 @@ local function Record(id)
   return ns.R().bait[id]
 end
 
+-- Plans come from the item's last live search, never from the saved record a full scan may change
 local function Plan(id)
-  local held = ns.ladders[id]
-  local ladder = (held and held.kind == "commodity") and held.ladder or {}
-  return B.Plan(ladder, thresholds[id], Record(id), not buyBait[id])
+  local seen = searched[id] or B.Snapshot({}, nil)
+  return B.Plan(seen.ladder, thresholds[id], seen.bait, not buyBait[id])
 end
 
 local function Action()
@@ -88,8 +89,11 @@ end
 -- Pressing the button
 -------------------------------------------------------------------------------
 local function OnSearched(id, state, answered)
-  if id ~= selectedID or state ~= button then return end
   local held = ns.ladders[id]
+  if answered then
+    searched[id] = (held and held.kind == "commodity") and B.Snapshot(held.ladder, Record(id)) or nil
+  end
+  if id ~= selectedID or state ~= button then return end
   if not answered then
     B.Unanswered(state)
   elseif held and held.kind == "item" then
@@ -223,7 +227,7 @@ local function DrawLadder(id, held, wall)
     if level then
       local note, color = "", ""
       if record and level.p == record.p then
-        note = string.format("bait (%d) + %d copies", record.u, B.Copies(record))
+        note = "bait " .. B.LevelNote(record)
         color = ORANGE
       elseif wall and level.p == wall then
         note = GREY .. "wall|r"

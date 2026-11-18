@@ -56,11 +56,30 @@ function B.Under(record)
   return 1 - record.p / record.w
 end
 
+-- The bait level's note, after the page's own word for it: "(1) + 14 copies"
+function B.LevelNote(record)
+  return string.format("(%d) + %d copies", record.u, B.Copies(record))
+end
+
+-- A warning when posting at price would match the bait: at its price or within band of it,
+-- rounded to whole copper. Returns nil when there is no bait record or the price is away from it.
+function B.PostWarning(record, price, band)
+  if not record or math.abs(price - record.p) > ns.Round(record.p * band) then return nil end
+  return string.format("%d unit%s at %s sits %d%% under the %s wall. Likely bait; don't match it.",
+    record.u, record.u == 1 and "" or "s", ns.Money(record.p), ns.Round(B.Under(record) * 100), ns.Money(record.w))
+end
+
 -- Piling-up items first, then the furthest under the wall
 function B.Before(a, b)
   local pa, pb = B.Copies(a) > 0, B.Copies(b) > 0
   if pa ~= pb then return pa end
   return B.Under(a) > B.Under(b)
+end
+
+-- A live search's ladder with the bait as that search saw it. The saved record changes with
+-- every later scan, and a plan built from it could lose the bait it must leave.
+function B.Snapshot(ladder, record)
+  return { ladder = ladder, bait = record and { p = record.p, u = record.u } or nil }
 end
 
 -- What one buy would take. A commodity purchase always takes the cheapest units, so leaving
