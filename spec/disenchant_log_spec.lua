@@ -63,6 +63,14 @@ describe("DisenchantLog", function()
       assert.same({}, events)
     end)
 
+    it("knows a window as a disenchant's even when the item is unknown, without sampling it", function()
+      tracker:Started(nil, false)
+      tracker:Succeeded(100)
+      assert.is_true(tracker:Loot({ Slot(SOUL_DUST, 2, ITEM_GUID) }, 101))
+      assert.same({}, events)
+      assert.is_false(tracker:Loot({ Slot(SOUL_DUST, 2, ITEM_GUID) }, 102))
+    end)
+
     it("takes the item from the cast's end when its start named none", function()
       tracker:Started(nil, false)
       tracker:Succeeded(100, BRACERS_ITEM, false)
@@ -104,6 +112,16 @@ describe("DisenchantLog", function()
       assert.same({}, MarketWallDB.mobs)
       local sample = Log.Sample(BRACERS, UNCOMMON, 28, ARMOR, false)
       assert.same({ count = 1, materials = { [SOUL_DUST] = { hits = 1, total = 2 } } }, sample)
+    end)
+
+    it("never counts a disenchant whose item is unknown as container loot", function()
+      local loots = {}
+      ns.Recording.On("loot", function(e) loots[#loots + 1] = e end)
+      Fire("UNIT_SPELLCAST_START", "player", "cast", 13262)       -- no bag item can be named
+      Fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast", 13262)
+      window = { { id = SOUL_DUST, quantity = 2, guid = ITEM_GUID } }
+      Fire("LOOT_READY")
+      assert.same({}, loots)
     end)
 
     it("records under the salvagerMode setting, where the odds look it up", function()
