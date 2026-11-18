@@ -130,3 +130,58 @@ function W.Suggest(wall, stats, cut)
   if sell < minSell then sell = minSell end
   return buy, sell
 end
+
+local WEEKEND = { [1] = true, [7] = true }   -- Sunday, Saturday
+local NEIGHBOR_DAYS = 3
+
+local function median(values)
+  table.sort(values)
+  return W.Percentile(values, 0.5)
+end
+
+-- Price pattern by time of day and by weekday/weekend. obs: { {day=, part=1..4, wday=1..7, w=}, ... }
+-- r is a slot's price relative to normal (1.0 = normal), kept free of market trend:
+-- a time of day is compared with the median of its own day, and a day with the median of the days
+-- within NEIGHBOR_DAYS of it, so a drifting market moves both sides together. Medians ignore spikes.
+-- A day with one observation says nothing about time of day, so it is left out of the parts.
+function W.Cycle(obs)
+  local byDay = {}
+  for _, o in ipairs(obs) do
+    local day = byDay[o.day]
+    if not day then
+      day = { wday = o.wday, walls = {}, list = {} }
+      byDay[o.day] = day
+    end
+    day.walls[#day.walls + 1] = o.w
+    day.list[#day.list + 1] = o
+  end
+
+  local partRatios, weekdayRatios, weekendRatios = {}, {}, {}
+  local levels = {}
+  for dayKey, day in pairs(byDay) do
+    levels[dayKey] = median(day.walls)
+    if #day.list > 1 then
+      for _, o in ipairs(day.list) do
+        partRatios[o.part] = partRatios[o.part] or {}
+        table.insert(partRatios[o.part], o.w / levels[dayKey])
+      end
+    end
+  end
+  for dayKey, day in pairs(byDay) do
+    local around = {}
+    for other = dayKey - NEIGHBOR_DAYS, dayKey + NEIGHBOR_DAYS do
+      if other ~= dayKey and levels[other] then around[#around + 1] = levels[other] end
+    end
+    if #around > 0 then
+      local group = WEEKEND[day.wday] and weekendRatios or weekdayRatios
+      group[#group + 1] = levels[dayKey] / median(around)
+    end
+  end
+
+  local function slot(ratios)
+    if ratios and #ratios > 0 then return { n = #ratios, r = median(ratios) } end
+  end
+  local result = { parts = {}, weekday = slot(weekdayRatios), weekend = slot(weekendRatios) }
+  for part, ratios in pairs(partRatios) do result.parts[part] = slot(ratios) end
+  return result
+end
