@@ -99,9 +99,17 @@ local function Build()
   tracker = f
 end
 
--- Shows the open session, or hides the tracker when none is
+local shownState   -- "running", "paused" or "none", as last shown
+
+-- Shows the open session, or hides the tracker when none is. Starting, pausing, resuming or
+-- stopping, from any of its controls, redraws the search window too.
 function ns.UpdateSessionTracker()
   local s = Sessions.Current()
+  local state = s and (s.pausedAt and "paused" or "running") or "none"
+  if state ~= shownState then
+    shownState = state
+    ns.SearchChanged()
+  end
   if not s then
     if tracker then tracker:Hide() end
     return
