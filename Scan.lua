@@ -227,6 +227,15 @@ function ns.StartWatchScan(ids, onDone, maxTries)
   NextItem()
 end
 
+-- One search for one item, sent during this press or not at all, so nothing waits to go out
+-- later. Returns false, sending nothing, while the item's key info is still loading.
+function ns.SearchNow(id, onDone)
+  if not C_AuctionHouse.GetItemKeyInfo(C_AuctionHouse.MakeItemKey(id)) then return false end
+  ns.StartWatchScan({ id }, onDone, 1)
+  Step()
+  return true
+end
+
 function ns.OnAuctionHouseClosed()
   if state.running then FinishWatchScan(true) end
   if ns.fullScanRunning then

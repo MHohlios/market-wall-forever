@@ -99,10 +99,12 @@ end
 
 local function Search()
   local id, state = selectedID, button
+  if not ns.SearchNow(id, function() OnSearched(id, state) end) then
+    B.Finished(state, "Item info loading")
+    return
+  end
   B.Searched(state, GetTime())
   searches[#searches + 1] = GetTime()
-  ns.StartWatchScan({ id }, function() OnSearched(id, state) end, 1)
-  if not ns.scanState.running then B.Finished(state, "Search did not start") end
 end
 
 local function Buy()
@@ -113,7 +115,7 @@ local function Buy()
     return
   end
   local function OnQuote(unitPrice, total)
-    local ok, reason = B.QuoteOK(unitPrice, total, plan.qty, threshold)
+    local ok, reason = B.QuoteOK(unitPrice, total, plan.qty, threshold, plan.leaveAt)
     local needPress = ns.Cfg("baitConfirmPress")
     B.Quoted(state, total, ok, reason, needPress, GetTime())
     if not ok then
@@ -163,7 +165,7 @@ local function Select(id)
   end
   if id ~= selectedID then
     selectedID = id
-    button = B.NewButton()
+    button = B.NewButton(button.lastSearch)
     local record = Record(id)
     if not thresholds[id] and record then thresholds[id] = record.p end
   end

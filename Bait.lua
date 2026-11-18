@@ -22,7 +22,7 @@ end
 local function Candidate(ladder, wall, stats, minDays)
   local cheapest = ladder and ladder[1]
   if not cheapest or not wall or cheapest.p >= wall then return nil end
-  if not stats or stats.n + 1 < minDays or cheapest.p >= stats.p25 then return nil end
+  if not stats or stats.n == 0 or stats.n + 1 < minDays or cheapest.p >= stats.p25 then return nil end
   return cheapest
 end
 
@@ -65,8 +65,9 @@ end
 
 -- What one buy would take. A commodity purchase always takes the cheapest units, so leaving
 -- the bait means stopping at the bait level: higher levels cannot be reached without it.
--- Returns { qty, cost, leaving, blocked } where blocked counts units at or below the threshold
--- that sit above the bait and were left out to keep it.
+-- Returns { qty, cost, leaving, blocked, leaveAt } where blocked counts units at or below the
+-- threshold that sit above the bait and were left out to keep it, and leaveAt is the bait price
+-- when the bait is left: no unit of the purchase may cost more than that.
 function B.Plan(ladder, threshold, record, leaveBait)
   local plan = { qty = 0, cost = 0, leaving = 0, blocked = 0 }
   if not threshold then return plan end
@@ -84,7 +85,7 @@ function B.Plan(ladder, threshold, record, leaveBait)
       local take = level.q
       if leave > 0 and level.p == record.p then
         take = level.q - leave
-        plan.leaving = leave
+        plan.leaving, plan.leaveAt = leave, record.p
         stopped = true
       end
       plan.qty = plan.qty + take
@@ -96,11 +97,15 @@ end
 
 -- The game quotes the final price before a commodity purchase completes. Accept it only when
 -- no unit is over the threshold. unitPrice is the game's quoted unit price.
-function B.QuoteOK(unitPrice, totalPrice, qty, threshold)
+-- leaveAt: the bait price when leaving the bait. The cheapest units sell first, so a quote over
+-- it means copies were bought since the search and this purchase would take the bait.
+function B.QuoteOK(unitPrice, totalPrice, qty, threshold, leaveAt)
   if not totalPrice or qty <= 0 then return false, "No price quoted" end
-  if totalPrice / qty > threshold or (unitPrice and unitPrice > threshold) then
-    return false, "Price rose over " .. ns.Money(threshold)
+  local function Over(limit)
+    return totalPrice / qty > limit or (unitPrice and unitPrice > limit)
   end
+  if Over(threshold) then return false, "Price rose over " .. ns.Money(threshold) end
+  if leaveAt and Over(leaveAt) then return false, "Copies gone, this would buy the bait" end
   return true
 end
 
@@ -108,8 +113,10 @@ end
 -- The action button. Each press does exactly one thing; nothing is ever queued.
 -- Phases: search, searching, deal, nothing, quote, confirm, buying.
 -------------------------------------------------------------------------------
-function B.NewButton()
-  return { phase = "search" }
+-- lastSearch: when the previous search went out, whichever item it was for. The minimum gap
+-- applies across items, so switching items never allows an early search.
+function B.NewButton(lastSearch)
+  return { phase = "search", lastSearch = lastSearch }
 end
 
 -- What a press would do now: "search", "buy", "confirm", "reset", "busy" or "wait" (with seconds).

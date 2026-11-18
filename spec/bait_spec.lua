@@ -40,6 +40,10 @@ describe("Bait", function()
       assert.is_nil(B.Update(nil, Baited(), 100, W.Stats({}), MIN_DAYS, 1))
     end)
 
+    it("does not flag an item with no history even when one day is enough", function()
+      assert.is_nil(B.Update(nil, Baited(), 100, W.Stats({}), 1, 1))
+    end)
+
     it("does not flag a cheapest level at the wall", function()
       local ladder = W.SortLadder({ [100] = 200, [110] = 600 })
       assert.is_nil(B.Update(nil, ladder, 100, History(), MIN_DAYS, 1))
@@ -102,6 +106,37 @@ describe("Bait", function()
     end)
   end)
 
+  describe("searching on a press", function()
+    local sent, keyInfo
+    before_each(function()
+      local fire
+      ns, fire = addon.Load()
+      fire("ADDON_LOADED", addon.ADDON)
+      ns.ahOpen = true
+      sent, keyInfo = 0, nil
+      _G.GetTime = function() return 0 end
+      _G.C_AuctionHouse = {
+        MakeItemKey = function(id) return { itemID = id } end,
+        GetItemKeyInfo = function() return keyInfo end,
+        IsThrottledMessageSystemReady = function() return true end,
+        SendSearchQuery = function() sent = sent + 1 end,
+      }
+    end)
+    after_each(function() _G.C_AuctionHouse, _G.GetTime = nil, nil end)
+
+    it("sends the search during the press", function()
+      keyInfo = {}
+      assert.is_true(ns.SearchNow(1, function() end))
+      assert.equal(1, sent)
+    end)
+
+    it("sends nothing, now or later, while the item's info is loading", function()
+      assert.is_false(ns.SearchNow(1, function() end))
+      assert.is_falsy(ns.scanState.running)   -- no scan left waiting to send later
+      assert.equal(0, sent)
+    end)
+  end)
+
   describe("buy plan", function()
     -- bait (1) + 14 copies at 30, 4 units at 35, the wall at 100
     local ladder, record
@@ -112,7 +147,7 @@ describe("Bait", function()
 
     it("leaves the bait's units and stops at the bait level", function()
       local plan = B.Plan(ladder, 35, record, true)
-      assert.same({ qty = 14, cost = 14 * 30, leaving = 1, blocked = 4 }, plan)
+      assert.same({ qty = 14, cost = 14 * 30, leaving = 1, blocked = 4, leaveAt = 30 }, plan)
     end)
 
     it("buys the bait and every level at or below the threshold", function()
@@ -133,7 +168,7 @@ describe("Bait", function()
     it("leaves only the bait units still listed", function()
       local partly = W.SortLadder({ [30] = 1, [100] = 200 })
       record.u = 2
-      assert.same({ qty = 0, cost = 0, leaving = 1, blocked = 0 }, B.Plan(partly, 30, record, true))
+      assert.same({ qty = 0, cost = 0, leaving = 1, blocked = 0, leaveAt = 30 }, B.Plan(partly, 30, record, true))
     end)
 
     it("buys nothing under the bait price", function()
@@ -142,6 +177,14 @@ describe("Bait", function()
   end)
 
   describe("price quote", function()
+    it("rejects a quote that would take the bait because copies were bought since the search", function()
+      -- planned 14 copies at 30; 10 copies were bought, so 14 units are now 5 at 30 and 9 at 35
+      local ok, reason = B.QuoteOK(35, 5 * 30 + 9 * 35, 14, 35, 30)
+      assert.is_false(ok)
+      assert.equal("Copies gone, this would buy the bait", reason)
+      assert.is_true(B.QuoteOK(30, 14 * 30, 14, 35, 30))
+    end)
+
     it("accepts a quote with every unit within the threshold", function()
       assert.is_true(B.QuoteOK(35, 14 * 30, 14, 35))
     end)
@@ -199,6 +242,13 @@ describe("Bait", function()
       assert.is_false(B.Found(s, { qty = 0, cost = 0, leaving = 0, blocked = 0 }, 35))
       assert.equal("Nothing at or below 35c · Search again", Label("search"))
       assert.equal("search", B.NextAction(s, 5, GAP, true))
+    end)
+
+    it("keeps the minimum gap when switching to another item", function()
+      B.Searched(s, 10)
+      local next = B.NewButton(s.lastSearch)
+      assert.equal("wait", (B.NextAction(next, 10.5, GAP, true)))
+      assert.equal("search", (B.NextAction(next, 11, GAP, true)))
     end)
 
     it("waits out the minimum gap and the game's throttle without doing anything", function()
