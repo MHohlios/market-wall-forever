@@ -244,7 +244,7 @@ local DISENCHANT_COLUMNS = {
   { "DE value after cut", 130, "RIGHT", "Expected value of the materials from one disenchant, at their wall prices, after the auction house cut on reselling them." },
   { "Profit", 100, "RIGHT", "Disenchant value after cut minus the price." },
   { "Profit %", 80, "RIGHT", "Profit as a share of the price." },
-  { "Odds from", 150, nil, "Where the material odds come from: your own disenchants (from Disenchantry), a Forever estimate, or the classic disenchanting table." },
+  { "Odds from", 150, nil, "Where the material odds come from: your own disenchants (recorded by MarketWall), a Forever estimate, or the classic disenchanting table." },
 }
 local COLUMNS = { watch = WATCH_COLUMNS, snipes = SNIPE_COLUMNS, dips = DIP_COLUMNS, disenchant = DISENCHANT_COLUMNS }
 
