@@ -163,5 +163,54 @@ describe("Mobs", function()
       }), Prices(), opts)
       assert.same({ id = RING, share = 0.25 }, stats.top)
     end)
+
+    it("leaves rare drops out of every lens's without-rare values", function()
+      local kills = {}
+      for i = 1, 99 do kills[i] = { K.LOOTED, 0, { [LINEN] = 1 } } end
+      kills[100] = { K.LOOTED, 0, { [LINEN] = 1, [RING] = 1 } }
+      local stats = M.Stats(Mob(kills), Prices(), opts)
+      assert.same({ 10, 95 }, { stats.vendorNoRare.average, stats.marketNoRare.average })
+      assert.near(10 + 1, stats.vendor.average, 1e-9)
+    end)
+  end)
+
+  describe("DropTable", function()
+    local opts
+    local prices = {
+      vendor = function(id) return ({ [LINEN] = 10, [RING] = 100 })[id] end,
+      wall = function(id) return ({ [LINEN] = 100, [RING] = 1000 })[id], true end,
+      disenchant = function(id) return id == RING and 5000 or nil end,
+    }
+
+    local function Mob()
+      local mobs = {}
+      M.Add(mobs, KillEvent(1, K.LOOTED, 0, { [LINEN] = 1 }))
+      M.Add(mobs, KillEvent(2, K.LOOTED, 0, { [LINEN] = 3, [RING] = 1 }))
+      M.Add(mobs, KillEvent(3, K.EMPTY))
+      M.Add(mobs, KillEvent(4, K.UNSEEN))
+      return mobs[WOLF]
+    end
+
+    before_each(function()
+      opts = { cut = 0.05, disenchant = false, skinning = false, rareShare = 0.02, minKills = 3 }
+    end)
+
+    it("gives each drop's share of seen kills, its quantity when it drops and one unit's value per lens", function()
+      local rows = M.DropTable(Mob(), prices, opts)
+      assert.equal(2, #rows)
+      assert.same({ id = RING, share = 1 / 3, quantity = 1, vendor = 100, market = 950, optimal = 950 }, rows[1])
+      assert.same({ id = LINEN, share = 2 / 3, quantity = 2, vendor = 10, market = 95, optimal = 95 }, rows[2])
+    end)
+
+    it("prices Optimal at disenchanting when it is included and worth more", function()
+      opts.disenchant = true
+      assert.equal(4750, M.DropTable(Mob(), prices, opts)[1].optimal)
+    end)
+
+    it("is empty for a mob whose kills dropped nothing", function()
+      local mobs = {}
+      M.Add(mobs, KillEvent(1, K.EMPTY))
+      assert.same({}, M.DropTable(mobs[WOLF], prices, opts))
+    end)
   end)
 end)

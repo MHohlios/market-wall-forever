@@ -1,5 +1,6 @@
 -- MarketWall: the item search window. Opens from the minimap button, anywhere in the world.
--- Left: the search box, matching names and recent searches. Right: the item's chart and stats.
+-- Items view, left: the search box, matching names and recent searches. Right: the item's chart
+-- and stats. The Mobs view, MobsView.lua, shares the window behind an Items | Mobs switch.
 local _, ns = ...
 local PV = ns.PriceView
 
@@ -156,10 +157,24 @@ local function RefreshItem()
   win.listings:SetText(ListingsText(id))
 end
 
+-- Redraws the open window on its next update tick, for changes no window event announces
+function ns.SearchChanged()
+  if win then win.dirty = true end
+end
+
 function ns.RefreshSearch()
   if not (win and win:IsShown()) then return end
-  RefreshSide()
-  RefreshItem()
+  local mobs = win.mode == "mobs"
+  win.items:SetShown(not mobs)
+  win.mobs:SetShown(mobs)
+  win.itemsButton:SetEnabled(mobs)
+  win.mobsButton:SetEnabled(not mobs)
+  if mobs then
+    win.mobs:Refresh()
+  else
+    RefreshSide()
+    RefreshItem()
+  end
 end
 
 local function SideRow(parent, i)
@@ -209,13 +224,26 @@ local function Build()
 
   local heading = w.MakeText(f, "GameFontNormal")
   heading:SetPoint("TOPLEFT", 12, -10)
-  heading:SetText("MarketWall · Item prices")
+  heading:SetText("MarketWall ·")
   local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
   close:SetPoint("TOPRIGHT", 2, 2)
 
+  -- Items | Mobs switch; the button for the view on show is disabled
+  f.mode = "items"
+  f.itemsButton = w.MakeButton(f, "Items", 60)
+  f.itemsButton:SetPoint("LEFT", heading, "RIGHT", 8, 0)
+  f.itemsButton:SetScript("OnClick", function() f.mode = "items" ns.RefreshSearch() end)
+  f.mobsButton = w.MakeButton(f, "Mobs", 60)
+  f.mobsButton:SetPoint("LEFT", f.itemsButton, "RIGHT", 4, 0)
+  f.mobsButton:SetScript("OnClick", function() f.mode = "mobs" ns.RefreshSearch() end)
+  f.mobs = ns.MobsView.Build(f)
+  local items = CreateFrame("Frame", nil, f)   -- the item search, hidden in the Mobs view
+  items:SetAllPoints()
+  f.items = items
+
   f.rows = {}
-  for i = 1, SIDE_ROWS do f.rows[i] = SideRow(f, i) end
-  f.box = w.MakeEdit(f, SIDE_WIDTH - 6)
+  for i = 1, SIDE_ROWS do f.rows[i] = SideRow(items, i) end
+  f.box = w.MakeEdit(items, SIDE_WIDTH - 6)
   f.box:SetPoint("TOPLEFT", 18, -36)
   f.box:SetScript("OnTextChanged", RefreshSide)
   f.box:SetScript("OnEnterPressed", OnEnter)
@@ -226,17 +254,17 @@ local function Build()
     f.box:ClearFocus()
     Select(id)
   end)
-  local hint = w.MakeText(f, "GameFontDisableSmall")
+  local hint = w.MakeText(items, "GameFontDisableSmall")
   hint:SetPoint("BOTTOMLEFT", 14, 12)
   hint:SetWidth(SIDE_WIDTH)
   hint:SetText("Type a name, or shift-click any item link.")
 
-  f.pick = w.MakeText(f, "GameFontDisable", "CENTER")
+  f.pick = w.MakeText(items, "GameFontDisable", "CENTER")
   f.pick:SetPoint("TOPLEFT", MAIN_X, -180)
   f.pick:SetPoint("RIGHT", -20, 0)
   f.pick:SetText("Search for an item to see its price history.")
 
-  f.item = CreateFrame("Frame", nil, f)
+  f.item = CreateFrame("Frame", nil, items)
   f.item:SetPoint("TOPLEFT", MAIN_X, -34)
   f.item:SetPoint("BOTTOMRIGHT", -14, 10)
   f.icon = f.item:CreateTexture(nil, "ARTWORK")

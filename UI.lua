@@ -244,7 +244,7 @@ local DISENCHANT_COLUMNS = {
   { "DE value after cut", 130, "RIGHT", "Expected value of the materials from one disenchant, at their wall prices, after the auction house cut on reselling them." },
   { "Profit", 100, "RIGHT", "Disenchant value after cut minus the price." },
   { "Profit %", 80, "RIGHT", "Profit as a share of the price." },
-  { "Odds from", 150, nil, "Where the material odds come from: your own disenchants (from Disenchantry), a Forever estimate, or the classic disenchanting table." },
+  { "Odds from", 150, nil, "Where the material odds come from: your own disenchants (recorded by MarketWall), a Forever estimate, or the classic disenchanting table." },
 }
 local COLUMNS = { watch = WATCH_COLUMNS, snipes = SNIPE_COLUMNS, dips = DIP_COLUMNS, disenchant = DISENCHANT_COLUMNS }
 
@@ -737,12 +737,20 @@ local SETTINGS = {
   { key = "baitSearchGap", label = "Bait search gap (seconds)", kind = "secs", tip = "Bait Detect waits at least this long between searches. Never less than 1 second." },
   { key = "baitConfirmPress", label = "Bait confirm press", kind = "bool", tip = "Bait Detect confirms each purchase with its own press of the button. Untick to confirm straight after the price quote." },
   { key = "minimapButton", label = "Minimap button", kind = "bool", tip = "Show the MW button on the minimap, which opens the item search window. /mw minimap does the same." },
+  { key = "mobDisenchant", label = "Mob value: disenchanting", kind = "mode", tip = "Include disenchanting in a mob's Optimal value. Auto: when this character has Enchanting. Always suits an enchanter alt." },
+  { key = "mobSkinning", label = "Mob value: skinning", kind = "mode", tip = "Include skinning in a mob's Optimal value. Auto: when this character has Skinning." },
+  { key = "mobRareShare", label = "Rare drop threshold", kind = "pct", tip = "Drops seen in fewer kills than this count as rare, and are left out of the values without rare drops." },
+  { key = "mobMinKills", label = "Minimum kills", kind = "int", tip = "A mob needs this many kills with loot seen before its value per kill shows." },
 }
 
-local SETTING_ROW_H = 25  -- every row, plus Reset, fits above the frame's bottom edge
+-- Rows scroll above Reset: they no longer all fit in the frame at this height
+local SETTING_ROW_H = 25
+local MODES = { auto = "always", always = "never", never = "auto" }   -- each click moves to the next
+local MODE_TEXT = { auto = "Auto", always = "Always", never = "Never" }
 
 local function FormatSetting(def)
   local value = ns.Cfg(def.key)
+  if def.kind == "mode" then return MODE_TEXT[value] end
   if def.kind == "pct" then return ns.Round(value * 1000) / 10 .. "%" end
   if def.kind == "money" then return ns.Money(value) end
   return tostring(value)
@@ -769,62 +777,81 @@ local function RefreshSettings()
   for _, row in ipairs(ui.settings.rows) do
     if row.def.kind == "bool" then
       row.control:SetChecked(ns.Cfg(row.def.key) and true or false)
-    elseif not row.control:HasFocus() then
+    elseif row.def.kind == "mode" or not row.control:HasFocus() then
       row.control:SetText(FormatSetting(row.def))
     end
   end
 end
 
+local function SaveSetting(key, value)
+  MarketWallDB.cfg[key] = value
+  ns.Mobs.Invalidate()   -- prices, the cut and the mob settings all feed mob values
+end
+
 local function BuildSettings(parent)
   local page = CreateFrame("Frame", nil, parent)
   page:SetAllPoints()
+  local scroll = CreateFrame("ScrollFrame", nil, page, "UIPanelScrollFrameTemplate")
+  scroll:SetPoint("TOPLEFT", 0, -56)
+  scroll:SetPoint("BOTTOMRIGHT", -28, 40)
+  local rows = CreateFrame("Frame", nil, scroll)
+  rows:SetSize(760, #SETTINGS * SETTING_ROW_H + 6)
+  scroll:SetScrollChild(rows)
   page.rows = {}
   for i, def in ipairs(SETTINGS) do
-    local y = -62 - (i - 1) * SETTING_ROW_H
-    local label = MakeText(page, "GameFontNormal")
+    local y = -6 - (i - 1) * SETTING_ROW_H
+    local label = MakeText(rows, "GameFontNormal")
     label:SetPoint("TOPLEFT", 20, y)
     label:SetText(def.label)
     local control
     if def.kind == "bool" then
-      control = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
+      control = CreateFrame("CheckButton", nil, rows, "UICheckButtonTemplate")
       control:SetSize(24, 24)
       control:SetPoint("TOPLEFT", 216, y + 5)
       control:SetScript("OnClick", function(self)
-        MarketWallDB.cfg[def.key] = self:GetChecked() and true or false
+        SaveSetting(def.key, self:GetChecked() and true or false)
         ns.UpdateMinimapButton()
       end)
+    elseif def.kind == "mode" then
+      control = MakeButton(rows, "", 80)
+      control:SetPoint("TOPLEFT", 216, y + 4)
+      control:SetScript("OnClick", function(self)
+        SaveSetting(def.key, MODES[ns.Cfg(def.key)])
+        self:SetText(FormatSetting(def))
+      end)
     else
-      control = MakeEdit(page, 80)
+      control = MakeEdit(rows, 80)
       control:SetPoint("TOPLEFT", 222, y + 3)
       local function Save(self)
         local value = ParseSetting(def, self:GetText())
-        if value ~= nil then MarketWallDB.cfg[def.key] = value end
+        if value ~= nil then SaveSetting(def.key, value) end
         self:ClearFocus()
         self:SetText(FormatSetting(def))
       end
       control:SetScript("OnEnterPressed", Save)
       control:SetScript("OnEditFocusLost", function(self)
         local value = ParseSetting(def, self:GetText())
-        if value ~= nil then MarketWallDB.cfg[def.key] = value end
+        if value ~= nil then SaveSetting(def.key, value) end
         self:SetText(FormatSetting(def))
       end)
     end
-    local help = MakeText(page, "GameFontDisableSmall")
+    local help = MakeText(rows, "GameFontDisableSmall")
     help:SetPoint("TOPLEFT", 320, y + 2)
-    help:SetWidth(455)
+    help:SetWidth(430)
     help:SetText(def.tip)
     page.rows[i] = { def = def, control = control }
   end
   local reset = MakeButton(page, "Reset to defaults", 140)
-  reset:SetPoint("TOPLEFT", 20, -62 - #SETTINGS * SETTING_ROW_H - 6)
+  reset:SetPoint("BOTTOMLEFT", 20, 10)
   reset:SetScript("OnClick", function()
     for k in pairs(MarketWallDB.cfg) do MarketWallDB.cfg[k] = nil end
+    ns.Mobs.Invalidate()
     RefreshSettings()
     ns.UpdateMinimapButton()
   end)
   local note = MakeText(page, "GameFontDisableSmall")
   note:SetPoint("LEFT", reset, "RIGHT", 12, 0)
-  note:SetText("Press Enter after typing a value. Changes to Snipes, Dips and Disenchant apply on the next full scan.")
+  note:SetText("Press Enter after typing a value. Scroll for the mob value settings. Changes to Snipes, Dips and Disenchant apply on the next full scan.")
   return page
 end
 

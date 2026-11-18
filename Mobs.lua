@@ -133,14 +133,20 @@ end
 
 -- Value per kill under every lens, from the stored kills at current prices. Unseen kills are
 -- left out; 0c kills count. Below opts.minKills seen kills only the counts are returned.
+-- vendorNoRare, marketNoRare and optimalNoRare leave out drops seen in under opts.rareShare of kills.
 -- prices: vendor(id), wall(id) -> wall and whether it has real supply,
 -- disenchant(id) -> copper or nil when not allowed
 -- opts: cut, disenchant, skinning (include in Optimal), rareShare, minKills
-function Mobs.Stats(mob, prices, opts)
+local function SeenKills(mob)
   local seen = {}
   for _, kill in ipairs(mob.kills) do
     if kill[K_OUTCOME] ~= UNSEEN then seen[#seen + 1] = kill end
   end
+  return seen
+end
+
+function Mobs.Stats(mob, prices, opts)
+  local seen = SeenKills(mob)
   local stats = { name = mob.name, kills = #mob.kills, lifetime = mob.life.kills, seen = #seen }
   if #seen < math.max(1, opts.minKills) then return stats end
 
@@ -160,7 +166,8 @@ function Mobs.Stats(mob, prices, opts)
     if count / #seen < opts.rareShare then rare[id] = true end
   end
 
-  local vendor, market, optimal, common, skinning = {}, {}, {}, {}, {}
+  local vendor, market, optimal, skinning = {}, {}, {}, {}
+  local vendorCommon, marketCommon, optimalCommon = {}, {}, {}
   for _, kill in ipairs(seen) do
     local coin, drops, gather = kill[K_COIN] or 0, kill[K_DROPS], kill[K_GATHER]
     local skin = gather and Worth(gather, lens.gathered) or 0
@@ -169,7 +176,9 @@ function Mobs.Stats(mob, prices, opts)
     vendor[#vendor + 1] = coin + Worth(drops, lens.vendor)
     market[#market + 1] = coin + Worth(drops, lens.market)
     optimal[#optimal + 1] = coin + Worth(drops, lens.optimal) + extra
-    common[#common + 1] = coin + Worth(drops, lens.optimal, rare) + extra
+    vendorCommon[#vendorCommon + 1] = coin + Worth(drops, lens.vendor, rare)
+    marketCommon[#marketCommon + 1] = coin + Worth(drops, lens.market, rare)
+    optimalCommon[#optimalCommon + 1] = coin + Worth(drops, lens.optimal, rare) + extra
   end
 
   local top
@@ -183,9 +192,36 @@ function Mobs.Stats(mob, prices, opts)
   stats.skinning = Summary(skinning)
   stats.optimal = Summary(optimal)
   stats.optimal.label = Mobs.OptimalLabel(opts)
-  stats.optimalNoRare = Summary(common)
+  stats.vendorNoRare = Summary(vendorCommon)
+  stats.marketNoRare = Summary(marketCommon)
+  stats.optimalNoRare = Summary(optimalCommon)
   if top then stats.top = { id = top, share = dropped[top] / #seen } end
   return stats
+end
+
+-- Each item the seen kills dropped: the share of seen kills it dropped in, its average quantity
+-- when it drops, and one unit's value under each lens. Most value per kill first, under Optimal.
+function Mobs.DropTable(mob, prices, opts)
+  local seen = SeenKills(mob)
+  local lens = Lenses(prices, opts, {})
+  local dropped, total = {}, {}
+  for _, kill in ipairs(seen) do
+    for id, qty in pairs(kill[K_DROPS] or {}) do
+      dropped[id] = (dropped[id] or 0) + 1
+      total[id] = (total[id] or 0) + qty
+    end
+  end
+  local rows = {}
+  for id, count in pairs(dropped) do
+    rows[#rows + 1] = { id = id, share = count / #seen, quantity = total[id] / count,
+      vendor = lens.vendor(id), market = lens.market(id), optimal = lens.optimal(id) }
+  end
+  table.sort(rows, function(a, b)
+    local x, y = a.share * a.quantity * a.optimal, b.share * b.quantity * b.optimal
+    if x ~= y then return x > y end
+    return a.id < b.id
+  end)
+  return rows
 end
 
 -- In game -----------------------------------------------------------------------------------
@@ -230,10 +266,37 @@ function Mobs.GamePrices()
   }
 end
 
--- Stats for one mob at current prices, nil when it has never been killed
+local cache = {}   -- [npcID] = stats, or false for a mob never killed
+
+-- Stats for one mob at current prices, nil when it has never been killed. Cached until the mob
+-- gets a new kill, or Mobs.Invalidate after a scan or a settings change.
 function Mobs.For(npc)
-  local mob = MarketWallDB.mobs[npc]
-  if mob then return Mobs.Stats(mob, Mobs.GamePrices(), Mobs.GameOptions()) end
+  local stats = cache[npc]
+  if stats == nil then
+    local mob = MarketWallDB.mobs[npc]
+    stats = mob and Mobs.Stats(mob, Mobs.GamePrices(), Mobs.GameOptions()) or false
+    cache[npc] = stats
+  end
+  return stats or nil
+end
+
+function Mobs.Invalidate()
+  cache = {}
+end
+
+-- Stats for every recorded mob, each with its npc ID
+function Mobs.All()
+  local all = {}
+  for npc in pairs(MarketWallDB.mobs) do
+    local stats = Mobs.For(npc)
+    stats.npc = npc
+    all[#all + 1] = stats
+  end
+  return all
+end
+
+function Mobs.GameDropTable(npc)
+  return Mobs.DropTable(MarketWallDB.mobs[npc], Mobs.GamePrices(), Mobs.GameOptions())
 end
 
 local recent = {}   -- [guid] = { mob, record } for kills stored this session, so later gathers attach
@@ -241,9 +304,22 @@ local recent = {}   -- [guid] = { mob, record } for kills stored this session, s
 ns.Recording.On("kill", function(event)
   local record = Mobs.Add(MarketWallDB.mobs, event)
   recent[event.guid] = { MarketWallDB.mobs[event.npc], record }
+  cache[event.npc] = nil
+  ns.SearchChanged()
 end)
 
 ns.Recording.On("gather", function(event)
   local stored = event.guid and recent[event.guid]
-  if stored then Mobs.AddGather(stored[1], stored[2], event.drops) end
+  if stored then
+    Mobs.AddGather(stored[1], stored[2], event.drops)
+    cache[event.npc] = nil
+    ns.SearchChanged()
+  end
 end)
+
+-- Vendor prices and item levels arrive late after login, and professions may not be known at
+-- first hover: stats priced without them are dropped, and recomputed when next asked for
+local loader = CreateFrame("Frame")
+loader:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+loader:RegisterEvent("SKILL_LINES_CHANGED")
+loader:SetScript("OnEvent", Mobs.Invalidate)

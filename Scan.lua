@@ -44,6 +44,7 @@ local function FinishWatchScan(aborted)
       Status("Scan complete")
     end
   end
+  ns.Mobs.Invalidate()   -- new walls and supply change what drops are worth
   if ns.RefreshUI then ns.RefreshUI() end
   local cb = state.onDone
   state.onDone = nil
@@ -366,6 +367,7 @@ local function Finalize(maps, names, stamp)
       ns.lastFullScan = stamp
       r.lastFull = stamp
       r.supplied = supplied
+      ns.Mobs.Invalidate()
       ns.fullScanRunning = false
       Status(string.format("Full scan complete: %d items, %d snipes, %d dips", #ids, #snipes, #dips))
       ns.Print(string.format("Full scan complete: %d items recorded, %d snipes, %d dips.", #ids, #snipes, #dips))
