@@ -33,6 +33,15 @@ ns.cfgDefaults = {
   mobMinKills = 10,        -- kills a mob needs before its value per kill shows
 }
 
+-- Settings Reset to defaults leaves alone: imported once from Disenchantry, which never imports again
+ns.KEPT_ON_RESET = { salvagerMode = true, salvagerBonus = true }
+
+function ns.ResetSettings(cfg)
+  for key in pairs(cfg) do
+    if not ns.KEPT_ON_RESET[key] then cfg[key] = nil end
+  end
+end
+
 local function Print(...)
   print("|cfff5c518MarketWall|r:", ...)
 end

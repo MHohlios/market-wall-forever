@@ -56,6 +56,108 @@ local function OnLinkInsert(box, onLink)
 end
 
 -------------------------------------------------------------------------------
+-- Pop-up menu and text prompt
+-------------------------------------------------------------------------------
+local MENU_ROW_H, MENU_LINGER = 18, 1.5
+local menu
+
+local function MenuButton(i)
+  local button = CreateFrame("Button", nil, menu)
+  button:SetHeight(MENU_ROW_H)
+  button:SetPoint("TOPLEFT", 6, -6 - (i - 1) * MENU_ROW_H)
+  button:SetPoint("RIGHT", -6, 0)
+  button:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+  button.text = MakeText(button, "GameFontHighlightSmall")
+  button.text:SetPoint("LEFT", 4, 0)
+  button:SetScript("OnClick", function(self)
+    menu:Hide()
+    self.item.onClick()
+  end)
+  return button
+end
+
+-- A menu at the cursor. items: { { text =, onClick = }, ... }; an item with no onClick is a
+-- heading, or greyed out when disabled is set. It closes on a choice, on Escape, or once the
+-- mouse has been off it for a moment.
+local function ShowMenu(items)
+  if not menu then
+    menu = CreateFrame("Frame", "MarketWallMenu", UIParent)
+    menu:SetFrameStrata("DIALOG")
+    menu:SetClampedToScreen(true)
+    menu:EnableMouse(true)
+    local edge = menu:CreateTexture(nil, "BACKGROUND", nil, 0)
+    edge:SetAllPoints()
+    edge:SetColorTexture(0.35, 0.29, 0.16, 1)
+    local bg = menu:CreateTexture(nil, "BACKGROUND", nil, 1)
+    bg:SetPoint("TOPLEFT", 1, -1)
+    bg:SetPoint("BOTTOMRIGHT", -1, 1)
+    bg:SetColorTexture(0.05, 0.07, 0.07, 0.97)
+    menu.buttons = {}
+    menu:SetScript("OnUpdate", function(self, dt)
+      self.away = self:IsMouseOver() and 0 or self.away + dt
+      if self.away > MENU_LINGER then self:Hide() end
+    end)
+    table.insert(UISpecialFrames, "MarketWallMenu")
+  end
+  local width = 80
+  for i, item in ipairs(items) do
+    local button = menu.buttons[i] or MenuButton(i)
+    menu.buttons[i] = button
+    button.item = item
+    local color = (item.disabled and GREY) or (not item.onClick and GOLD) or ""
+    button.text:SetText(color .. item.text .. (color ~= "" and "|r" or ""))
+    button:SetEnabled(item.onClick ~= nil and not item.disabled)
+    button:Show()
+    width = math.max(width, button.text:GetStringWidth())
+  end
+  for i = #items + 1, #menu.buttons do menu.buttons[i]:Hide() end
+  menu:SetSize(width + 22, #items * MENU_ROW_H + 12)
+  local x, y = GetCursorPosition()
+  local scale = UIParent:GetEffectiveScale()
+  menu:ClearAllPoints()
+  menu:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", x / scale - 8, y / scale + 8)
+  menu.away = 0
+  menu:Show()
+end
+
+local function PromptBox(popup)
+  return popup.editBox or popup.EditBox or popup:GetEditBox()
+end
+
+local function Answer(popup, data)
+  local text = strtrim(PromptBox(popup):GetText() or "")
+  if text ~= "" then data.onAccept(text) end
+end
+
+StaticPopupDialogs["MARKETWALL_PROMPT"] = {
+  text = "%s",
+  button1 = OKAY,
+  button2 = CANCEL,
+  hasEditBox = true,
+  OnShow = function(self, data)
+    local box = PromptBox(self)
+    box:SetText(data and data.initial or "")
+    box:HighlightText()
+    box:SetFocus()
+  end,
+  OnAccept = Answer,
+  EditBoxOnEnterPressed = function(box, data)
+    local popup = box:GetParent()
+    Answer(popup, data)
+    popup:Hide()
+  end,
+  EditBoxOnEscapePressed = function(box) box:GetParent():Hide() end,
+  timeout = 0,
+  whileDead = true,
+  hideOnEscape = true,
+}
+
+-- Asks for a line of text, starting from initial; onAccept(text) gets it trimmed, never empty
+local function Prompt(question, initial, onAccept)
+  StaticPopup_Show("MARKETWALL_PROMPT", question, nil, { initial = initial, onAccept = onAccept })
+end
+
+-------------------------------------------------------------------------------
 -- Generic list: sortable headers with hover help, icon per row
 -------------------------------------------------------------------------------
 local function CreateList(parent, rows)
@@ -75,6 +177,10 @@ local function CreateList(parent, rows)
     row:SetPoint("RIGHT")
     row.bg = row:CreateTexture(nil, "BACKGROUND")
     row.bg:SetAllPoints()
+    row.bar = row:CreateTexture(nil, "BORDER")   -- an entry's share, as a bar from the left
+    row.bar:SetPoint("TOPLEFT")
+    row.bar:SetPoint("BOTTOMLEFT")
+    row.bar:SetColorTexture(0.96, 0.77, 0.09, 0.18)
     local hl = row:CreateTexture(nil, "HIGHLIGHT")
     hl:SetAllPoints()
     hl:SetColorTexture(1, 1, 1, 0.08)
@@ -82,8 +188,10 @@ local function CreateList(parent, rows)
     row.icon:SetSize(16, 16)
     row.icon:SetPoint("LEFT", 8, 0)
     row.cells = {}
-    row:SetScript("OnClick", function(self)
-      if self.entry and list.onClick then list.onClick(self.entry) end
+    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    row:SetScript("OnClick", function(self, button)
+      local handler = button == "RightButton" and list.onRightClick or list.onClick
+      if self.entry and handler then handler(self.entry) end
     end)
     row:SetScript("OnEnter", function(self)
       if self.entry and self.entry.id and GameTooltip and GameTooltip.SetItemByID then
@@ -179,6 +287,8 @@ local function CreateList(parent, rows)
         for c = 1, #self.columns do row.cells[c]:SetText(entry.cells[c] or "") end
         row.icon:SetTexture(entry.id and ns.Icon(entry.id) or nil)
         row:SetAlpha(entry.dim and 0.45 or 1)
+        row.bar:SetShown(entry.bar ~= nil)
+        if entry.bar then row.bar:SetWidth(math.max(1, entry.bar * self:GetWidth())) end
         if entry.highlight then
           row.bg:SetColorTexture(0.18, 0.32, 0.45, 0.45)
         elseif entry.tint then
@@ -480,7 +590,7 @@ local function CreateChart(parent)
 end
 ns.widgets = {
   MakeButton = MakeButton, MakeText = MakeText, MakeEdit = MakeEdit, ShowTip = ShowTip, HideTip = HideTip,
-  OnLinkInsert = OnLinkInsert, CreateList = CreateList, CreateChart = CreateChart, ListHeight = function(rows) return 22 + rows * ROW_H end,
+  OnLinkInsert = OnLinkInsert, CreateList = CreateList, CreateChart = CreateChart, ShowMenu = ShowMenu, Prompt = Prompt, ListHeight = function(rows) return 22 + rows * ROW_H end,
 }
 
 -------------------------------------------------------------------------------
@@ -741,17 +851,27 @@ local SETTINGS = {
   { key = "mobSkinning", label = "Mob value: skinning", kind = "mode", tip = "Include skinning in a mob's Optimal value. Auto: when this character has Skinning." },
   { key = "mobRareShare", label = "Rare drop threshold", kind = "pct", tip = "Drops seen in fewer kills than this count as rare, and are left out of the values without rare drops." },
   { key = "mobMinKills", label = "Minimum kills", kind = "int", tip = "A mob needs this many kills with loot seen before its value per kill shows." },
+  { key = "salvagerMode", label = "Salvager mode", kind = "mode", modes = { "auto", "on", "off" }, tip = "Count Salvager's disenchant bonus. Auto: while the buff is up. Imported once from Disenchantry, so Reset to defaults keeps it." },
+  { key = "salvagerBonus", label = "Salvager bonus %", kind = "points", tip = "Extra materials Salvager gives, in percent. Imported once from Disenchantry, so Reset to defaults keeps it." },
 }
 
 -- Rows scroll above Reset: they no longer all fit in the frame at this height
 local SETTING_ROW_H = 25
-local MODES = { auto = "always", always = "never", never = "auto" }   -- each click moves to the next
-local MODE_TEXT = { auto = "Auto", always = "Always", never = "Never" }
+local MODES = { "auto", "always", "never" }   -- each click moves to the next; a row's own modes replace these
+local MODE_TEXT = { auto = "Auto", always = "Always", never = "Never", on = "On", off = "Off" }
+
+local function NextMode(modes, value)
+  for i, mode in ipairs(modes) do
+    if mode == value then return modes[i % #modes + 1] end
+  end
+  return modes[1]
+end
 
 local function FormatSetting(def)
   local value = ns.Cfg(def.key)
   if def.kind == "mode" then return MODE_TEXT[value] end
   if def.kind == "pct" then return ns.Round(value * 1000) / 10 .. "%" end
+  if def.kind == "points" then return value .. "%" end
   if def.kind == "money" then return ns.Money(value) end
   return tostring(value)
 end
@@ -760,6 +880,9 @@ local function ParseSetting(def, text)
   if def.kind == "pct" then
     local n = tonumber((text:gsub("%%", "")))
     if n and n >= 0 and n < 100 then return n / 100 end
+  elseif def.kind == "points" then   -- stored as the percent itself, 5 for 5%
+    local n = tonumber((text:gsub("%%", "")))
+    if n and n >= 0 and n <= 1000 then return n end
   elseif def.kind == "money" then
     local n = ns.ParseMoney(text)
     if n and n >= 0 then return n end
@@ -816,7 +939,7 @@ local function BuildSettings(parent)
       control = MakeButton(rows, "", 80)
       control:SetPoint("TOPLEFT", 216, y + 4)
       control:SetScript("OnClick", function(self)
-        SaveSetting(def.key, MODES[ns.Cfg(def.key)])
+        SaveSetting(def.key, NextMode(def.modes or MODES, ns.Cfg(def.key)))
         self:SetText(FormatSetting(def))
       end)
     else
@@ -844,14 +967,14 @@ local function BuildSettings(parent)
   local reset = MakeButton(page, "Reset to defaults", 140)
   reset:SetPoint("BOTTOMLEFT", 20, 10)
   reset:SetScript("OnClick", function()
-    for k in pairs(MarketWallDB.cfg) do MarketWallDB.cfg[k] = nil end
+    ns.ResetSettings(MarketWallDB.cfg)
     ns.Mobs.Invalidate()
     RefreshSettings()
     ns.UpdateMinimapButton()
   end)
   local note = MakeText(page, "GameFontDisableSmall")
   note:SetPoint("LEFT", reset, "RIGHT", 12, 0)
-  note:SetText("Press Enter after typing a value. Scroll for the mob value settings. Changes to Snipes, Dips and Disenchant apply on the next full scan.")
+  note:SetText("Press Enter after typing a value. Scroll for the mob value and Salvager settings. Changes to Snipes, Dips and Disenchant apply on the next full scan.")
   return page
 end
 

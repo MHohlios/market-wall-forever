@@ -117,6 +117,20 @@ describe("Sessions", function()
       S.Rename(groups, "Owl", "Snapping Turtle")   -- merging into a merged name joins its group
       assert.equal("Shells", S.GroupOf(groups, "Owl"))
     end)
+
+    it("unmerges one member of a group back to its own name, leaving the rest merged", function()
+      local groups = {}
+      S.Rename(groups, "Snapping Turtle", "Turtles")
+      S.Rename(groups, "Giant Turtle", "Turtles")
+      S.Rename(groups, "Turtles", "Shells")
+      assert.same({ "Giant Turtle", "Snapping Turtle", "Turtles" }, S.Members(groups, "Shells"))
+      S.Unmerge(groups, "Giant Turtle")
+      assert.equal("Giant Turtle", S.GroupOf(groups, "Giant Turtle"))
+      assert.same({ "Snapping Turtle", "Turtles" }, S.Members(groups, "Shells"))
+      assert.same({}, S.Members(groups, "Giant Turtle"))
+      S.Rename(groups, "Giant Turtle", "Shells")   -- and can merge again
+      assert.equal("Shells", S.GroupOf(groups, "Giant Turtle"))
+    end)
   end)
 
   describe("value", function()

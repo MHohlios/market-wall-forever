@@ -1,8 +1,16 @@
 -- MarketWall: the item search window. Opens from the minimap button, anywhere in the world.
 -- Items view, left: the search box, matching names and recent searches. Right: the item's chart
--- and stats. The Mobs view, MobsView.lua, shares the window behind an Items | Mobs switch.
+-- and stats. The Mobs, Ledger and Sessions views (MobsView.lua, LedgerView.lua, SessionsView.lua)
+-- share the window behind an Items | Mobs | Ledger | Sessions switch.
 local _, ns = ...
 local PV = ns.PriceView
+
+local TABS = {
+  { key = "items", label = "Items" },
+  { key = "mobs", label = "Mobs", view = ns.MobsView },
+  { key = "ledger", label = "Ledger", view = ns.LedgerView },
+  { key = "sessions", label = "Sessions", view = ns.SessionsView },
+}
 
 local S = {}
 ns.ItemSearch = S
@@ -164,16 +172,16 @@ end
 
 function ns.RefreshSearch()
   if not (win and win:IsShown()) then return end
-  local mobs = win.mode == "mobs"
-  win.items:SetShown(not mobs)
-  win.mobs:SetShown(mobs)
-  win.itemsButton:SetEnabled(mobs)
-  win.mobsButton:SetEnabled(not mobs)
-  if mobs then
-    win.mobs:Refresh()
-  else
+  for _, tab in ipairs(TABS) do
+    local on = tab.key == win.mode
+    win.views[tab.key]:SetShown(on)
+    win.tabButtons[tab.key]:SetEnabled(not on)
+  end
+  if win.mode == "items" then
     RefreshSide()
     RefreshItem()
+  else
+    win.views[win.mode]:Refresh()
   end
 end
 
@@ -228,18 +236,21 @@ local function Build()
   local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
   close:SetPoint("TOPRIGHT", 2, 2)
 
-  -- Items | Mobs switch; the button for the view on show is disabled
+  -- Items | Mobs | Ledger | Sessions switch; the button for the view on show is disabled
   f.mode = "items"
-  f.itemsButton = w.MakeButton(f, "Items", 60)
-  f.itemsButton:SetPoint("LEFT", heading, "RIGHT", 8, 0)
-  f.itemsButton:SetScript("OnClick", function() f.mode = "items" ns.RefreshSearch() end)
-  f.mobsButton = w.MakeButton(f, "Mobs", 60)
-  f.mobsButton:SetPoint("LEFT", f.itemsButton, "RIGHT", 4, 0)
-  f.mobsButton:SetScript("OnClick", function() f.mode = "mobs" ns.RefreshSearch() end)
-  f.mobs = ns.MobsView.Build(f)
-  local items = CreateFrame("Frame", nil, f)   -- the item search, hidden in the Mobs view
+  f.tabButtons, f.views = {}, {}
+  local previous = heading
+  for _, tab in ipairs(TABS) do
+    local button = w.MakeButton(f, tab.label, 70)
+    button:SetPoint("LEFT", previous, "RIGHT", previous == heading and 8 or 4, 0)
+    button:SetScript("OnClick", function() f.mode = tab.key ns.RefreshSearch() end)
+    f.tabButtons[tab.key] = button
+    if tab.view then f.views[tab.key] = tab.view.Build(f) end
+    previous = button
+  end
+  local items = CreateFrame("Frame", nil, f)   -- the item search, hidden in the other views
   items:SetAllPoints()
-  f.items = items
+  f.views.items = items
 
   f.rows = {}
   for i = 1, SIDE_ROWS do f.rows[i] = SideRow(items, i) end
@@ -311,7 +322,7 @@ local function Build()
         LoadListings(waitingID)
         f.dirty = true
       end
-      if f.dirty then
+      if f.dirty or (f.mode == "sessions" and f.views.sessions:Live()) then
         f.dirty = false
         ns.RefreshSearch()
       end
@@ -329,4 +340,13 @@ function ns.ToggleSearch(open)
     win:Show()
     if selectedID then LoadListings(selectedID) end
   end
+end
+
+-- Opens the window on the Sessions view, showing the open session if there is one
+function ns.OpenSessions()
+  if not win then Build() end
+  win.mode = "sessions"
+  win.views.sessions.session = ns.Sessions.Current()
+  ns.ToggleSearch(true)
+  ns.RefreshSearch()
 end

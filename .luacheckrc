@@ -33,7 +33,7 @@ read_globals = {
   "PanelTemplates_DeselectTab", "PanelTemplates_SelectTab", "PanelTemplates_TabResize",
   -- Frames and constants
   "LibStub",                -- only to find Auctionator's tabs, when it is installed
-  "UIParent", "UISpecialFrames", "Minimap", "GameTooltip", "ItemRefTooltip", "ITEM_QUALITY_COLORS", "NUM_BAG_SLOTS", "YES", "NO",
+  "UIParent", "UISpecialFrames", "Minimap", "GameTooltip", "ItemRefTooltip", "ITEM_QUALITY_COLORS", "NUM_BAG_SLOTS", "YES", "NO", "OKAY", "CANCEL",
   -- Disenchantry's SavedVariables, imported at login (DisenchantLog.lua)
   "DisenchantryDB",
 }
