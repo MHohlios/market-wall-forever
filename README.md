@@ -48,7 +48,9 @@ nothing. A sound plays when a search finds units to buy.
   sells the cheapest units first, so levels above the bait can only be bought with
   Buy bait; the page says how many that leaves out.
 - The game quotes the final price before a purchase completes. MarketWall confirms only
-  if no unit is over your price, otherwise it cancels and says why on the button.
+  if no unit is over your price, otherwise it cancels and says why on the button. With
+  Leave bait it also cancels unless every unit is at the bait price, since any other
+  quote means the supply changed and the purchase could take the bait.
 - By default the confirm is its own press. Untick **Bait confirm press** in Settings to
   confirm right after the quote, if the game allows that without a key press.
 - Every purchase through MarketWall is logged with its time, item, units, unit price

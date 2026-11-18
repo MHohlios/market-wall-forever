@@ -32,6 +32,7 @@ local selectedID
 local button = B.NewButton()
 local thresholds, buyBait, spent = {}, {}, {}   -- per item, this session
 local searches = {}                              -- GetTime() of each search, last minute only
+local lastSearch                                 -- GetTime() of the last search, for any item
 
 local function Short(t)
   local s = time() - t
@@ -61,7 +62,7 @@ local function Plan(id)
 end
 
 local function Action()
-  local action, wait = B.NextAction(button, GetTime(), Gap(), C_AuctionHouse.IsThrottledMessageSystemReady())
+  local action, wait = B.NextAction(button, GetTime(), Gap(), C_AuctionHouse.IsThrottledMessageSystemReady(), lastSearch)
   if action == "search" and (ns.scanState.running or ns.fullScanRunning) then return "scan" end
   return action, wait
 end
@@ -86,10 +87,12 @@ end
 -------------------------------------------------------------------------------
 -- Pressing the button
 -------------------------------------------------------------------------------
-local function OnSearched(id, state)
+local function OnSearched(id, state, answered)
   if id ~= selectedID or state ~= button then return end
   local held = ns.ladders[id]
-  if held and held.kind == "item" then
+  if not answered then
+    B.Unanswered(state)
+  elseif held and held.kind == "item" then
     B.Finished(state, "Not a commodity")
   elseif B.Found(state, Plan(id), thresholds[id]) and ns.Cfg("sound") and PlaySound then
     PlaySound((SOUNDKIT and SOUNDKIT.READY_CHECK) or 8960, "Master")
@@ -99,12 +102,13 @@ end
 
 local function Search()
   local id, state = selectedID, button
-  if not ns.SearchNow(id, function() OnSearched(id, state) end) then
-    B.Finished(state, "Item info loading")
+  if not ns.SearchNow(id, function(answered) OnSearched(id, state, answered) end) then
+    B.Unanswered(state)   -- nothing sent; the next press tries again
     return
   end
-  B.Searched(state, GetTime())
-  searches[#searches + 1] = GetTime()
+  lastSearch = GetTime()
+  B.Searched(state)
+  searches[#searches + 1] = lastSearch
 end
 
 local function Buy()
@@ -165,7 +169,7 @@ local function Select(id)
   end
   if id ~= selectedID then
     selectedID = id
-    button = B.NewButton(button.lastSearch)
+    button = B.NewButton()
     local record = Record(id)
     if not thresholds[id] and record then thresholds[id] = record.p end
   end

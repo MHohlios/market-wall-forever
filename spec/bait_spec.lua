@@ -104,36 +104,90 @@ describe("Bait", function()
       _G.C_Item = nil
       assert.is_nil(ns.R().bait[8])
     end)
+
+    it("leaves the record untouched while the item's commodity status is unknown", function()
+      local record = { p = 30, u = 1, q = 3, w = 100, first = 1, last = 1, seen = 2 }
+      ns.R().bait[9] = record
+      ns.UpdateBait(9, W.SortLadder({ [100] = 200 }), 100, History(), 5)   -- no item info loaded
+      assert.equal(record, ns.R().bait[9])
+      assert.same({ p = 30, u = 1, q = 3, w = 100, first = 1, last = 1, seen = 2 }, record)
+    end)
+
+    it("logs each purchase with item, units, unit price, total and time", function()
+      ns.AddPosition(7, 14, 420)
+      local entry = ns.R().buys[1]
+      assert.same({ id = 7, qty = 14, unit = 30, total = 420 }, { id = entry.id, qty = entry.qty, unit = entry.unit, total = entry.total })
+      assert.is_number(entry.t)
+    end)
   end)
 
   describe("searching on a press", function()
-    local sent, keyInfo
+    local fire, sent, keyInfo, ready, hasResults, answers
     before_each(function()
-      local fire
       ns, fire = addon.Load()
       fire("ADDON_LOADED", addon.ADDON)
       ns.ahOpen = true
-      sent, keyInfo = 0, nil
+      sent, keyInfo, ready, hasResults, answers = 0, nil, true, false, {}
       _G.GetTime = function() return 0 end
       _G.C_AuctionHouse = {
         MakeItemKey = function(id) return { itemID = id } end,
         GetItemKeyInfo = function() return keyInfo end,
-        IsThrottledMessageSystemReady = function() return true end,
+        IsThrottledMessageSystemReady = function() return ready end,
         SendSearchQuery = function() sent = sent + 1 end,
+        HasSearchResults = function() return hasResults end,
+        HasFullCommoditySearchResults = function() return true end,
+        GetCommoditySearchResultsQuantity = function() return 3 end,
+        GetNumCommoditySearchResults = function() return 1 end,
+        GetCommoditySearchResultInfo = function() return { unitPrice = 30, quantity = 3 } end,
       }
     end)
     after_each(function() _G.C_AuctionHouse, _G.GetTime = nil, nil end)
 
+    local function Search()
+      return ns.SearchNow(1, function(answered) answers[#answers + 1] = answered end)
+    end
+
     it("sends the search during the press", function()
       keyInfo = {}
-      assert.is_true(ns.SearchNow(1, function() end))
+      assert.is_true(Search())
       assert.equal(1, sent)
     end)
 
-    it("sends nothing, now or later, while the item's info is loading", function()
-      assert.is_false(ns.SearchNow(1, function() end))
+    it("sends nothing, now or later, while the item's info is loading or searches are throttled", function()
+      assert.is_false(Search())
+      keyInfo, ready = {}, false
+      assert.is_false(Search())
       assert.is_falsy(ns.scanState.running)   -- no scan left waiting to send later
       assert.equal(0, sent)
+    end)
+
+    it("reports an answered search", function()
+      keyInfo, hasResults = {}, true
+      Search()
+      fire("COMMODITY_SEARCH_RESULTS_UPDATED", 1)
+      assert.same({ true }, answers)
+      assert.equal(30, ns.ladders[1].ladder[1].p)
+    end)
+
+    it("records nothing when the search gets no answer", function()
+      local record = { p = 30, u = 1, q = 3, w = 100, first = 1, last = 1, seen = 2 }
+      local cur = { t = 1, w = 100, q = 50 }
+      ns.R().bait[1], ns.R().watch[1] = record, { cur = cur }
+      keyInfo = {}
+      Search()
+      fire("COMMODITY_SEARCH_RESULTS_UPDATED", 1)   -- an empty response
+      assert.same({ false }, answers)
+      assert.equal(record, ns.R().bait[1])
+      assert.equal(cur, ns.R().watch[1].cur)
+      assert.is_nil(ns.ladders[1])
+      assert.equal(1, sent)   -- and it did not retry
+    end)
+
+    it("reports a search stopped by closing the auction house as unanswered", function()
+      keyInfo = {}
+      Search()
+      ns.OnAuctionHouseClosed()
+      assert.same({ false }, answers)
     end)
   end)
 
@@ -177,12 +231,23 @@ describe("Bait", function()
   end)
 
   describe("price quote", function()
-    it("rejects a quote that would take the bait because copies were bought since the search", function()
-      -- planned 14 copies at 30; 10 copies were bought, so 14 units are now 5 at 30 and 9 at 35
-      local ok, reason = B.QuoteOK(35, 5 * 30 + 9 * 35, 14, 35, 30)
-      assert.is_false(ok)
-      assert.equal("Copies gone, this would buy the bait", reason)
-      assert.is_true(B.QuoteOK(30, 14 * 30, 14, 35, 30))
+    describe("when leaving the bait", function()
+      -- planned: 14 copies at 30, threshold 35
+      it("accepts only every unit at the bait price", function()
+        assert.is_true(B.QuoteOK(30, 14 * 30, 14, 35, 30))
+      end)
+
+      it("cancels when copies were bought since the search", function()
+        -- 14 units are now 5 at 30 (the bait included) and 9 at 35
+        local ok, reason = B.QuoteOK(35, 5 * 30 + 9 * 35, 14, 35, 30)
+        assert.is_false(ok)
+        assert.equal("Supply changed", reason)
+      end)
+
+      it("cancels when cheaper units appeared and copies were bought", function()
+        -- 14 units are now 13 at 25 and the bait at 30: cheaper on average, bait included
+        assert.same({ false, "Supply changed" }, { B.QuoteOK(30, 13 * 25 + 30, 14, 35, 30) })
+      end)
     end)
 
     it("accepts a quote with every unit within the threshold", function()
@@ -210,8 +275,8 @@ describe("Bait", function()
     it("searches, finds a deal, buys, confirms with a press and searches again", function()
       assert.equal("search", B.NextAction(s, 0, GAP, true))
       assert.equal("Search Thorium Bar", Label("search"))
-      B.Searched(s, 0)
-      assert.equal("busy", B.NextAction(s, 0.5, GAP, true))
+      B.Searched(s)
+      assert.equal("busy", B.NextAction(s, 0.5, GAP, true, 0))
 
       local found = B.Found(s, { qty = 18, cost = 560, leaving = 1, blocked = 0 }, 35)
       assert.is_true(found)
@@ -238,28 +303,35 @@ describe("Bait", function()
     end)
 
     it("says when nothing is at or below the threshold", function()
-      B.Searched(s, 0)
+      B.Searched(s)
       assert.is_false(B.Found(s, { qty = 0, cost = 0, leaving = 0, blocked = 0 }, 35))
       assert.equal("Nothing at or below 35c · Search again", Label("search"))
-      assert.equal("search", B.NextAction(s, 5, GAP, true))
+      assert.equal("search", B.NextAction(s, 5, GAP, true, 0))
     end)
 
     it("keeps the minimum gap when switching to another item", function()
-      B.Searched(s, 10)
-      local next = B.NewButton(s.lastSearch)
-      assert.equal("wait", (B.NextAction(next, 10.5, GAP, true)))
-      assert.equal("search", (B.NextAction(next, 11, GAP, true)))
+      -- the last search, for the previous item, went out at 10
+      local other = B.NewButton()
+      assert.equal("wait", (B.NextAction(other, 10.5, GAP, true, 10)))
+      assert.equal("search", (B.NextAction(other, 11, GAP, true, 10)))
     end)
 
     it("waits out the minimum gap and the game's throttle without doing anything", function()
-      B.Searched(s, 10)
+      B.Searched(s)
       B.Found(s, { qty = 0, cost = 0, leaving = 0, blocked = 0 }, 35)
-      local action, wait = B.NextAction(s, 10.2, GAP, true)
+      local action, wait = B.NextAction(s, 10.2, GAP, true, 10)
       assert.same({ "wait", 1 }, { action, wait })
       assert.equal("Waiting 1s", Label(action, wait))
-      assert.same({ "wait", 3 }, { B.NextAction(s, 10.2, 3, true) })
-      assert.equal("wait", (B.NextAction(s, 20, GAP, false)))
+      assert.same({ "wait", 3 }, { B.NextAction(s, 10.2, 3, true, 10) })
+      assert.equal("wait", (B.NextAction(s, 20, GAP, false, 10)))
       assert.equal("nothing", s.phase)   -- waiting changed nothing
+    end)
+
+    it("goes back to Search after a search that was stopped or got no answer", function()
+      B.Searched(s)
+      B.Unanswered(s)
+      assert.equal("search", B.NextAction(s, 5, GAP, true, 0))
+      assert.equal("Search Thorium Bar", Label("search"))
     end)
 
     it("cancels a quote over the threshold and shows the reason", function()

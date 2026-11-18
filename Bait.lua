@@ -97,15 +97,15 @@ end
 
 -- The game quotes the final price before a commodity purchase completes. Accept it only when
 -- no unit is over the threshold. unitPrice is the game's quoted unit price.
--- leaveAt: the bait price when leaving the bait. The cheapest units sell first, so a quote over
--- it means copies were bought since the search and this purchase would take the bait.
+-- leaveAt: the bait price when leaving the bait. Every unit bought must then be a copy at
+-- exactly that price; any other total means the supply changed since the search and the
+-- cheapest-first purchase could take the bait.
 function B.QuoteOK(unitPrice, totalPrice, qty, threshold, leaveAt)
   if not totalPrice or qty <= 0 then return false, "No price quoted" end
-  local function Over(limit)
-    return totalPrice / qty > limit or (unitPrice and unitPrice > limit)
+  if totalPrice / qty > threshold or (unitPrice and unitPrice > threshold) then
+    return false, "Price rose over " .. ns.Money(threshold)
   end
-  if Over(threshold) then return false, "Price rose over " .. ns.Money(threshold) end
-  if leaveAt and Over(leaveAt) then return false, "Copies gone, this would buy the bait" end
+  if leaveAt and totalPrice ~= qty * leaveAt then return false, "Supply changed" end
   return true
 end
 
@@ -113,15 +113,14 @@ end
 -- The action button. Each press does exactly one thing; nothing is ever queued.
 -- Phases: search, searching, deal, nothing, quote, confirm, buying.
 -------------------------------------------------------------------------------
--- lastSearch: when the previous search went out, whichever item it was for. The minimum gap
--- applies across items, so switching items never allows an early search.
-function B.NewButton(lastSearch)
-  return { phase = "search", lastSearch = lastSearch }
+function B.NewButton()
+  return { phase = "search" }
 end
 
 -- What a press would do now: "search", "buy", "confirm", "reset", "busy" or "wait" (with seconds).
 -- gap: minimum seconds between searches. ready: the game's search throttle is open.
-function B.NextAction(s, now, gap, ready)
+-- lastSearch: when the previous search went out, for any item, so switching items keeps the gap.
+function B.NextAction(s, now, gap, ready, lastSearch)
   local phase = s.phase
   if phase == "deal" then return "buy" end
   if phase == "confirm" then return "confirm" end
@@ -130,14 +129,19 @@ function B.NextAction(s, now, gap, ready)
     if now - s.since > B.STALE_PURCHASE then return "reset" end
     return "busy"
   end
-  local left = gap - (now - (s.lastSearch or -math.huge))
+  local left = gap - (now - (lastSearch or -math.huge))
   if left > 0 then return "wait", math.ceil(left) end
   if not ready then return "wait", 1 end
   return "search"
 end
 
-function B.Searched(s, now)
-  s.phase, s.lastSearch, s.note, s.plan = "searching", now, nil, nil
+function B.Searched(s)
+  s.phase, s.note, s.plan = "searching", nil, nil
+end
+
+-- The search was stopped or got no answer: nothing is known, so the next press searches again
+function B.Unanswered(s)
+  s.phase, s.note, s.plan = "search", nil, nil
 end
 
 -- Returns true when the search found a deal (play the sound)
