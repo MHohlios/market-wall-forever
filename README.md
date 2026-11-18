@@ -56,6 +56,30 @@ table. Settings has the mob rows: disenchanting and skinning in Optimal (Auto, A
 Never), the rare drop threshold and the minimum kills. The Mobs view added
 `MobsView.lua`, so restart the game once after updating to it.
 
+## Farm sessions and the ledger
+
+Right-click the **MW** button to start a labelled farm session (a recent label starts
+again in one click), pause or resume it, stop it, or open the Sessions view. `/mw
+session start <label>`, `stop`, `pause` and `resume` do the same. While a session is
+open, a small movable tracker shows its time, value earned and gold per hour under the
+Optimal, Market or Vendor lens. Logging out pauses it; paused time doesn't count.
+
+The search window's **Sessions** view lists every session, filtered by label; with one
+label picked it gives the best and median gold per hour of its runs. Click a session for
+its value earned at current prices and at the moment it ended, coins looted, gaps of over
+10 minutes with nothing gained, and each activity's share, value and top items.
+Right-click an activity to rename it, merge it into another, or unmerge a member; groups
+apply to every session.
+
+The **Ledger** view charts your gold and lists income and spending by source for a week
+or a month, for this character or all of them. Gold changes it can't attribute go to
+Other, so it always matches your gold. Settings has the Salvager mode and bonus rows;
+Reset to defaults keeps them, as they were imported once from Disenchantry.
+
+These views added `LedgerView.lua`, `SessionsView.lua` and `SessionTracker.lua`, and the
+recording added `Ledger.lua`, `Quests.lua` and `Sessions.lua`, so restart the game once
+after updating to them.
+
 ## Bait Detect
 
 A seller posts a unit or two far under the market so others copy that price, then buys

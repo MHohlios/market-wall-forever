@@ -161,6 +161,22 @@ function Sessions.Rename(groups, from, to)
   groups[to] = nil
 end
 
+-- The activity names shown under a group other than its own, sorted
+function Sessions.Members(groups, group)
+  local members = {}
+  for name, to in pairs(groups) do
+    if to == group then members[#members + 1] = name end
+  end
+  table.sort(members)
+  return members
+end
+
+-- Shows a merged or renamed activity under its own name again. Rename keeps groups one level
+-- deep, so nothing else points at the name.
+function Sessions.Unmerge(groups, name)
+  groups[name] = nil
+end
+
 local function PerHour(value, seconds)
   return seconds > 0 and value * 3600 / seconds or 0
 end
@@ -286,10 +302,12 @@ function Sessions.ReportFor(s, lens)
   return Sessions.Report(s, Sessions.GameLenses()[lens], Name, time())
 end
 
-local function Clock(seconds)
+-- Seconds as H:MM:SS
+function Sessions.Clock(seconds)
   seconds = math.max(0, math.floor(seconds))
   return string.format("%d:%02d:%02d", math.floor(seconds / 3600), math.floor(seconds % 3600 / 60), seconds % 60)
 end
+local Clock = Sessions.Clock
 
 local function Summary(s)
   local report = Sessions.ReportFor(s, "optimal")
@@ -338,6 +356,10 @@ end
 -- Renames or merges an activity group, for this and every later session
 function Sessions.RenameGroup(from, to)
   Sessions.Rename(MarketWallDB.sessionGroups, from, to)
+end
+
+function Sessions.UnmergeName(name)
+  Sessions.Unmerge(MarketWallDB.sessionGroups, name)
 end
 
 function Sessions.Command(text)

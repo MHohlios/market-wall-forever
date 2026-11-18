@@ -1,4 +1,5 @@
--- MarketWall: the MW button on the minimap's edge. Click opens the search window; drag moves it.
+-- MarketWall: the MW button on the minimap's edge. Click opens the search window, right-click
+-- the farm session menu; drag moves it.
 local _, ns = ...
 
 local M = {}
@@ -34,6 +35,29 @@ local function FollowCursor()
   Place()
 end
 
+-- Right-click: start, pause or resume, stop and open farm sessions
+local function SessionMenu()
+  local S = ns.Sessions
+  local s = S.Current()
+  local items = {
+    { text = "Farm session" },
+    { text = "Start session...", disabled = s ~= nil, onClick = function()
+      local recent = ns.SessionsView.RecentLabels(MarketWallDB.sessions, 1)
+      ns.widgets.Prompt("Label for the new session:", recent[1], S.Start)
+    end },
+  }
+  if not s then
+    for _, label in ipairs(ns.SessionsView.RecentLabels(MarketWallDB.sessions, ns.SessionsView.RECENT_LABELS)) do
+      items[#items + 1] = { text = "    Start \"" .. label .. "\"", onClick = function() S.Start(label) end }
+    end
+  end
+  items[#items + 1] = { text = s and s.pausedAt and "Resume" or "Pause", disabled = s == nil,
+    onClick = function() if s.pausedAt then S.Resume() else S.Pause() end end }
+  items[#items + 1] = { text = "Stop", disabled = s == nil, onClick = S.Stop }
+  items[#items + 1] = { text = "Open sessions", onClick = ns.OpenSessions }
+  ns.widgets.ShowMenu(items)
+end
+
 function ns.UpdateMinimapButton()
   if button then button:SetShown(ns.Cfg("minimapButton")) end
 end
@@ -44,7 +68,7 @@ function ns.InitMinimapButton()
   button:SetSize(31, 31)
   button:SetFrameStrata("MEDIUM")
   button:SetFrameLevel(8)
-  button:RegisterForClicks("LeftButtonUp")
+  button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   button:RegisterForDrag("LeftButton")
   button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
 
@@ -60,10 +84,13 @@ function ns.InitMinimapButton()
   label:SetPoint("CENTER", background, "CENTER", 0, 0)
   label:SetText("MW")
 
-  button:SetScript("OnClick", function() ns.ToggleSearch() end)
+  button:SetScript("OnClick", function(_, mouse)
+    GameTooltip:Hide()
+    if mouse == "RightButton" then SessionMenu() else ns.ToggleSearch() end
+  end)
   button:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-    GameTooltip:SetText("MarketWall: click to search prices")
+    GameTooltip:SetText("MarketWall: click to search prices, right-click for farm sessions")
     GameTooltip:Show()
   end)
   button:SetScript("OnLeave", function() GameTooltip:Hide() end)
