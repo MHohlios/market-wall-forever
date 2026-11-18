@@ -29,6 +29,11 @@ describe("Sell 7-day trend", function()
     assert.equal("flat", trend.TrendText(-0.03))
   end)
 
+  it("calls a computed 3% change flat despite float error", function()
+    assert.equal("flat", trend.TrendText(1030 / 1000 - 1))
+    assert.equal("flat", trend.TrendText(970 / 1000 - 1))
+  end)
+
   it("names moves past 3% up or down with the rounded percent", function()
     assert.truthy(trend.TrendText(0.031):find("up 3%%"))
     assert.truthy(trend.TrendText(-0.126):find("down 13%%"))
