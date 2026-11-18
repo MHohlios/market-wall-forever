@@ -169,6 +169,19 @@ describe("Bait", function()
       assert.equal(30, ns.ladders[1].ladder[1].p)
     end)
 
+    -- saved, so a reload keeps what the latest search saw (mob values read it)
+    it("saves whether the search saw real supply, replacing the full scan's verdict", function()
+      ns.R().supplied[1] = true
+      keyInfo, hasResults = {}, true
+      Search()
+      fire("COMMODITY_SEARCH_RESULTS_UPDATED", 1)   -- 3 units, under minSupply
+      assert.is_nil(MarketWallDB.realms[ns.Realm()].supplied[1])
+      MarketWallDB.cfg.minSupply = 3
+      Search()
+      fire("COMMODITY_SEARCH_RESULTS_UPDATED", 1)
+      assert.is_true(MarketWallDB.realms[ns.Realm()].supplied[1])
+    end)
+
     it("records nothing when the search gets no answer", function()
       local record = { p = 30, u = 1, q = 3, w = 100, first = 1, last = 1, seen = 2 }
       local cur = { t = 1, w = 100, q = 50 }

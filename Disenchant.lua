@@ -235,41 +235,44 @@ function ns.FindDisenchantDeals(prices, cut, minProfit, minPct)
   return deals, loading
 end
 
-local ENCHANTING_SKILL_LINE = 333
-
--- Each reader returns Enchanting's rank, or nil and whether it listed the character's skills
--- without Enchanting
-local function FromProfessions()
+-- Each reader returns a profession's rank, or nil and whether it listed the character's skills
+-- without that profession
+local function FromProfessions(skillLine)
   if not (GetProfessions and GetProfessionInfo) then return nil, false end
   local first, second = GetProfessions()
   for _, index in pairs({ first, second }) do
-    local _, _, rank, _, _, _, skillLine = GetProfessionInfo(index)
-    if skillLine == ENCHANTING_SKILL_LINE then return rank end
+    local _, _, rank, _, _, _, line = GetProfessionInfo(index)
+    if line == skillLine then return rank end
   end
   return nil, (first or second) ~= nil
 end
 
-local function FromSkillLines()
+local function FromSkillLines(spellID, englishName)
   if not (GetNumSkillLines and GetSkillLineInfo) then return nil, false end
-  local enchanting = (GetSpellInfo and GetSpellInfo(7411)) or "Enchanting"
+  local wanted = (GetSpellInfo and GetSpellInfo(spellID)) or englishName
   local count, collapsed = GetNumSkillLines(), false
   for i = 1, count do
     local name, isHeader, isExpanded, rank = GetSkillLineInfo(i)
     if isHeader and not isExpanded then
       collapsed = true
-    elseif name == enchanting then
+    elseif name == wanted then
       return rank
     end
   end
-  -- a collapsed section could be hiding Enchanting
+  -- a collapsed section could be hiding the profession
   return nil, count > 0 and not collapsed
 end
 
--- This character's Enchanting skill: 0 without the profession, nil when the game will not say
-function ns.EnchantingSkill()
-  local rank, listedWithout = FromProfessions()
+-- This character's rank in a profession, by its skill line and the spell named after it:
+-- 0 without the profession, nil when the game will not say
+function ns.ProfessionSkill(skillLine, spellID, englishName)
+  local rank, listedWithout = FromProfessions(skillLine)
   if rank then return rank end
-  local lineRank, linesWithout = FromSkillLines()
+  local lineRank, linesWithout = FromSkillLines(spellID, englishName)
   if lineRank then return lineRank end
   if listedWithout or linesWithout then return 0 end
+end
+
+function ns.EnchantingSkill()
+  return ns.ProfessionSkill(333, 7411, "Enchanting")
 end

@@ -14,6 +14,9 @@ Data.lua
 Scan.lua
 Buy.lua
 Disenchant.lua
+Record.lua
+Kills.lua
+Mobs.lua
 UI.lua
 PriceView.lua
 Sell.lua

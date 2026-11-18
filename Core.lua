@@ -25,6 +25,10 @@ ns.cfgDefaults = {
   baitSearchGap = 1.0,     -- seconds between Bait Detect searches; never less than 1
   baitConfirmPress = true, -- Bait Detect confirms each purchase with its own press
   minimapButton = true,    -- show the MW button on the minimap
+  mobDisenchant = "auto",  -- disenchanting in a mob's Optimal value: "auto" (with Enchanting), "always", "never"
+  mobSkinning = "auto",    -- skinning in a mob's Optimal value: "auto" (with Skinning), "always", "never"
+  mobRareShare = 0.02,     -- drops seen in fewer than this share of kills count as rare
+  mobMinKills = 10,        -- kills a mob needs before its value per kill shows
 }
 
 local function Print(...)
@@ -167,6 +171,7 @@ function ns.R()
   r.buys = r.buys or {}     -- { {t, id, qty, unit, total}, ... } every purchase through the addon
   r.bait = r.bait or {}     -- [itemID] = bait record, see Bait.lua; overwritten each scan
   r.recent = r.recent or {} -- item IDs looked up in the search window, newest first
+  r.supplied = r.supplied or {}   -- [itemID] = true with minSupply units at the latest search or full scan, which replaces it
   ns.realmData = r
   return r
 end
@@ -232,11 +237,13 @@ frame:SetScript("OnEvent", function(_, event, arg1)
     MarketWallDB.version = MarketWallDB.version or 1
     MarketWallDB.cfg = MarketWallDB.cfg or {}
     MarketWallDB.realms = MarketWallDB.realms or {}
+    MarketWallDB.mobs = MarketWallDB.mobs or {}   -- kill records per mob, see Mobs.lua
   elseif event == "PLAYER_LOGIN" then
     ns.realmData = nil
     ns.R()
     if ns.InitTooltip then ns.InitTooltip() end
     if ns.InitMinimapButton then ns.InitMinimapButton() end
+    if ns.Kills then ns.Kills.Start() end
   elseif event == "AUCTION_HOUSE_SHOW" then
     ns.ahOpen = true
     if ns.OnAuctionHouseShow then ns.OnAuctionHouseShow() end
@@ -269,6 +276,8 @@ SlashCmdList["MARKETWALL"] = function(msg)
       local default = ns.cfgDefaults[key]
       if type(default) == "boolean" then
         MarketWallDB.cfg[key] = (value == "true" or value == "on" or value == "1")
+      elseif type(default) == "string" then
+        MarketWallDB.cfg[key] = string.lower(value)
       else
         MarketWallDB.cfg[key] = tonumber(value) or default
       end
