@@ -119,16 +119,17 @@ function Log.NewTracker(emit)
     self.pending = cast and { item = cast.item, salvager = cast.salvager, t = t }
   end
 
-  -- A loot window opened; slots as in Kills.SplitLoot
+  -- A loot window opened; slots as in Kills.SplitLoot. Returns whether it is a disenchant's result.
   function tracker:Loot(slots, t)
     local cast = self.pending
     self.pending = nil
-    if not cast or t - cast.t > CAST_WINDOW or not FromItems(slots) then return end
+    if not cast or t - cast.t > CAST_WINDOW or not FromItems(slots) then return false end
     local materials = Materials(slots)
-    if not next(materials) then return end
+    if not next(materials) then return true end
     local item = cast.item
     emit({ t = t, kind = "disenchant", source = "item:" .. item.id, item = item.id, quality = item.quality,
       level = item.level, classID = item.classID, salvager = cast.salvager == true, materials = materials })
+    return true
   end
 
   return tracker

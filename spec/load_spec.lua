@@ -30,6 +30,7 @@ describe("loading the addon", function()
   it("creates its SavedVariables on ADDON_LOADED", function()
     local _, fire = addon.Load()
     fire("ADDON_LOADED", addon.ADDON)
-    assert.same({ version = 1, cfg = {}, realms = {}, mobs = {}, disenchants = {} }, MarketWallDB)
+    assert.same({ version = 1, cfg = {}, realms = {}, mobs = {}, disenchants = {}, ledger = {}, sessions = {},
+      sessionGroups = {}, creatures = {} }, MarketWallDB)
   end)
 end)

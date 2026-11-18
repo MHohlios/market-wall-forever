@@ -253,6 +253,10 @@ frame:SetScript("OnEvent", function(_, event, arg1)
     MarketWallDB.realms = MarketWallDB.realms or {}
     MarketWallDB.mobs = MarketWallDB.mobs or {}   -- kill records per mob, see Mobs.lua
     MarketWallDB.disenchants = MarketWallDB.disenchants or {}   -- your disenchant results, see DisenchantLog.lua
+    MarketWallDB.ledger = MarketWallDB.ledger or {}   -- cash ledger per character, see Ledger.lua
+    MarketWallDB.sessions = MarketWallDB.sessions or {}   -- farm sessions, see Sessions.lua
+    MarketWallDB.sessionGroups = MarketWallDB.sessionGroups or {}
+    MarketWallDB.creatures = MarketWallDB.creatures or {}
   elseif event == "PLAYER_LOGIN" then
     ns.realmData = nil
     ns.R()
@@ -317,6 +321,8 @@ SlashCmdList["MARKETWALL"] = function(msg)
     if id then ns.R().pos[id] = nil Print("Position cleared for " .. ns.Name(id)) end
   elseif cmd == "probe" then
     ns.ProbeCommand(rest)
+  elseif cmd == "session" then
+    ns.Sessions.Command(rest)
   else
     Print("Open the auction house and use the Market tab. Commands:")
     print("  /mw add <item link, id or name>   watch an item")
@@ -328,5 +334,6 @@ SlashCmdList["MARKETWALL"] = function(msg)
     print("  /mw probe start|stop|status       record what the client exposes for kills, loot and money")
     print("  /mw search                        open the item search window")
     print("  /mw minimap                       hide or show the minimap button")
+    print("  /mw session start <label>|stop|pause|resume   a farm session; /mw session shows the running one")
   end
 end

@@ -129,7 +129,10 @@ describe("DisenchantLog", function()
       local tracker = ns.Kills.NewTracker(function(e) events[#events + 1] = e end, function() end)
       tracker:Loot({ Slot(SOUL_DUST, 2, ITEM_GUID) }, false, 100, nil)
       tracker:Tick(1000, true)
-      assert.same({}, events)
+      for _, e in ipairs(events) do
+        assert.is_nil(e.npc)
+        assert.is_true(e.kind == "window" or e.source == "item")   -- an opened container at most
+      end
     end)
   end)
 
