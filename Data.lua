@@ -6,6 +6,7 @@ local B = ns.Bait
 ns.ladders = {}   -- [itemID] = { ladder=, total=, t=, kind=, auctions= } session only
 ns.snipes = {}    -- last full scan results
 ns.dips = {}
+ns.disenchants = {}
 
 local D_WALL, D_LOW, D_HIGH, D_UNITS, D_MIN, D_PARTS = 1, 2, 3, 4, 5, 6
 

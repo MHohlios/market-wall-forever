@@ -229,7 +229,15 @@ local DIP_COLUMNS = {
   { "Profit each", 110, "RIGHT", "Expected profit per unit if the price returns to normal, after the auction house cut." },
   { "History", 90, "RIGHT", "Days of data behind the normal price." },
 }
-local COLUMNS = { watch = WATCH_COLUMNS, snipes = SNIPE_COLUMNS, dips = DIP_COLUMNS }
+local DISENCHANT_COLUMNS = {
+  { "Item", 220, nil, "Weapons and armor, uncommon or better, listed under what disenchanting them is worth. Click a row to load live listings before buying." },
+  { "Price", 90, "RIGHT", "The cheapest buyout found in the scan." },
+  { "DE value after cut", 130, "RIGHT", "Expected value of the materials from one disenchant, at their wall prices, after the auction house cut on reselling them." },
+  { "Profit", 100, "RIGHT", "Disenchant value after cut minus the price." },
+  { "Profit %", 80, "RIGHT", "Profit as a share of the price." },
+  { "Odds from", 150, nil, "Where the material odds come from: your own disenchants (from Disenchantry), a Forever estimate, or the classic disenchanting table." },
+}
+local COLUMNS = { watch = WATCH_COLUMNS, snipes = SNIPE_COLUMNS, dips = DIP_COLUMNS, disenchant = DISENCHANT_COLUMNS }
 
 local STATUS_TEXT = {
   buy = BLUE .. "Buy|r", sell = ORANGE .. "Sell|r", normal = "Normal", nodata = GREY .. "Not scanned|r",
@@ -292,6 +300,25 @@ local function DipData()
     }
   end
   return data
+end
+
+-- Deals this character can disenchant, or all of them when the box is ticked or the skill is
+-- unknown. Also returns the skill and how many deals it hides.
+local function DisenchantData()
+  local skill = ns.EnchantingSkill()
+  local showAll = ns.Cfg("disenchantShowAll") or skill == nil
+  local data, hidden = {}, 0
+  for _, d in ipairs(ns.disenchants) do
+    if showAll or d.skill <= skill then
+      data[#data + 1] = { id = d.id,
+        cells = { ns.ColorName(d.id), ns.Money(d.price), ns.Money(d.value), ns.Money(d.profit), Pct(d.pct), d.odds },
+        sort = { ns.Name(d.id), d.price, d.value, d.profit, d.pct, d.odds },
+      }
+    else
+      hidden = hidden + 1
+    end
+  end
+  return data, skill, hidden
 end
 
 local function ApplySort(view, data)
@@ -691,6 +718,8 @@ local SETTINGS = {
   { key = "minHistoryDays", label = "Days of data required", kind = "int", tip = "Items need this many days of full scans before they can appear in Snipes or Dips." },
   { key = "minSnipeProfit", label = "Minimum snipe profit", kind = "money", tip = "Snipes with less total profit than this, after the cut, are left out." },
   { key = "minSnipeDiscount", label = "Minimum snipe discount", kind = "pct", tip = "Snipe units must cost at least this much less than the normal price." },
+  { key = "minDisenchantProfit", label = "Minimum disenchant profit", kind = "money", tip = "Disenchant deals with less profit per item than this, after the cut on the materials, are left out." },
+  { key = "minDisenchantPct", label = "Minimum disenchant profit %", kind = "pct", tip = "Disenchant deals must profit at least this share of their price." },
   { key = "dipPct", label = "Dip size", kind = "pct", tip = "How far below its normal price the wall must fall to count as a dip." },
   { key = "minSupply", label = "Minimum supply", kind = "int", tip = "Items with fewer units listed than this are left out of Snipes and Dips, because thin markets give unreliable prices." },
   { key = "staleMinutes", label = "Grey out after (minutes)", kind = "int", tip = "Watchlist rows are greyed out when their last scan is older than this." },
@@ -699,6 +728,8 @@ local SETTINGS = {
   { key = "baitSearchGap", label = "Bait search gap (seconds)", kind = "secs", tip = "Bait Detect waits at least this long between searches. Never less than 1 second." },
   { key = "baitConfirmPress", label = "Bait confirm press", kind = "bool", tip = "Bait Detect confirms each purchase with its own press of the button. Untick to confirm straight after the price quote." },
 }
+
+local SETTING_ROW_H = 27   -- every row, plus Reset, fits above the frame's bottom edge
 
 local function FormatSetting(def)
   local value = ns.Cfg(def.key)
@@ -739,7 +770,7 @@ local function BuildSettings(parent)
   page:SetAllPoints()
   page.rows = {}
   for i, def in ipairs(SETTINGS) do
-    local y = -62 - (i - 1) * 30
+    local y = -62 - (i - 1) * SETTING_ROW_H
     local label = MakeText(page, "GameFontNormal")
     label:SetPoint("TOPLEFT", 20, y)
     label:SetText(def.label)
@@ -774,14 +805,14 @@ local function BuildSettings(parent)
     page.rows[i] = { def = def, control = control }
   end
   local reset = MakeButton(page, "Reset to defaults", 140)
-  reset:SetPoint("TOPLEFT", 20, -62 - #SETTINGS * 30 - 6)
+  reset:SetPoint("TOPLEFT", 20, -62 - #SETTINGS * SETTING_ROW_H - 6)
   reset:SetScript("OnClick", function()
     for k in pairs(MarketWallDB.cfg) do MarketWallDB.cfg[k] = nil end
     RefreshSettings()
   end)
   local note = MakeText(page, "GameFontDisableSmall")
   note:SetPoint("LEFT", reset, "RIGHT", 12, 0)
-  note:SetText("Press Enter after typing a value. Changes to Snipes and Dips apply on the next full scan.")
+  note:SetText("Press Enter after typing a value. Changes to Snipes, Dips and Disenchant apply on the next full scan.")
   return page
 end
 
@@ -811,6 +842,7 @@ function ui.Show(view)
   ui.bait:SetShown(isBait)
   ui.list:SetShown(isList)
   ui.footer:SetShown(view == "watch")
+  ui.disenchantFooter:SetShown(view == "disenchant")
   ui.hint:SetShown(isList)
   for name, button in pairs(ui.nav) do
     if name == view or (isItem and name == ui.lastList) then button:LockHighlight() else button:UnlockHighlight() end
@@ -845,6 +877,21 @@ local function ListView(view, data, emptyText, hint)
   ui.hint:SetText(hint)
 end
 
+local function RefreshDisenchant()
+  local data, skill, hidden = DisenchantData()
+  local empty
+  if not ns.lastFullScan then
+    empty = ui.WaitingText(nil, "Run a full scan to look for gear listed under its disenchant value.")
+  elseif hidden > 0 then
+    empty = string.format("No deals at your Enchanting skill. %d more need a higher skill; tick the box below to see them.", hidden)
+  else
+    empty = "No disenchant deals in the last full scan."
+  end
+  local skillText = skill and ("Enchanting " .. skill) or (ORANGE .. "Enchanting skill unknown, so every item is shown|r")
+  ListView("disenchant", data, empty, skillText .. ". Click a row to load live listings before buying.")
+  ui.showAllBox:SetChecked(ns.Cfg("disenchantShowAll") and true or false)
+end
+
 function ns.RefreshUI()
   if not ui.frame or not ui.frame:IsShown() then return end
   local view = ui.view
@@ -868,6 +915,8 @@ function ns.RefreshUI()
     ListView("dips", DipData(),
       ui.WaitingText("No dips in the last full scan.", "Run a full scan. Dips compare today's wall price with each item's own history."),
       string.format("Only items with %d days of data. Items sliding for days are left out.", ns.Cfg("minHistoryDays")))
+  elseif view == "disenchant" then
+    RefreshDisenchant()
   end
   ns.UpdateStatus()
 end
@@ -916,8 +965,10 @@ local function Build()
 
   ui.nav = {}
   local previous
-  for _, def in ipairs({ { "watch", "Watchlist" }, { "snipes", "Snipes" }, { "dips", "Dips" }, { "bait", "Bait Detect" }, { "sell", "Sell" }, { "settings", "Settings" } }) do
-    local b = MakeButton(f, def[2], 74)
+  -- widths fit each label, so eight buttons leave room for the scan buttons on the right
+  for _, def in ipairs({ { "watch", "Watchlist", 72 }, { "snipes", "Snipes", 58 }, { "dips", "Dips", 46 }, { "disenchant", "Disenchant", 76 },
+    { "bait", "Bait Detect", 80 }, { "sell", "Sell", 44 }, { "settings", "Settings", 64 } }) do
+    local b = MakeButton(f, def[2], def[3])
     if previous then b:SetPoint("LEFT", previous, "RIGHT", 4, 0) else b:SetPoint("TOPLEFT", 8, -6) end
     b:SetScript("OnClick", function() ui.Show(def[1]) end)
     ui.nav[def[1]] = b
@@ -978,6 +1029,22 @@ local function Build()
   local add = MakeButton(ui.footer, "Add", 60)
   add:SetPoint("LEFT", ui.addBox, "RIGHT", 6, 0)
   add:SetScript("OnClick", AddFromBox)
+
+  ui.disenchantFooter = CreateFrame("Frame", nil, f)
+  ui.disenchantFooter:SetPoint("BOTTOMLEFT", 0, 4)
+  ui.disenchantFooter:SetPoint("BOTTOMRIGHT", 0, 4)
+  ui.disenchantFooter:SetHeight(26)
+  ui.showAllBox = CreateFrame("CheckButton", nil, ui.disenchantFooter, "UICheckButtonTemplate")
+  ui.showAllBox:SetSize(24, 24)
+  ui.showAllBox:SetPoint("LEFT", 6, 0)
+  ui.showAllBox:SetScript("OnClick", function(self)
+    MarketWallDB.cfg.disenchantShowAll = self:GetChecked() and true or false
+    ui.list.offset = 0
+    ns.RefreshUI()
+  end)
+  local showAllLabel = MakeText(ui.disenchantFooter, "GameFontNormalSmall")
+  showAllLabel:SetPoint("LEFT", ui.showAllBox, "RIGHT", 2, 0)
+  showAllLabel:SetText("Show items I can't disenchant yet")
 
   ui.item = BuildItemPage(f)
   ui.item:Hide()

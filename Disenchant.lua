@@ -186,3 +186,71 @@ function ns.DisenchantValue(id)
   total = total * (1 + SalvagerBonus())
   return total, source == "estimate" and "estimate" or nil
 end
+
+-- The Enchanting skill the classic rules ask for before an item can be disenchanted, by item
+-- level: 1 up to level 20, then 25 more for every 5 levels, capped at 225 from level 61
+function ns.DisenchantSkill(level)
+  if level <= 20 then return 1 end
+  return math.min(225, 25 * math.ceil((level - 20) / 5))
+end
+
+local ODDS_FROM = { estimate = "Forever estimate" }
+
+-- Gear check that needs no server round trip, for filtering a whole scan cheaply
+function ns.IsGear(id)
+  local classID = select(6, C_Item.GetItemInfoInstant(id))
+  return classID == WEAPON or classID == ARMOR
+end
+
+-- One disenchant deal: uncommon or better weapons and armor whose disenchant value, after the
+-- cut on reselling the materials, beats the price by both thresholds. Nil otherwise.
+local function Deal(id, price, cut, minProfit, minPct)
+  local _, _, quality, level, _, _, _, _, _, _, _, classID = C_Item.GetItemInfo(id)
+  if not (quality and quality >= UNCOMMON and (classID == WEAPON or classID == ARMOR)) then return nil end
+  local value, note = ns.DisenchantValue(id)
+  if not value then return nil end
+  value = value * (1 - cut)
+  local profit = value - price
+  local pct = profit / price
+  if profit <= 0 or profit < minProfit or pct < minPct then return nil end
+  return { id = id, price = price, value = value, profit = profit, pct = pct,
+    odds = ODDS_FROM[note] or note or "classic table", skill = ns.DisenchantSkill(level) }
+end
+
+-- prices: { [itemID] = cheapest buyout }. Returns the deals, most profit first.
+function ns.FindDisenchantDeals(prices, cut, minProfit, minPct)
+  local deals = {}
+  for id, price in pairs(prices) do
+    deals[#deals + 1] = Deal(id, price, cut, minProfit, minPct)
+  end
+  table.sort(deals, function(a, b) return a.profit > b.profit end)
+  return deals
+end
+
+local ENCHANTING_SKILL_LINE = 333
+
+-- This character's Enchanting skill: 0 without the profession, nil when the game will not say
+function ns.EnchantingSkill()
+  if GetProfessions and GetProfessionInfo then
+    local first, second = GetProfessions()
+    for _, index in pairs({ first, second }) do
+      local _, _, rank, _, _, _, skillLine = GetProfessionInfo(index)
+      if skillLine == ENCHANTING_SKILL_LINE then return rank end
+    end
+    return 0
+  end
+  if GetNumSkillLines and GetSkillLineInfo then
+    local enchanting = (GetSpellInfo and GetSpellInfo(7411)) or "Enchanting"
+    local collapsed = false
+    for i = 1, GetNumSkillLines() do
+      local name, isHeader, isExpanded, rank = GetSkillLineInfo(i)
+      if isHeader and not isExpanded then
+        collapsed = true
+      elseif name == enchanting then
+        return rank
+      end
+    end
+    -- a collapsed section could be hiding Enchanting
+    if not collapsed then return 0 end
+  end
+end

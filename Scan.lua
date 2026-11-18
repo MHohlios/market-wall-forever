@@ -266,13 +266,14 @@ function ns.FullScanCooldown()
   return left
 end
 
--- Turn accumulated { [itemID] = { [unitPrice] = units } } into records, snipes and dips
+-- Turn accumulated { [itemID] = { [unitPrice] = units } } into records, snipes, dips and disenchant deals
 local function Finalize(maps, names, stamp)
   local r = ns.R()
   local ids = {}
   for id in pairs(maps) do ids[#ids + 1] = id end
   for id, name in pairs(names) do r.names[id] = name end
   local snipes, dips = {}, {}
+  local gearPrices = {}   -- cheapest buyout of each weapon and armor item, for disenchant deals
   local hidden, bestHistory = 0, 0
   local minDays = ns.Cfg("minHistoryDays")
   local cut = ns.Cfg("ahCut")
@@ -288,6 +289,7 @@ local function Finalize(maps, names, stamp)
       local stats = ns.StatsFor(id)
       local wall, minPrice = ns.Record(id, ladder, total, stamp)
       ns.UpdateBait(id, ladder, wall, stats, stamp)
+      if ns.IsGear(id) then gearPrices[id] = ladder[1].p end
       if wall then
         if r.watch[id] then
           ns.ladders[id] = { ladder = ladder, total = total, t = stamp, kind = "scan" }
@@ -327,6 +329,8 @@ local function Finalize(maps, names, stamp)
         if not maps[id] then r.bait[id] = nil end
       end
       ns.snipes, ns.dips = snipes, dips
+      -- after the loop, so materials are priced at today's walls
+      ns.disenchants = ns.FindDisenchantDeals(gearPrices, cut, ns.Cfg("minDisenchantProfit"), ns.Cfg("minDisenchantPct"))
       ns.hiddenSnipes, ns.bestHistory = hidden, bestHistory
       ns.lastFullScan = stamp
       r.lastFull = stamp
