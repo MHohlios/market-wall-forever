@@ -19,7 +19,7 @@ local function MarketLines(add, id, count)
   end
 
   local PV = ns.PriceView
-  local week = PV.WeekSummary(PV.InRange(ns.Series(id), 7, time()))
+  local week = PV.Summary(PV.InRange(ns.Series(id), 7, time()))
   if week and week.trend then add(GREY .. "7-day trend|r", PV.TrendText(week.trend)) end
 
   local cycle = ns.Cycle(id)

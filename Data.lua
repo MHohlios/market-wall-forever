@@ -68,24 +68,90 @@ function ns.StatsFor(id)
   return W.Stats(ns.DayWalls(id))
 end
 
+-- Weekly history is saved as one compact string per item: the first week's start day, then one
+-- "wall,wall-low,high-wall" segment per consecutive week, all base 36, and an empty segment for a
+-- week with no data. "fr1;2n9,1c,8;;2p1,0,3" is three weeks, the middle one missing.
+local DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz"
+
+local function Base36(n)
+  local out = ""
+  repeat
+    local digit = n % 36
+    out = DIGITS:sub(digit + 1, digit + 1) .. out
+    n = (n - digit) / 36
+  until n == 0
+  return out
+end
+
+-- Weeks, oldest first, each { start=, wall=, low=, high= }, as one string; nil for none
+function ns.PackWeeks(weeks)
+  if #weeks == 0 then return nil end
+  local first = weeks[1].start
+  local segments = { Base36(first) }
+  for _, week in ipairs(weeks) do
+    local position = (week.start - first) / 7 + 2
+    for i = #segments + 1, position - 1 do segments[i] = "" end
+    segments[position] = Base36(week.wall) .. "," .. Base36(week.wall - week.low) .. "," .. Base36(week.high - week.wall)
+  end
+  return table.concat(segments, ";")
+end
+
+-- The weeks in a packed string, oldest first, skipping missing weeks
+function ns.UnpackWeeks(text)
+  local weeks = {}
+  if not text then return weeks end
+  local first, start
+  for segment in (text .. ";"):gmatch("([^;]*);") do
+    if not first then
+      first = tonumber(segment, 36)
+      start = first
+    else
+      local wall, below, above = segment:match("^(%w+),(%w+),(%w+)$")
+      if wall then
+        wall = tonumber(wall, 36)
+        weeks[#weeks + 1] = { start = start, wall = wall, low = wall - tonumber(below, 36), high = wall + tonumber(above, 36) }
+      end
+      start = start + 7
+    end
+  end
+  return weeks
+end
+
+-- Unpacked weekly history for the chart, parsed again only when the saved string changes
+local weekCache = {}   -- [itemID] = { text =, weeks = }
+local function CachedWeeks(id)
+  local text = ns.R().weeks[id]
+  local cached = weekCache[id]
+  if not cached or cached.text ~= text then
+    cached = { text = text, weeks = ns.UnpackWeeks(text) }
+    weekCache[id] = cached
+  end
+  return cached.weeks
+end
+
 -- Points for the chart: per-scan snapshots when we have them, otherwise one point per day.
--- withOlderDays also keeps the daily points from the days before the first snapshot.
-function ns.Series(id, withOlderDays)
+-- withHistory first adds the weekly points, at mid-week, then the daily points from before the first snapshot.
+function ns.Series(id, withHistory)
   local r = ns.R()
   local out = {}
+  if withHistory then
+    for i, week in ipairs(CachedWeeks(id)) do
+      out[i] = { t = ns.DayStart(week.start) + 3.5 * 86400, w = week.wall }
+    end
+  end
   local snaps = r.snaps[id]
   local useSnaps = snaps and #snaps >= 2
   local days = r.days[id]
-  if days and (withOlderDays or not useSnaps) then
+  if days and (withHistory or not useSnaps) then
     local before = useSnaps and ns.DayOf(snaps[1][1]) or math.huge
     local keys = {}
     for day in pairs(days) do
       if day < before then keys[#keys + 1] = day end
     end
     table.sort(keys)
-    for i = 1, #keys do
-      local d = days[keys[i]]
-      out[i] = { t = ns.DayStart(keys[i]) + 43200, w = d[D_WALL], m = d[D_MIN], q = d[D_UNITS] }
+    for _, day in ipairs(keys) do
+      local d = days[day]
+      out[#out + 1] = { t = ns.DayStart(day) + 43200, w = d[D_WALL], m = d[D_MIN], q = d[D_UNITS] }
     end
   end
   if useSnaps then
@@ -94,6 +160,50 @@ function ns.Series(id, withOlderDays)
     end
   end
   return out
+end
+
+-- First day of the Monday-start week holding a day; day 0, 1 Jan 1970, was a Thursday
+local function WeekStart(day)
+  return day - (day + 3) % 7
+end
+
+local function Median(values)
+  table.sort(values)
+  return W.Percentile(values, 0.5)
+end
+
+-- Folds an item's daily records from whole weeks before `cutoff` into one weekly point each:
+-- the median, lowest and highest wall. A week straddling the cutoff waits until all its days
+-- have passed it. Keeps the newest retainWeeks weeks.
+function ns.FoldWeeks(id, cutoff)
+  local r = ns.R()
+  local days = r.days[id]
+  local expired = {}   -- [week start] = daily records
+  for day, d in pairs(days or {}) do
+    local week = WeekStart(day)
+    if week + 7 <= cutoff then
+      expired[week] = expired[week] or {}
+      table.insert(expired[week], d)
+      days[day] = nil
+    end
+  end
+  local starts = {}
+  for week in pairs(expired) do starts[#starts + 1] = week end
+  if #starts == 0 then return end
+  table.sort(starts)
+
+  local weeks = ns.UnpackWeeks(r.weeks[id])
+  for _, week in ipairs(starts) do
+    local walls, low, high = {}, math.huge, 0
+    for i, d in ipairs(expired[week]) do
+      walls[i] = d[D_WALL]
+      low, high = math.min(low, d[D_LOW]), math.max(high, d[D_HIGH])
+    end
+    weeks[#weeks + 1] = { start = week, wall = ns.Round(Median(walls)), low = low, high = high }
+  end
+  local oldest = weeks[#weeks].start - (ns.Cfg("retainWeeks") - 1) * 7
+  while weeks[1].start < oldest do table.remove(weeks, 1) end
+  r.weeks[id] = ns.PackWeeks(weeks)
 end
 
 -- Record one observation of an item's listings. Returns wall, minPrice.
@@ -126,9 +236,13 @@ function ns.Record(id, ladder, total, t)
     if not parts then parts = {} d[D_PARTS] = parts end
     parts[PartOf(t)] = wall
     cycleCache[id] = nil
-    local cutoff = today - (watched and 365 or ns.Cfg("retainDays"))
-    for day in pairs(days) do
-      if day < cutoff then days[day] = nil end
+    if watched then
+      local cutoff = today - 365
+      for day in pairs(days) do
+        if day < cutoff then days[day] = nil end
+      end
+    else
+      ns.FoldWeeks(id, today - ns.Cfg("retainDays"))
     end
   end
 
@@ -234,17 +348,6 @@ function ns.LatestWall(id)
     if not latestDay or day > latestDay then latestDay = day end
   end
   if latestDay then return days[latestDay][D_WALL], latestDay end
-end
-
--- How many days an item has been recorded, and the lowest and highest wall seen on them
-function ns.WallHistory(id)
-  local history = { days = 0 }
-  for _, d in pairs(ns.R().days[id] or {}) do
-    history.days = history.days + 1
-    if not history.low or d[D_LOW] < history.low then history.low = d[D_LOW] end
-    if not history.high or d[D_HIGH] > history.high then history.high = d[D_HIGH] end
-  end
-  return history
 end
 
 -- How a price compares with the item's median wall: the difference (-0.1 is 10% under)

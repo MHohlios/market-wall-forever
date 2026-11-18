@@ -18,6 +18,7 @@ ns.cfgDefaults = {
   minHistoryDays = 5,      -- days of data an item needs before it can appear in Snipes or Dips
   baselineDays = 14,       -- days used for the normal price
   retainDays = 30,         -- daily history kept for unwatched items
+  retainWeeks = 52,        -- weekly points kept for unwatched items, folded from their expired days
   minRecordSupply = 5,     -- unwatched items with fewer units are not recorded
   maxSnaps = 400,          -- per-scan snapshots kept per watched item
   sound = true,
@@ -184,6 +185,7 @@ function ns.R()
   r.names = r.names or {}   -- [itemID] = name
   r.watch = r.watch or {}   -- [itemID] = { buy=, sell=, added=, cur={t,w,m,q,under,cost} }
   r.days = r.days or {}     -- [itemID] = { [day] = { wall, lowWall, highWall, units, minPrice } }
+  r.weeks = r.weeks or {}   -- [itemID] = packed weekly history, see ns.PackWeeks in Data.lua
   r.snaps = r.snaps or {}   -- [itemID] = { {t, wall, minPrice, units}, ... } watched items only
   r.pos = r.pos or {}       -- [itemID] = { qty=, cost= } bought through the addon
   r.buys = r.buys or {}     -- { {t, id, qty, unit, total}, ... } every purchase through the addon

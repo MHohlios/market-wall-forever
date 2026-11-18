@@ -18,7 +18,10 @@ ns.ItemSearch = S
 local MATCHES, RECENT = 8, 10
 local WIDTH, HEIGHT, SIDE_WIDTH, MAIN_X = 760, 460, 180, 210
 local SIDE_ROWS, ROW_HEIGHT, LISTING_LINES = 20, 16, 5
-local CELLS = { "lastWall", "median", "normalRange", "average", "trend", "lowHigh", "days", "vendor", "disenchant", "limits" }
+local CELLS = {
+  "current", "rangeMin", "rangeMax", "rangeAverage", "rangeMedian", "rangeTrend", "rangePoints", "normalRange",
+  "vendor", "disenchant", "limits",
+}
 local GREY, GOLD = "|cffa3acac", "|cfff5c518"
 
 -------------------------------------------------------------------------------
