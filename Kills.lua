@@ -24,11 +24,11 @@ local PICK_POCKET = 921
 local FORGET_AFTER = 1800  -- seconds a corpse is remembered for dedupe and repeat loot windows
 local MONEY_SLOT = 2       -- LOOT_SLOT_MONEY
 
--- Skinning, Herb Gathering and Mining, every classic rank
+-- Skinning, Herb Gathering and Mining, every classic rank, and the skill each belongs to
 local GATHER_SPELLS = {
-  [8613] = true, [8617] = true, [8618] = true, [10768] = true,
-  [2366] = true, [2368] = true, [3570] = true, [11993] = true,
-  [2575] = true, [2576] = true, [3564] = true, [10248] = true,
+  [8613] = "skinning", [8617] = "skinning", [8618] = "skinning", [10768] = "skinning",
+  [2366] = "herbalism", [2368] = "herbalism", [3570] = "herbalism", [11993] = "herbalism",
+  [2575] = "mining", [2576] = "mining", [3564] = "mining", [10248] = "mining",
 }
 
 -- "npc" or "object" and its ID; nil for players, pets and anything unreadable
@@ -169,7 +169,10 @@ function Kills.NewTracker(emit, canLoot)
     pending = {},   -- [guid] = { guid, npc, t, looted, check, coin, drops, gather }
     corpses = {},   -- [guid] = { t =, loot = nil, "partial", "emptied" or "gathered" }
     names = {},     -- [npcID] = name, from units you targeted or hovered
-    window = {},    -- guids in the open loot window
+    window = {},    -- corpse guids in the open loot window
+    items = {},     -- [item guid] = { t = } for item loot open now or closed with loot left
+    itemWindow = {},   -- item guids in the open loot window
+    windowID = 0,   -- counts loot windows; loot and fish events carry their window's as `window`
     paths = { loot = 0, canloot = 0, window = 0 },
     lastGather = nil,
   }
@@ -199,7 +202,7 @@ function Kills.NewTracker(emit, canLoot)
   end
 
   function tracker:Cast(spellID, t)
-    if GATHER_SPELLS[spellID] then self.lastGather = t end
+    if GATHER_SPELLS[spellID] then self.lastGather, self.gatherSkill = t, GATHER_SPELLS[spellID] end
     if spellID == PICK_POCKET then self.lastPickPocket = t end
   end
 
@@ -207,15 +210,16 @@ function Kills.NewTracker(emit, canLoot)
     return castAt and t - castAt <= CAST_WINDOW
   end
 
-  -- Each corpse or node is gathered once; reopening its gather window adds nothing
-  local function Gather(guid, kind, id, share, t)
+  -- Each gather cast is recorded once, so mining a vein twice records both; reopening a gather
+  -- window without a new cast adds nothing. skill is nil for a corpse emptied and opened again.
+  local function Gather(guid, kind, id, share, t, skill)
     local corpse = tracker.corpses[guid] or { t = t }
     corpse.loot = "gathered"
     tracker.corpses[guid] = corpse
     local kill = tracker.pending[guid]
     if kill then kill.gather = Merge(kill.gather or {}, share.drops) end
     emit({ t = t, kind = "gather", source = SourceOf(kind, id), guid = guid, npc = kind == "npc" and id or nil,
-      drops = share.drops })
+      skill = skill or (kind == "npc" and "skinning" or nil), drops = share.drops })
   end
 
   -- Whether any source in a window died: a kill was seen for it
@@ -227,15 +231,19 @@ function Kills.NewTracker(emit, canLoot)
   end
 
   -- A loot window opened. slots as in SplitLoot; target is your target's GUID, which names the
-  -- corpse of a window with nothing in it.
-  function tracker:Loot(slots, fishing, t, target)
-    self.window = {}
+  -- corpse of a window with nothing in it. disenchanting: DisenchantLog.lua took it as a disenchant.
+  function tracker:Loot(slots, fishing, t, target, disenchanting)
+    self.window, self.itemWindow = {}, {}
+    self.windowID = self.windowID + 1
+    local window = self.windowID
+    emit({ t = t, kind = "window", window = window })   -- even one that records nothing
     -- a cast explains only the first window after it
     local gathering, pickPocket = Within(self.lastGather, t), Within(self.lastPickPocket, t)
+    local skill = gathering and self.gatherSkill or nil
     self.lastGather, self.lastPickPocket = nil, nil
     if fishing then
       local total = Kills.TotalLoot(slots)
-      emit({ t = t, kind = "fish", source = "fishing", coin = total.coin, drops = total.drops })
+      emit({ t = t, kind = "fish", source = "fishing", window = window, coin = total.coin, drops = total.drops })
       return
     end
     local opened = target and self.pending[target]
@@ -245,8 +253,25 @@ function Kills.NewTracker(emit, canLoot)
       return
     end
     local shares = Kills.SplitLoot(slots)
-    for guid in pairs(shares) do
-      if Kills.IsItemSource(guid) then shares[guid] = nil end   -- never a mob's loot
+    local container
+    for guid, share in pairs(shares) do
+      if Kills.IsItemSource(guid) then   -- never a mob's loot
+        shares[guid] = nil
+        -- an item reopened with loot left is neither new loot nor a new disenchant
+        self.itemWindow[#self.itemWindow + 1] = guid
+        if not self.items[guid] then
+          self.items[guid] = { t = t }
+          if not disenchanting then
+            container = container or { coin = 0, drops = {} }
+            container.coin = container.coin + share.coin
+            Merge(container.drops, share.drops)
+          end
+        end
+      end
+    end
+    -- a container opened from your bags; disenchant materials belong to DisenchantLog.lua
+    if container then
+      emit({ t = t, kind = "loot", source = "item", window = window, coin = container.coin, drops = container.drops })
     end
     if pickPocket and not self:FromCorpse(shares) then
       return   -- a living mob's pockets, not its drops
@@ -254,16 +279,17 @@ function Kills.NewTracker(emit, canLoot)
     for guid, share in pairs(shares) do
       local kind, id = Kills.ParseGUID(guid)
       local state = self.corpses[guid] and self.corpses[guid].loot
-      if state ~= "gathered" and (gathering or state == "emptied") then
-        Gather(guid, kind, id, share, t)
+      if gathering or state == "emptied" then
+        Gather(guid, kind, id, share, t, skill)
       elseif not state then   -- a corpse reopened with items left is not new loot
         self.window[#self.window + 1] = guid
         local kill = self.pending[guid] or self:Kill(guid, t)
         local corpse = self.corpses[guid] or { t = t }
         corpse.loot = "partial"
         self.corpses[guid] = corpse
-        emit({ t = t, kind = "loot", source = SourceOf(kind, id), guid = guid, npc = kind == "npc" and id or nil,
-          coin = share.coin, drops = share.drops })
+        local npc = kind == "npc" and id or nil
+        emit({ t = t, kind = "loot", source = SourceOf(kind, id), window = window, guid = guid, npc = npc,
+          name = npc and tracker.names[npc], coin = share.coin, drops = share.drops })
         if kill then
           kill.looted, kill.coin, kill.drops = true, share.coin, share.drops
           Settle(kill, Kills.LOOTED, "loot")
@@ -273,11 +299,14 @@ function Kills.NewTracker(emit, canLoot)
   end
 
   -- The loot window closed; emptied says every slot was taken
-  function tracker:Closed(emptied)
+  function tracker:Closed(emptied, t)
+    emit({ t = t, kind = "window", window = self.windowID, closed = true })
     if emptied then
       for _, guid in ipairs(self.window) do self.corpses[guid].loot = "emptied" end
+      -- the next container opened from the same stack shares its GUID, and is new loot
+      for _, guid in ipairs(self.itemWindow) do self.items[guid] = nil end
     end
-    self.window = {}
+    self.window, self.itemWindow = {}, {}
   end
 
   -- Called about once a second: asks CanLootUnit once per kill, settles kills whose window has
@@ -290,6 +319,9 @@ function Kills.NewTracker(emit, canLoot)
     end
     for guid, corpse in pairs(self.corpses) do
       if now - corpse.t > FORGET_AFTER and not self.pending[guid] then self.corpses[guid] = nil end
+    end
+    for guid, item in pairs(self.items) do
+      if now - item.t > FORGET_AFTER then self.items[guid] = nil end
     end
   end
 
@@ -352,8 +384,8 @@ local HANDLERS = {
     looting = true
     local slots = ReadLootWindow()
     slotCount, cleared = #slots, {}
-    tracker:Loot(slots, Readable(IsFishingLoot()) == true, time(), Readable(UnitGUID("target")))
-    if ns.DisenchantLog then ns.DisenchantLog.tracker:Loot(slots, time()) end
+    local disenchant = ns.DisenchantLog and ns.DisenchantLog.tracker:Loot(slots, time())
+    tracker:Loot(slots, Readable(IsFishingLoot()) == true, time(), Readable(UnitGUID("target")), disenchant == true)
   end,
   LOOT_SLOT_CLEARED = function(slot) cleared[slot] = true end,
   LOOT_CLOSED = function()
@@ -361,7 +393,7 @@ local HANDLERS = {
     looting = false
     local taken = 0
     for _ in pairs(cleared) do taken = taken + 1 end
-    tracker:Closed(taken >= slotCount)
+    tracker:Closed(taken >= slotCount, time())
   end,
   PLAYER_LOGOUT = function() tracker:Tick(time(), true) end,
 }

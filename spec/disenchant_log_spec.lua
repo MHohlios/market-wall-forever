@@ -63,6 +63,14 @@ describe("DisenchantLog", function()
       assert.same({}, events)
     end)
 
+    it("knows a window as a disenchant's even when the item is unknown, without sampling it", function()
+      tracker:Started(nil, false)
+      tracker:Succeeded(100)
+      assert.is_true(tracker:Loot({ Slot(SOUL_DUST, 2, ITEM_GUID) }, 101))
+      assert.same({}, events)
+      assert.is_false(tracker:Loot({ Slot(SOUL_DUST, 2, ITEM_GUID) }, 102))
+    end)
+
     it("takes the item from the cast's end when its start named none", function()
       tracker:Started(nil, false)
       tracker:Succeeded(100, BRACERS_ITEM, false)
@@ -106,6 +114,16 @@ describe("DisenchantLog", function()
       assert.same({ count = 1, materials = { [SOUL_DUST] = { hits = 1, total = 2 } } }, sample)
     end)
 
+    it("never counts a disenchant whose item is unknown as container loot", function()
+      local loots = {}
+      ns.Recording.On("loot", function(e) loots[#loots + 1] = e end)
+      Fire("UNIT_SPELLCAST_START", "player", "cast", 13262)       -- no bag item can be named
+      Fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast", 13262)
+      window = { { id = SOUL_DUST, quantity = 2, guid = ITEM_GUID } }
+      Fire("LOOT_READY")
+      assert.same({}, loots)
+    end)
+
     it("records under the salvagerMode setting, where the odds look it up", function()
       MarketWallDB.cfg.salvagerMode = "on"   -- the buff is not detected
       _G.C_Container = {
@@ -129,7 +147,10 @@ describe("DisenchantLog", function()
       local tracker = ns.Kills.NewTracker(function(e) events[#events + 1] = e end, function() end)
       tracker:Loot({ Slot(SOUL_DUST, 2, ITEM_GUID) }, false, 100, nil)
       tracker:Tick(1000, true)
-      assert.same({}, events)
+      for _, e in ipairs(events) do
+        assert.is_nil(e.npc)
+        assert.is_true(e.kind == "window" or e.source == "item")   -- an opened container at most
+      end
     end)
   end)
 

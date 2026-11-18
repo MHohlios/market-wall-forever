@@ -112,23 +112,25 @@ function Log.NewTracker(emit)
     self.casting = nil
   end
 
-  -- The cast finished; item and salvager stand in when the start named no item
+  -- The cast finished; item and salvager stand in when the start named no item. A cast whose item
+  -- is still unknown is kept too, so its materials are known as a disenchant's, but not sampled.
   function tracker:Succeeded(t, item, salvager)
-    local cast = self.casting or (item and { item = item, salvager = salvager })
+    local cast = self.casting or { item = item, salvager = salvager }
     self.casting = nil
-    self.pending = cast and { item = cast.item, salvager = cast.salvager, t = t }
+    self.pending = { item = cast.item, salvager = cast.salvager, t = t }
   end
 
-  -- A loot window opened; slots as in Kills.SplitLoot
+  -- A loot window opened; slots as in Kills.SplitLoot. Returns whether it is a disenchant's result.
   function tracker:Loot(slots, t)
     local cast = self.pending
     self.pending = nil
-    if not cast or t - cast.t > CAST_WINDOW or not FromItems(slots) then return end
+    if not cast or t - cast.t > CAST_WINDOW or not FromItems(slots) then return false end
     local materials = Materials(slots)
-    if not next(materials) then return end
     local item = cast.item
+    if not (item and next(materials)) then return true end
     emit({ t = t, kind = "disenchant", source = "item:" .. item.id, item = item.id, quality = item.quality,
       level = item.level, classID = item.classID, salvager = cast.salvager == true, materials = materials })
+    return true
   end
 
   return tracker

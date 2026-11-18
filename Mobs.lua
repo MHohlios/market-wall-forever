@@ -91,7 +91,7 @@ local function Worth(drops, price, skip)
   return total
 end
 
--- Per-item prices under each lens, each worked out once per call
+-- Per-item prices under each lens, each worked out once per call. Farm sessions price with it too.
 local function Lenses(prices, opts, unpriced)
   local cache = {}
   local function Of(id)
@@ -122,6 +122,8 @@ local function Lenses(prices, opts, unpriced)
     optimal = function(id) return Of(id).optimal end,
   }
 end
+
+Mobs.Lenses = Lenses
 
 function Mobs.OptimalLabel(opts)
   local parts = {}

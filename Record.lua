@@ -1,13 +1,18 @@
 -- MarketWall: the shared recording core. One synchronous stream of events that the kill tracker,
--- and later the money ledger, sessions and disenchant log, write to and read from.
+-- disenchant log, money ledger and farm sessions write to and read from.
 -- An event is { t, kind, source, ... }:
 --   kill    a settled kill: guid, npc, name, outcome, coin, drops, gather, via (see Kills.lua)
---   loot    a corpse or container you looted: guid, npc, coin, drops
---   gather  skinning or other gathering: guid, npc (nil for a node), drops
---   fish    a fishing catch: coin, drops
+--   loot    a corpse, chest or container you looted: window, guid, npc, name, coin, drops
+--   gather  skinning, herbalism or mining: guid, npc (nil for a node), skill, drops
+--   fish    a fishing catch: window, coin, drops
+--   window  a loot window opened, or closed when closed is true: window
+--   quest   a quest reward: coin, drops (items arrive as their own events)
+--   money   a gold change in the ledger: delta, with source its ledger source (see Ledger.lua)
 --   disenchant  one of your disenchants: item, quality, level, classID, salvager, materials
 --               (see DisenchantLog.lua)
--- source is "npc:<id>", "object:<id>", "item:<id>" or "fishing". drops are raw { [itemID] = quantity }.
+-- source is "npc:<id>", "object:<id>", "item" (a bag container), "item:<id>" (a disenchanted
+-- item) or "fishing"; for a quest it is "quest:<id>" for its gold and "quest" for its items.
+-- window numbers the loot window an event came from. drops are raw { [itemID] = quantity }.
 local _, ns = ...
 
 local Recording = {}

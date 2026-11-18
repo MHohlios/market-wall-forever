@@ -27,7 +27,7 @@ read_globals = {
   -- Functions
   "CreateFrame", "GetBindingKey", "GetBuildInfo", "GetItemInfo", "GetMoney", "GetNormalizedRealmName", "GetRealmName",
   "GetProfessions", "GetProfessionInfo", "GetNumSkillLines", "GetSkillLineInfo", "GetSpellInfo",
-  "GetCursorPosition", "GetTime", "PlaySound", "UnitGUID", "UnitName", "CanLootUnit", "IsFishingLoot",
+  "GetCursorPosition", "GetTime", "PlaySound", "UnitGUID", "UnitName", "UnitCreatureFamily", "CanLootUnit", "IsFishingLoot",
   "GetNumLootItems", "GetLootSlotInfo", "GetLootSlotLink", "GetLootSlotType", "GetLootSourceInfo",
   "StaticPopup_Show", "hooksecurefunc", "ChatEdit_InsertLink",
   "PanelTemplates_DeselectTab", "PanelTemplates_SelectTab", "PanelTemplates_TabResize",
