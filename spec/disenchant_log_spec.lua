@@ -2,8 +2,9 @@ local addon = require("spec.helpers.addon")
 
 local ITEM_SLOT = 1
 local ARMOR, UNCOMMON = 4, 2
-local SOUL_DUST, VISION_DUST = 11083, 11137
+local STRANGE_DUST, SOUL_DUST, VISION_DUST = 10940, 11083, 11137
 local BRACERS = 1001
+local LOW_CRAFT = 250620   -- one of Forever's crafts with its own estimate
 local BRACERS_ITEM = { id = BRACERS, quality = UNCOMMON, level = 28, classID = ARMOR }
 local ITEM_GUID = "Item-5827-0-400000000ABCDEF"
 local WOLF_GUID = "Creature-0-5250-0-12-1234-1"
@@ -101,7 +102,7 @@ describe("DisenchantLog", function()
       ns.Kills.tracker:Tick(time(), true)
       assert.same({}, kinds)
       assert.same({}, MarketWallDB.mobs)
-      local sample = Log.Sample(UNCOMMON, 28, ARMOR, false)
+      local sample = Log.Sample(BRACERS, UNCOMMON, 28, ARMOR, false)
       assert.same({ count = 1, materials = { [SOUL_DUST] = { hits = 1, total = 2 } } }, sample)
     end)
 
@@ -117,8 +118,8 @@ describe("DisenchantLog", function()
       window = { { id = SOUL_DUST, quantity = 1, guid = ITEM_GUID } }
       Fire("LOOT_READY")
       _G.C_Container, _G.C_Item = nil, nil
-      assert.equal(1, Log.Sample(UNCOMMON, 28, ARMOR, true).count)
-      assert.is_nil(Log.Sample(UNCOMMON, 28, ARMOR, false))
+      assert.equal(1, Log.Sample(BRACERS, UNCOMMON, 28, ARMOR, true).count)
+      assert.is_nil(Log.Sample(BRACERS, UNCOMMON, 28, ARMOR, false))
     end)
   end)
 
@@ -133,21 +134,26 @@ describe("DisenchantLog", function()
   end)
 
   describe("samples", function()
-    it("groups item levels in fives", function()
-      assert.equal("2:26-30:4:normal", Log.KindKey(2, 26, 4, false))
-      assert.equal("2:26-30:4:normal", Log.KindKey(2, 30, 4, false))
-      assert.equal("3:31-35:2:salvager", Log.KindKey(3, 31, 2, true))
+    it("pools classic items by kind, with item levels in fives", function()
+      assert.equal("2:26-30:4:normal", Log.SampleKey(BRACERS, 2, 26, 4, false))
+      assert.equal("2:26-30:4:normal", Log.SampleKey(1002, 2, 30, 4, false))
+      assert.equal("3:31-35:2:salvager", Log.SampleKey(1003, 3, 31, 2, true))
+    end)
+
+    it("keeps items with a Forever estimate to themselves", function()
+      assert.equal("item:" .. LOW_CRAFT .. ":normal", Log.SampleKey(LOW_CRAFT, UNCOMMON, 10, ARMOR, false))
+      assert.equal("item:200001:salvager", Log.SampleKey(200001, 3, 30, ARMOR, true))
+      assert.equal("2:26-30:4:normal", Log.SampleKey(200002, UNCOMMON, 28, ARMOR, false))   -- a new green: classic
     end)
 
     it("counts a material's hits and total quantity", function()
-      local store = {}
-      local event = { quality = UNCOMMON, level = 28, classID = ARMOR, salvager = false }
+      local event = { kind = "disenchant", item = BRACERS, quality = UNCOMMON, level = 28, classID = ARMOR, salvager = false }
       event.materials = { [SOUL_DUST] = 2 }
-      Log.Add(store, event)
+      ns.Recording.Emit(event)
       event.materials = { [SOUL_DUST] = 1, [VISION_DUST] = 1 }
-      Log.Add(store, event)
+      ns.Recording.Emit(event)
       assert.same({ count = 2, materials = { [SOUL_DUST] = { hits = 2, total = 3 }, [VISION_DUST] = { hits = 1, total = 1 } } },
-        store.samples["2:26-30:4:normal"])
+        Log.Sample(BRACERS, UNCOMMON, 28, ARMOR, false))
     end)
   end)
 
@@ -165,75 +171,43 @@ describe("DisenchantLog", function()
         disenchantSamples = {
           ["1.15.8:12345:" .. BRACERS .. ":2:28:4:normal"] = {
             count = count, materials = { [SOUL_DUST] = { hits = hits, total = total, min = 1, max = 2 } } },
+          ["1.15.8:12345:" .. LOW_CRAFT .. ":2:10:4:normal"] = {
+            count = 4, materials = { [STRANGE_DUST] = { hits = 4, total = 10, min = 2, max = 3 } } },
         },
       }
     end
 
     local function Imported()
-      return Log.Sample(UNCOMMON, 28, ARMOR, false)
+      return Log.Sample(BRACERS, UNCOMMON, 28, ARMOR, false)
     end
 
-    it("copies the log and Salvager setting on the first login, and says so once", function()
+    it("copies the log and Salvager setting on the first login, and says so", function()
       Disenchantry(30, 30, 45)
       Log.Start()
       assert.same({ count = 30, materials = { [SOUL_DUST] = { hits = 30, total = 45 } } }, Imported())
+      assert.same({ count = 4, materials = { [STRANGE_DUST] = { hits = 4, total = 10 } } },
+        MarketWallDB.disenchants.samples["item:" .. LOW_CRAFT .. ":normal"])
+      assert.is_nil(MarketWallDB.disenchants.samples["2:6-10:4:normal"])
       assert.equal("on", ns.Cfg("salvagerMode"))
       assert.equal(25, ns.Cfg("salvagerBonus"))
-      assert.same({ "Imported 30 disenchant results from Disenchantry." }, printed)
+      assert.same({ "Imported 34 disenchant results from Disenchantry." }, printed)
     end)
 
-    it("merges only new results on later logins", function()
-      Disenchantry(30, 30, 45)
-      Log.Start()
-      Log.Start()
-      assert.equal(30, Imported().count)
-      Disenchantry(33, 33, 50)   -- three logged while MarketWall was off
-      Log.Start()
-      assert.same({ count = 33, materials = { [SOUL_DUST] = { hits = 33, total = 50 } } }, Imported())
-      assert.equal(1, #printed)
-    end)
-
-    it("keeps MarketWall's Salvager setting after the first import", function()
+    it("imports nothing on later logins, and keeps MarketWall's own Salvager setting", function()
       Disenchantry(30, 30, 45)
       Log.Start()
       MarketWallDB.cfg.salvagerMode = "off"
+      Disenchantry(33, 33, 50)   -- MarketWall recorded these itself
       Log.Start()
+      assert.equal(30, Imported().count)
       assert.equal("off", ns.Cfg("salvagerMode"))
-    end)
-
-    it("does not merge again what both add-ons logged in the same session", function()
-      Disenchantry(30, 30, 45)
-      Log.Start()
-      ns.Recording.Emit({ kind = "disenchant", item = BRACERS, quality = UNCOMMON, level = 28, classID = ARMOR,
-        salvager = false, materials = { [SOUL_DUST] = 2 } })
-      Disenchantry(31, 31, 47)   -- the same disenchant, in Disenchantry's log too
-      Fire("PLAYER_LOGOUT")
-      Log.Start()
-      assert.same({ count = 31, materials = { [SOUL_DUST] = { hits = 31, total = 47 } } }, Imported())
-    end)
-
-    it("merges at the next login what Disenchantry logged and MarketWall missed", function()
-      Disenchantry(30, 30, 45)
-      Log.Start()
-      Disenchantry(31, 31, 47)   -- MarketWall could not tell which item was disenchanted
-      Fire("PLAYER_LOGOUT")
-      Log.Start()
-      assert.same({ count = 31, materials = { [SOUL_DUST] = { hits = 31, total = 47 } } }, Imported())
-    end)
-
-    it("treats a Disenchantry log that was reset as all new", function()
-      Disenchantry(30, 30, 45)
-      Log.Start()
-      Disenchantry(2, 2, 3)
-      Log.Start()
-      assert.same({ count = 32, materials = { [SOUL_DUST] = { hits = 32, total = 48 } } }, Imported())
+      assert.equal(1, #printed)
     end)
 
     it("does nothing without Disenchantry", function()
       Log.Start()
-      Fire("PLAYER_LOGOUT")
       assert.is_nil(Imported())
-      assert.is_nil(MarketWallDB.disenchants.importedAt)
+      assert.is_nil(MarketWallDB.disenchants.imported)
       assert.equal("auto", ns.Cfg("salvagerMode"))
       assert.same({}, printed)
     end)

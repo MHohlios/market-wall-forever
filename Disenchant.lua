@@ -1,8 +1,8 @@
 -- MarketWall: expected disenchant value, priced from MarketWall's own material walls.
 -- Outcome data adapted from Disenchantry (MIT, see LICENSES/Disenchantry.txt). Where an item's
 -- odds come from, best first:
---   1. your own disenchants, from MarketWall's disenchant log (DisenchantLog.lua), once an item
---      kind has 20 of them
+--   1. your own disenchants, from MarketWall's disenchant log (DisenchantLog.lua), once there
+--      are 20 of them: for the item itself when Forever estimates it, otherwise for its kind
 --   2. Forever estimates: specific new crafted items, and new rares (IDs from 200000)
 --   3. the classic disenchanting tables (original-era item levels, which Forever uses)
 local _, ns = ...
@@ -132,9 +132,14 @@ local function SalvagerBonus()
   return math.max(0, math.min(1000, bonus)) / 100
 end
 
--- Your own results for the item's kind, under the current Salvager setting
-local function Observed(quality, level, classID)
-  local sample = ns.DisenchantLog.Sample(quality, level, classID, SalvagerActive())
+-- Whether Forever estimates this item's odds itself: its new crafts and its new rares
+function ns.HasForeverEstimate(id, quality)
+  return CRAFT_ESTIMATES[id] ~= nil or (quality == RARE and id >= NEW_ITEM_ID)
+end
+
+-- Your own results for the item, under the current Salvager setting
+local function Observed(id, quality, level, classID)
+  local sample = ns.DisenchantLog.Sample(id, quality, level, classID, SalvagerActive())
   if not sample or sample.count < MIN_SAMPLES then return nil end
   local out = {}
   for materialID, m in pairs(sample.materials) do
@@ -149,7 +154,7 @@ local function Outcomes(id)
   local _, _, quality, level, _, _, _, _, _, _, _, classID = C_Item.GetItemInfo(id)
   if not (quality and level and classID) then return nil end
 
-  local observed, samples = Observed(quality, level, classID)
+  local observed, samples = Observed(id, quality, level, classID)
   if observed then return observed, "observed", samples end
   if CRAFT_ESTIMATES[id] then return CRAFT_ESTIMATES[id], "estimate" end
   if classID ~= WEAPON and classID ~= ARMOR then return nil end

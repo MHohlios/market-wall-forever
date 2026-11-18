@@ -204,10 +204,15 @@ function ns.Name(id)
   return "item:" .. id
 end
 
+-- The item ID in an item link, nil for anything else
+function ns.ItemID(link)
+  return type(link) == "string" and tonumber(string.match(link, "item:(%d+)")) or nil
+end
+
 -- Resolve user text to an item ID: link, number, or name known from scans
 function ns.ResolveItem(text)
   if not text or text == "" then return nil end
-  local id = tonumber(string.match(text, "item:(%d+)")) or tonumber(text)
+  local id = ns.ItemID(text) or tonumber(text)
   if id then return id end
   local want = string.lower(strtrim(text))
   local r = ns.R()

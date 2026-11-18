@@ -73,10 +73,6 @@ function Kills.ParseCoin(text, quantity)
   return 0
 end
 
-local function ItemID(link)
-  return type(link) == "string" and tonumber(string.match(link, "item:(%d+)")) or nil
-end
-
 local function IsCoin(slot)
   return slot.type == MONEY_SLOT or (slot.type == nil and not slot.link and Kills.ParseCoin(slot.text) > 0)
 end
@@ -113,7 +109,7 @@ local function Add(share, slot, amount)
   if IsCoin(slot) then
     share.coin = share.coin + amount
   else
-    local id = ItemID(slot.link)
+    local id = ns.ItemID(slot.link)
     if id then share.drops[id] = (share.drops[id] or 0) + amount end
   end
 end

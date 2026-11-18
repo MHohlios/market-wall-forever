@@ -31,10 +31,10 @@ describe("DisenchantValue", function()
     items[id] = { quality = quality, level = level, classID = classID }
   end
 
-  -- MarketWall's log holding the results for an item's kind, under Salvager or not
+  -- MarketWall's log holding an item's results, under Salvager or not
   local function Observe(id, count, materials, salvager)
     local item = items[id]
-    local key = ns.DisenchantLog.KindKey(item.quality, item.level, item.classID, salvager)
+    local key = ns.DisenchantLog.SampleKey(id, item.quality, item.level, item.classID, salvager)
     MarketWallDB.disenchants.samples[key] = { count = count, materials = materials }
   end
 
@@ -72,7 +72,27 @@ describe("DisenchantValue", function()
     assert.same({ 700, "estimate" }, { ns.DisenchantValue(LOW_CRAFT_ID) })
   end)
 
-  it("pools results across items of the same kind", function()
+  it("keeps a Forever item's results out of its classic kind", function()
+    Item(LOW_CRAFT_ID, UNCOMMON, 10, ARMOR)
+    Item(1001, UNCOMMON, 10, ARMOR)
+    Observe(LOW_CRAFT_ID, 20, { [STRANGE_DUST] = { hits = 20, total = 40 } })
+    local value, note = ns.DisenchantValue(1001)
+    assert.near(420, value, 1e-6)   -- the classic table
+    assert.is_nil(note)
+  end)
+
+  it("keeps a Forever item's estimate until it has 20 results of its own", function()
+    Item(LOW_CRAFT_ID, UNCOMMON, 10, ARMOR)
+    Item(200001, RARE, 30, ARMOR)
+    Item(1001, UNCOMMON, 10, ARMOR)
+    Item(1002, RARE, 30, ARMOR)
+    Observe(1001, 20, { [STRANGE_DUST] = { hits = 20, total = 40 } })
+    Observe(1002, 20, { [STRANGE_DUST] = { hits = 20, total = 40 } })
+    assert.same({ 700, "estimate" }, { ns.DisenchantValue(LOW_CRAFT_ID) })
+    assert.same({ 400, "estimate" }, { ns.DisenchantValue(200001) })
+  end)
+
+  it("pools results across classic items of the same kind", function()
     Item(1001, UNCOMMON, 26, ARMOR)
     Item(1002, UNCOMMON, 30, ARMOR)   -- same quality, item levels 26-30 and armor
     Observe(1001, 20, { [STRANGE_DUST] = { hits = 20, total = 40 } })
