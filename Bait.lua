@@ -176,8 +176,11 @@ function B.Finished(s, note)
 end
 
 -- The threshold or the leave/buy choice changed after a search: recompute what to buy
+-- Returns true when a purchase waiting on its quote or its confirm press must be cancelled,
+-- because it was checked against the old values. Once confirmed it can no longer change.
 function B.Replan(s, plan, threshold)
   if s.phase == "deal" or s.phase == "nothing" then B.Found(s, plan, threshold) end
+  return s.phase == "quote" or s.phase == "confirm"
 end
 
 function B.Label(s, name, action, wait)

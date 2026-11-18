@@ -50,13 +50,16 @@ local function GetDialog()
   return dialog
 end
 
-function ns.CancelPurchase()
+-- note: why, passed to the purchase's onEnd so its owner knows nothing was bought
+function ns.CancelPurchase(note)
+  local onEnd = pending and pending.onEnd
   if pending and pending.kind == "commodity" and C_AuctionHouse.CancelCommoditiesPurchase then
     C_AuctionHouse.CancelCommoditiesPurchase()
   end
   pending = nil
   Unregister()
   if dialog then dialog:Hide() end
+  if onEnd then onEnd(false, note or "Purchase cancelled") end
 end
 
 local function AfterPurchase(id)
@@ -69,10 +72,8 @@ end
 -- A purchase that ended without buying. Callers with their own onEnd decide what happens next.
 local function EndUnbought(message, note)
   local id, onEnd = pending.id, pending.onEnd
-  ns.CancelPurchase()
-  if onEnd then
-    onEnd(false, note)
-  else
+  ns.CancelPurchase(note)
+  if not onEnd then
     ns.Print(message .. " Rescanning.")
     AfterPurchase(id)
   end
@@ -82,19 +83,22 @@ function ns.HasPendingPurchase()
   return pending ~= nil
 end
 
-function ns.ConfirmPurchase()
-  if pending and pending.kind == "commodity" and pending.total then
-    C_AuctionHouse.ConfirmCommoditiesPurchase(pending.id, pending.qty)
-    if dialog then dialog:Hide() end
-  end
+-- purchase: what ns.StartCommodityPurchase returned. Confirms only that purchase, once quoted;
+-- returns false when it is no longer the one waiting.
+function ns.ConfirmPurchase(purchase)
+  if not pending or pending ~= purchase or not pending.total then return false end
+  C_AuctionHouse.ConfirmCommoditiesPurchase(pending.id, pending.qty)
+  if dialog then dialog:Hide() end
+  return true
 end
 
 local function ShowQuote(totalPrice)
   local d = GetDialog()
+  local purchase = pending
   d.text:SetText(string.format("Buy %d x %s\nTotal: %s  (about %s each)\nResale break-even after the cut: %s each",
     pending.qty, ns.Name(pending.id), ns.Money(totalPrice), ns.Money(totalPrice / pending.qty),
     ns.Money(math.ceil((totalPrice / pending.qty) / (1 - ns.Cfg("ahCut"))))))
-  d.confirm:SetScript("OnClick", ns.ConfirmPurchase)
+  d.confirm:SetScript("OnClick", function() ns.ConfirmPurchase(purchase) end)
   d:Show()
 end
 
@@ -135,13 +139,14 @@ end)
 -- Start buying the qty cheapest units of a commodity. The game answers with a price quote.
 -- onQuote(unitPrice, totalPrice): optional; replaces the confirm dialog, and the caller then
 -- calls ns.ConfirmPurchase or ns.CancelPurchase. onEnd(bought, note, total): optional; replaces the
--- automatic rescan. Returns false when another purchase is still waiting.
+-- automatic rescan, and also runs when the purchase is cancelled. Returns the purchase, to pass
+-- to ns.ConfirmPurchase, or nil when another purchase is still waiting.
 function ns.StartCommodityPurchase(id, qty, maxTotal, onQuote, onEnd)
-  if pending then return false end
+  if pending then return nil end
   pending = { id = id, qty = qty, maxTotal = maxTotal, kind = "commodity", onQuote = onQuote, onEnd = onEnd }
   for i = 1, #PURCHASE_EVENTS do buyer:RegisterEvent(PURCHASE_EVENTS[i]) end
   C_AuctionHouse.StartCommoditiesPurchase(id, qty)
-  return true
+  return pending
 end
 
 -- Buy every unit priced under limit. Needs listings scanned within the last two minutes.

@@ -191,6 +191,49 @@ describe("Bait", function()
     end)
   end)
 
+  describe("commodity purchase", function()
+    local fire, confirmed, ended
+    before_each(function()
+      ns, fire = addon.Load()
+      fire("ADDON_LOADED", addon.ADDON)
+      confirmed, ended = {}, {}
+      _G.C_AuctionHouse = {
+        StartCommoditiesPurchase = function() end,
+        CancelCommoditiesPurchase = function() end,
+        ConfirmCommoditiesPurchase = function(id, qty) confirmed[#confirmed + 1] = { id, qty } end,
+      }
+    end)
+    after_each(function() _G.C_AuctionHouse = nil end)
+
+    local function Start(id, qty)
+      return ns.StartCommodityPurchase(id, qty, qty * 30, function() end,
+        function(bought, note) ended[#ended + 1] = { id, bought, note } end)
+    end
+
+    it("tells the purchase's owner when it is cancelled", function()
+      Start(1, 2)
+      ns.CancelPurchase("Auction house closed")
+      assert.same({ { 1, false, "Auction house closed" } }, ended)
+    end)
+
+    it("confirms only the purchase it was given", function()
+      local stale = Start(1, 2)
+      fire("COMMODITY_PRICE_UPDATED", 30, 60)
+      ns.CancelPurchase()
+      local current = Start(2, 5)
+      fire("COMMODITY_PRICE_UPDATED", 30, 150)
+      assert.is_false(ns.ConfirmPurchase(stale))
+      assert.same({}, confirmed)
+      assert.is_true(ns.ConfirmPurchase(current))
+      assert.same({ { 2, 5 } }, confirmed)
+    end)
+
+    it("does not confirm before the game has quoted a price", function()
+      local purchase = Start(1, 2)
+      assert.is_false(ns.ConfirmPurchase(purchase))
+    end)
+  end)
+
   describe("buy plan", function()
     -- bait (1) + 14 copies at 30, 4 units at 35, the wall at 100
     local ladder, record
@@ -356,6 +399,19 @@ describe("Bait", function()
       B.Started(s, 5)
       B.Replan(s, { qty = 0, cost = 0, leaving = 0, blocked = 0 }, 1)
       assert.equal("quote", s.phase)   -- never changes a purchase in flight
+    end)
+
+    it("asks to cancel a quoted purchase when the limit or the bait choice changes", function()
+      local none = { qty = 0, cost = 0, leaving = 0, blocked = 0 }
+      B.Found(s, { qty = 2, cost = 60, leaving = 0, blocked = 0 }, 30)
+      assert.is_false(B.Replan(s, none, 20))
+      B.Found(s, { qty = 2, cost = 60, leaving = 0, blocked = 0 }, 30)
+      B.Started(s, 0)
+      assert.is_true(B.Replan(s, none, 20))
+      B.Quoted(s, 60, true, nil, true, 1)
+      assert.is_true(B.Replan(s, none, 20))
+      B.Confirmed(s, 2)
+      assert.is_false(B.Replan(s, none, 20))   -- already confirmed: nothing left to cancel
     end)
   end)
 end)

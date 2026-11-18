@@ -123,9 +123,9 @@ local function Buy()
     local needPress = ns.Cfg("baitConfirmPress")
     B.Quoted(state, total, ok, reason, needPress, GetTime())
     if not ok then
-      ns.CancelPurchase()
+      ns.CancelPurchase(reason)
     elseif not needPress then
-      ns.ConfirmPurchase()
+      ns.ConfirmPurchase(state.purchase)
     end
     ns.RefreshUI()
   end
@@ -135,9 +135,8 @@ local function Buy()
     ns.RefreshUI()
   end
   B.Started(state, GetTime())
-  if not ns.StartCommodityPurchase(id, plan.qty, plan.qty * threshold, OnQuote, OnEnd) then
-    B.Finished(state, "Another purchase is waiting")
-  end
+  state.purchase = ns.StartCommodityPurchase(id, plan.qty, plan.qty * threshold, OnQuote, OnEnd)
+  if not state.purchase then B.Finished(state, "Another purchase is waiting") end
 end
 
 -- The button's click and the key binding both land here
@@ -153,11 +152,14 @@ function ns.BaitPress()
   elseif action == "buy" then
     Buy()
   elseif action == "confirm" then
-    B.Confirmed(button, GetTime())
-    ns.ConfirmPurchase()
+    if ns.ConfirmPurchase(button.purchase) then
+      B.Confirmed(button, GetTime())
+    else
+      B.Finished(button, "Purchase cancelled")
+    end
   elseif action == "reset" then
-    ns.CancelPurchase()
-    B.Finished(button, "No answer from the game")
+    ns.CancelPurchase("No answer from the game")
+    B.Finished(button, "No answer from the game")   -- also when nothing was left waiting
   end
   ns.RefreshUI()
 end
@@ -179,7 +181,9 @@ local function Select(id)
 end
 
 local function Replan()
-  if selectedID then B.Replan(button, Plan(selectedID), thresholds[selectedID]) end
+  if selectedID and B.Replan(button, Plan(selectedID), thresholds[selectedID]) then
+    ns.CancelPurchase("Limit changed")
+  end
   ns.RefreshUI()
 end
 
