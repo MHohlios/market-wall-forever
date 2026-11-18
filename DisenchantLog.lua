@@ -130,9 +130,14 @@ end
 -- Disenchantry keys samples "version:build:itemID:quality:itemLevel:classID:mode"
 local function ParseDisenchantryKey(key)
   if type(key) ~= "string" then return nil end
-  local quality, level, classID, mode = string.match(key, ":(%d+):(%d+):(%d+):(%a+)$")
+  local item, quality, level, classID, mode = string.match(key, ":(%d+):(%d+):(%d+):(%d+):(%a+)$")
   if not (mode == "salvager" or mode == "normal") then return nil end
-  return tonumber(quality), tonumber(level), tonumber(classID), mode == "salvager"
+  return tonumber(quality), tonumber(level), tonumber(classID), mode == "salvager", item
+end
+
+-- The item part of a Disenchantry key, "itemID:quality:itemLevel:classID", to match your own events
+local function ItemKey(item, quality, level, classID)
+  return table.concat({ item, quality, level, classID }, ":")
 end
 
 local function ValidSample(sample)
@@ -155,34 +160,40 @@ end
 
 local NONE = { count = 0, materials = {} }
 
--- Walks Disenchantry's samples against the watermark of what was already imported. With merge,
--- adds each sample's results past its watermark to MarketWall's samples; either way, moves the
--- watermark up to Disenchantry's current counts. A sample whose count fell was reset, so all of
--- it is new. Returns the number of results merged.
-function Log.Sync(store, disenchantry, merge)
+-- Each valid Disenchantry sample with its key's parts and its watermark of what was already
+-- imported. A sample whose count fell below its watermark was reset, so all of it is new.
+local function EachSample(store, disenchantry, fn)
   store.samples, store.imported = store.samples or {}, store.imported or {}
   local samples = type(disenchantry) == "table" and disenchantry.disenchantSamples
-  if type(samples) ~= "table" then return 0 end
-  local merged = 0
+  if type(samples) ~= "table" then return end
   for key, sample in pairs(samples) do
-    local quality, level, classID, salvager = ParseDisenchantryKey(key)
+    local quality, level, classID, salvager, item = ParseDisenchantryKey(key)
     if quality and level > 0 and ValidSample(sample) then
       local mark = store.imported[key] or NONE
       if sample.count < mark.count then mark = NONE end
-      local added = sample.count - mark.count
-      if merge and added > 0 then
-        local target = SampleIn(store.samples, Log.KindKey(quality, level, classID, salvager))
-        target.count = target.count + added
-        for id, m in pairs(sample.materials) do
-          local seen = mark.materials[id] or NONE
-          local hits, total = m.hits - (seen.hits or 0), m.total - (seen.total or 0)
-          if hits > 0 and total > 0 then AddMaterial(target, id, hits, total) end
-        end
-        merged = merged + added
-      end
-      store.imported[key] = Watermark(sample)
+      fn(key, sample, mark, quality, level, classID, salvager, item)
     end
   end
+end
+
+-- Adds each Disenchantry sample's results past its watermark to MarketWall's samples and moves
+-- the watermark up to its current counts. Returns the number of results merged.
+function Log.Sync(store, disenchantry)
+  local merged = 0
+  EachSample(store, disenchantry, function(key, sample, mark, quality, level, classID, salvager)
+    local added = sample.count - mark.count
+    if added > 0 then
+      local target = SampleIn(store.samples, Log.KindKey(quality, level, classID, salvager))
+      target.count = target.count + added
+      for id, m in pairs(sample.materials) do
+        local seen = mark.materials[id] or NONE
+        local hits, total = m.hits - (seen.hits or 0), m.total - (seen.total or 0)
+        if hits > 0 and total > 0 then AddMaterial(target, id, hits, total) end
+      end
+      merged = merged + added
+    end
+    store.imported[key] = Watermark(sample)
+  end)
   return merged
 end
 
@@ -198,7 +209,7 @@ end
 -- later logins merge only results it logged since, such as while MarketWall was off.
 function Log.Import(store, cfg, disenchantry)
   if type(disenchantry) ~= "table" then return end
-  local merged = Log.Sync(store, disenchantry, true)
+  local merged = Log.Sync(store, disenchantry)
   if not store.importedAt then
     store.importedAt = time()
     Log.ImportSettings(cfg, disenchantry)
@@ -206,10 +217,27 @@ function Log.Import(store, cfg, disenchantry)
   end
 end
 
--- At logout: whatever Disenchantry logged this session, MarketWall logged itself, so it is
--- marked as imported rather than merged again next login
-function Log.MarkSeen(store, disenchantry)
-  if store.importedAt and type(disenchantry) == "table" then Log.Sync(store, disenchantry, false) end
+-- At logout: the results Disenchantry logged this session that MarketWall recorded itself are
+-- marked as imported, so next login merges only the ones MarketWall missed. recorded is this
+-- session's disenchant events by ItemKey; each one accounts for at most one Disenchantry result.
+function Log.MarkSeen(store, disenchantry, recorded)
+  if not store.importedAt then return end
+  EachSample(store, disenchantry, function(key, sample, mark, quality, level, classID, _, item)
+    local own = recorded[ItemKey(item, quality, level, classID)]
+    local added = sample.count - mark.count
+    if not own or added <= 0 then return end
+    local seen = Watermark(mark)
+    for _ = 1, math.min(added, #own) do
+      local event = table.remove(own, 1)
+      seen.count = seen.count + 1
+      for id, qty in pairs(event.materials) do
+        local m = seen.materials[id] or { hits = 0, total = 0 }
+        m.hits, m.total = m.hits + 1, m.total + qty
+        seen.materials[id] = m
+      end
+    end
+    store.imported[key] = seen
+  end)
 end
 
 -- In game -----------------------------------------------------------------------------------
@@ -217,9 +245,14 @@ end
 local tracker = Log.NewTracker(function(event) ns.Recording.Emit(event) end)
 Log.tracker = tracker
 
+local recorded = {}   -- this session's disenchant events by ItemKey, for MarkSeen at logout
+
 ns.Recording.On("disenchant", function(event)
   local store = Store()
   if store then Log.Add(store, event) end
+  local key = ItemKey(event.item, event.quality, event.level, event.classID)
+  recorded[key] = recorded[key] or {}
+  table.insert(recorded[key], event)
 end)
 
 -- The item ID locked in your bags, nil when none or several are
@@ -239,7 +272,7 @@ local function LockedBagItem()
 end
 
 local function CastItem()
-  return Log.Describe(LockedBagItem()), ns.HasSalvagerBuff()
+  return Log.Describe(LockedBagItem()), ns.SalvagerActive()
 end
 
 local HANDLERS = {
@@ -255,7 +288,7 @@ frame:RegisterEvent("PLAYER_LOGOUT")
 frame:SetScript("OnEvent", function(_, event, _, _, spellID)
   if event == "PLAYER_LOGOUT" then
     local store = Store()
-    if store then Log.MarkSeen(store, DisenchantryDB) end
+    if store then Log.MarkSeen(store, DisenchantryDB, recorded) end
   elseif spellID == DISENCHANT then
     HANDLERS[event]()
   end

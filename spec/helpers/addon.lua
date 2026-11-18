@@ -10,6 +10,7 @@ local function NewFrame(frames)
   local frame = { scripts = {}, events = {} }
   function frame:SetScript(name, fn) self.scripts[name] = fn end
   function frame:RegisterEvent(event) self.events[event] = true end
+  frame.RegisterUnitEvent = frame.RegisterEvent
   frames[#frames + 1] = frame
   return setmetatable(frame, { __index = function() return noop end })
 end

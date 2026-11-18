@@ -104,6 +104,22 @@ describe("DisenchantLog", function()
       local sample = Log.Sample(UNCOMMON, 28, ARMOR, false)
       assert.same({ count = 1, materials = { [SOUL_DUST] = { hits = 1, total = 2 } } }, sample)
     end)
+
+    it("records under the salvagerMode setting, where the odds look it up", function()
+      MarketWallDB.cfg.salvagerMode = "on"   -- the buff is not detected
+      _G.C_Container = {
+        GetContainerNumSlots = function(bag) return bag == 0 and 2 or 0 end,
+        GetContainerItemInfo = function(_, slot) return { itemID = slot == 1 and BRACERS or 2589, isLocked = slot == 1 } end,
+      }
+      _G.C_Item = { GetItemInfo = function() return "x", "x", UNCOMMON, 28, 1, "", "", 1, "", 0, 0, ARMOR end }
+      Fire("UNIT_SPELLCAST_START", "player", "cast", 13262)
+      Fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast", 13262)
+      window = { { id = SOUL_DUST, quantity = 1, guid = ITEM_GUID } }
+      Fire("LOOT_READY")
+      _G.C_Container, _G.C_Item = nil, nil
+      assert.equal(1, Log.Sample(UNCOMMON, 28, ARMOR, true).count)
+      assert.is_nil(Log.Sample(UNCOMMON, 28, ARMOR, false))
+    end)
   end)
 
   describe("Kills tracker", function()
@@ -188,10 +204,21 @@ describe("DisenchantLog", function()
     it("does not merge again what both add-ons logged in the same session", function()
       Disenchantry(30, 30, 45)
       Log.Start()
-      Disenchantry(31, 31, 47)   -- MarketWall logged this disenchant itself
+      ns.Recording.Emit({ kind = "disenchant", item = BRACERS, quality = UNCOMMON, level = 28, classID = ARMOR,
+        salvager = false, materials = { [SOUL_DUST] = 2 } })
+      Disenchantry(31, 31, 47)   -- the same disenchant, in Disenchantry's log too
       Fire("PLAYER_LOGOUT")
       Log.Start()
-      assert.equal(30, Imported().count)
+      assert.same({ count = 31, materials = { [SOUL_DUST] = { hits = 31, total = 47 } } }, Imported())
+    end)
+
+    it("merges at the next login what Disenchantry logged and MarketWall missed", function()
+      Disenchantry(30, 30, 45)
+      Log.Start()
+      Disenchantry(31, 31, 47)   -- MarketWall could not tell which item was disenchanted
+      Fire("PLAYER_LOGOUT")
+      Log.Start()
+      assert.same({ count = 31, materials = { [SOUL_DUST] = { hits = 31, total = 47 } } }, Imported())
     end)
 
     it("treats a Disenchantry log that was reset as all new", function()

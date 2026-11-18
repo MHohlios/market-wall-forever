@@ -110,19 +110,21 @@ local function ClassicTable(quality, level, weapon)
   end
 end
 
-function ns.HasSalvagerBuff()
+local function HasSalvagerBuff()
   if not (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) then return false end
   local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, SALVAGER_BUFF)
   return ok and type(aura) == "table"
 end
 
--- The salvagerMode setting: "on", "off", or "auto" (the default) whenever the buff is up
-local function SalvagerActive()
+-- The salvagerMode setting: "on", "off", or "auto" (the default) whenever the buff is up.
+-- Your disenchants are recorded and looked up under it.
+function ns.SalvagerActive()
   local mode = ns.Cfg("salvagerMode")
   if not SALVAGER_MODES[mode] then mode = ns.cfgDefaults.salvagerMode end
   if mode == "off" then return false end
-  return mode == "on" or ns.HasSalvagerBuff()
+  return mode == "on" or HasSalvagerBuff()
 end
+local SalvagerActive = ns.SalvagerActive
 
 local function SalvagerBonus()
   if not SalvagerActive() then return 0 end
