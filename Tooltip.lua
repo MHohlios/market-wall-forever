@@ -85,12 +85,63 @@ local function AddLines(tooltip, id)
   end
 end
 
-ns.TooltipLines = { Add = AddLines, StackCount = StackCount }   -- exposed for tests
+-- Mob tooltips -------------------------------------------------------------------------------
+
+local function MedianAverage(summary)
+  return ns.Money(summary.median) .. "     " .. ns.Money(summary.average)
+end
+
+-- The lines a mob adds to its tooltip, from Mobs.Stats: { left, right } pairs, or { text } for
+-- a single line. Empty for a mob with no record. skinning: whether Optimal includes it.
+local function MobLines(stats, skinning, minKills)
+  if not stats then return {} end
+  local lines = { { stats.name or "Kills", GREY .. stats.lifetime .. " kills|r" } }
+  if not stats.optimal then
+    lines[2] = { GREY .. "Values show from " .. minKills .. " kills.|r" }
+    return lines
+  end
+  local function add(line) lines[#lines + 1] = line end
+  add({ " ", GREY .. "Median     Average|r" })
+  add({ GREY .. "Vendor|r", MedianAverage(stats.vendor) })
+  add({ GREY .. "Market|r", MedianAverage(stats.market) })
+  if skinning and stats.skinning then add({ GREY .. "Skinning|r", MedianAverage(stats.skinning) }) end
+  local label = stats.optimal.label:gsub("^Optimal (.+)$", "Optimal " .. GREY .. "%1|r")
+  add({ label, MedianAverage(stats.optimal) })
+  add({ GREY .. "Optimal, without rare drops|r", ns.Money(stats.optimalNoRare.average) })
+  if stats.top then
+    add({ GREY .. "Top drop:|r " .. ns.ColorName(stats.top.id) .. " " .. ns.ShareText(stats.top.share) .. GREY .. " of kills|r" })
+  end
+  return lines
+end
+
+-- The creature ID under the mouse, nil for players, pets and anything else
+local function MouseoverNPC()
+  local kind, npc = ns.Kills.ParseGUID(UnitGUID("mouseover"))
+  if kind == "npc" then return npc end
+end
+
+local function AddMobLines(tooltip)
+  if not MarketWallDB then return end
+  local npc = MouseoverNPC()
+  if not npc then return end
+  local lines = MobLines(ns.Mobs.For(npc), ns.Mobs.GameOptions().skinning, ns.Cfg("mobMinKills"))
+  if #lines == 0 then return end
+  tooltip:AddLine(" ")
+  for _, line in ipairs(lines) do
+    if line[2] then tooltip:AddDoubleLine(line[1], line[2], 1, 1, 1, 1, 1, 1) else tooltip:AddLine(line[1]) end
+  end
+end
+
+ns.TooltipLines = { Add = AddLines, StackCount = StackCount, Mob = MobLines }   -- exposed for tests
 
 function ns.InitTooltip()
   if not (TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType) then return end
   TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tooltip, data)
     if tooltip ~= GameTooltip and tooltip ~= ItemRefTooltip then return end
     pcall(AddLines, tooltip, data and data.id)
+  end)
+  TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip)
+    if tooltip ~= GameTooltip then return end
+    pcall(AddMobLines, tooltip)
   end)
 end

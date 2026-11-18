@@ -40,6 +40,13 @@ function ns.Round(x)
   return math.floor(x + 0.5)
 end
 
+-- A share as a percent, with one decimal under 10%: "4.2%", "31%"
+function ns.ShareText(share)
+  local pct = share * 100
+  if pct < 10 then return string.format("%.1f%%", pct) end
+  return string.format("%d%%", ns.Round(pct))
+end
+
 function ns.Money(c)
   if not c then return "-" end
   c = ns.Round(c)

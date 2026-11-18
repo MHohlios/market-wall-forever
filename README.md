@@ -11,7 +11,7 @@ A World of Warcraft (Forever) auction house addon. It adds a Market tab with:
 - **Item search**: an MW button on the minimap opens a window, anywhere in the world,
   to look up any item MarketWall has seen. See below.
 - **Tooltips**: market wall, normal range, high/low against the median, vendor price
-  and expected disenchant value.
+  and expected disenchant value. Hovering a mob shows its value per kill. See below.
 
 It needs no other auction addon.
 
@@ -42,6 +42,19 @@ link into the box. Your last 10 searches are listed under Recent. The item view 
 chart with a 7 days / 30 days / All switch, the item's numbers, and Add to watchlist.
 Live listings load only while the auction house is open. The window moves by dragging,
 remembers where you left it, and closes with Escape.
+
+## Mob values
+
+MarketWall records each kill you, your pet or your party make and what it dropped.
+Hovering a mob adds its kill count and its value per kill to the tooltip: median and
+average under Vendor, Market, Skinning (when included) and Optimal, the Optimal average
+without rare drops, and the top drop. Values show once a mob has **Minimum kills**.
+
+The search window's **Mobs** switch lists every recorded mob, sorted by median per kill
+under the Optimal, Market or Vendor lens, with a name filter. Click a mob for its drop
+table. Settings has the mob rows: disenchanting and skinning in Optimal (Auto, Always,
+Never), the rare drop threshold and the minimum kills. The Mobs view added
+`MobsView.lua`, so restart the game once after updating to it.
 
 ## Bait Detect
 

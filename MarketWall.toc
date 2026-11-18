@@ -21,6 +21,7 @@ UI.lua
 PriceView.lua
 Sell.lua
 BaitUI.lua
+MobsView.lua
 Search.lua
 Minimap.lua
 Tooltip.lua
