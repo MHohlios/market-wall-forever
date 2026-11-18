@@ -75,6 +75,7 @@ local function CompleteItem(ladderMap, kind, auctions)
     local ladder, total = W.SortLadder(ladderMap)
     local now = time()
     ns.ladders[a.id] = { ladder = ladder, total = total, t = now, kind = kind, auctions = auctions }
+    ns.R().supplied[a.id] = total >= ns.Cfg("minSupply") or nil   -- the latest search decides, until the next full scan
     local wall = ns.Record(a.id, ladder, total, now)
     ns.UpdateBait(a.id, ladder, wall, ns.StatsFor(a.id), now, kind == "commodity")
     state.answered = true

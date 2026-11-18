@@ -54,27 +54,20 @@ describe("Mobs", function()
     end)
   end)
 
+  -- the saved supply set is written by full scans (disenchant_deals_spec) and live searches (bait_spec)
   describe("real supply", function()
-    local DAY, MIN = 86400, 20
     local t = 1700000000
 
-    it("prices at the wall when the last full scan had plenty", function()
-      local r = { lastFull = t, supplied = { [LINEN] = true } }
-      assert.is_true(M.HasSupply(LINEN, r, {}, MIN))
-      ns.R().lastFull, ns.R().supplied = t, { [LINEN] = true }
+    it("prices at the wall while the latest scan or search had plenty", function()
+      ns.R().supplied = { [LINEN] = true }
       ns.Record(LINEN, { { p = 100, q = 30 } }, 30, t)
       assert.same({ 100, true }, { M.GamePrices().wall(LINEN) })
     end)
 
-    it("falls back when a later full scan the same day no longer lists the item", function()
-      local r = { lastFull = t + 3600, supplied = {} }   -- replaced whole by the later scan
-      assert.is_false(M.HasSupply(LINEN, r, { [LINEN] = { total = 30, t = t } }, MIN))
-    end)
-
-    it("falls back when a live search the next day finds it thin", function()
-      local r = { lastFull = t, supplied = { [LINEN] = true } }
-      assert.is_false(M.HasSupply(LINEN, r, { [LINEN] = { total = 3, t = t + DAY } }, MIN))
-      assert.is_true(M.HasSupply(LINEN, r, { [LINEN] = { total = 30, t = t + DAY } }, MIN))
+    it("falls back once the latest scan or search no longer had plenty", function()
+      ns.R().supplied = {}
+      ns.Record(LINEN, { { p = 100, q = 30 } }, 30, t)
+      assert.same({ 100, false }, { M.GamePrices().wall(LINEN) })
     end)
   end)
 

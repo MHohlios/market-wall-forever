@@ -213,14 +213,6 @@ function Mobs.GameOptions()
   }
 end
 
--- Real supply: what a live search newer than the last full scan saw, else whether the last
--- full scan listed at least minSupply units
-function Mobs.HasSupply(id, r, ladders, minSupply)
-  local live = ladders[id]
-  if live and live.t > (r.lastFull or 0) then return live.total >= minSupply end
-  return r.supplied[id] == true
-end
-
 -- Disenchanting counts only for items this character has the skill for, unless set to "always"
 function Mobs.GamePrices()
   local always = ns.Cfg("mobDisenchant") == "always"
@@ -228,7 +220,7 @@ function Mobs.GamePrices()
   return {
     vendor = function(id) return ItemInfo(id, 11) end,
     wall = function(id)
-      return ns.LatestWall(id), Mobs.HasSupply(id, ns.R(), ns.ladders, ns.Cfg("minSupply"))
+      return ns.LatestWall(id), ns.R().supplied[id] == true
     end,
     disenchant = function(id)
       local level = ItemInfo(id, 4)

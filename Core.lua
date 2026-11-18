@@ -171,7 +171,7 @@ function ns.R()
   r.buys = r.buys or {}     -- { {t, id, qty, unit, total}, ... } every purchase through the addon
   r.bait = r.bait or {}     -- [itemID] = bait record, see Bait.lua; overwritten each scan
   r.recent = r.recent or {} -- item IDs looked up in the search window, newest first
-  r.supplied = r.supplied or {}   -- [itemID] = true with minSupply units in the last full scan; replaced each scan
+  r.supplied = r.supplied or {}   -- [itemID] = true with minSupply units at the latest search or full scan, which replaces it
   ns.realmData = r
   return r
 end
