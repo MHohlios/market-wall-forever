@@ -7,6 +7,7 @@
 ## Category-enUS: Auctions
 
 Core.lua
+Probe.lua
 Wall.lua
 Bait.lua
 Data.lua
