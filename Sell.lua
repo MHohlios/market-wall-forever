@@ -94,7 +94,7 @@ local function TrendText(diff)
   if diff > FLAT then return ORANGE .. "up " .. pct .. "|r" end
   return "flat"
 end
-ns.SellTrend = { WeekSummary = WeekSummary, TrendText = TrendText }   -- exposed for tests
+ns.SellTrend = { WeekSummary = WeekSummary, TrendText = TrendText, RecentWalls = RecentWalls }   -- shared with the tooltip and tests
 
 local function IsCommodity(location)
   return C_AuctionHouse.GetItemCommodityStatus(location) == Enum.ItemCommodityStatus.Commodity

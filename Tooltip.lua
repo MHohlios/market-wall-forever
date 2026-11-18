@@ -3,12 +3,13 @@ local _, ns = ...
 
 local GREY = "|cffa3acac"
 
-local function MarketLines(add, id)
+local function MarketLines(add, id, count)
   local wall, day = ns.LatestWall(id)
   if not wall then return end
   local age = ns.Today() - day
   local when = (age == 0 and "today") or (age == 1 and "yesterday") or (age .. " days ago")
   add("|cfff5c518Market wall|r", ns.Money(wall) .. " " .. GREY .. "(" .. when .. ")|r")
+  if count and count > 1 then add(GREY .. "Stack of " .. count .. "|r", ns.Money(wall * count)) end
 
   local stats = ns.StatsFor(id)
   local diff, word = ns.Versus(wall, stats)
@@ -16,6 +17,9 @@ local function MarketLines(add, id)
     add(GREY .. "Normal range|r", ns.Money(stats.p25) .. " to " .. ns.Money(stats.p75))
     add(GREY .. (age == 0 and "Against median" or "Against median (last scan)") .. "|r", ns.VersusText(diff, word))
   end
+
+  local week = ns.SellTrend.WeekSummary(ns.SellTrend.RecentWalls(id))
+  if week and week.trend then add(GREY .. "7-day trend|r", ns.SellTrend.TrendText(week.trend)) end
 
   local cycle = ns.Cycle(id)
   local best, worst
@@ -39,6 +43,23 @@ local function MarketLines(add, id)
   end
 end
 
+-- Size of the stack the tooltip is for, read from the bag slot that owns it.
+-- Nil when the tooltip has no bag slot owner or the slot holds a different item.
+local function StackCount(tooltip, id)
+  local owner = tooltip.GetOwner and tooltip:GetOwner()
+  if not (owner and C_Container and C_Container.GetContainerItemInfo) then return nil end
+  local bag, slot
+  if owner.GetSlotAndBagID then
+    slot, bag = owner:GetSlotAndBagID()
+  elseif owner.GetParent and owner.GetID then
+    local parent = owner:GetParent()
+    bag, slot = parent and parent.GetID and parent:GetID(), owner:GetID()
+  end
+  if not (bag and slot) then return nil end
+  local info = C_Container.GetContainerItemInfo(bag, slot)
+  return info and info.itemID == id and info.stackCount or nil
+end
+
 local function AddLines(tooltip, id)
   if not id or not MarketWallDB then return end
   local spaced = false
@@ -50,7 +71,7 @@ local function AddLines(tooltip, id)
     tooltip:AddDoubleLine(left, right)
   end
 
-  MarketLines(add, id)
+  MarketLines(add, id, StackCount(tooltip, id))
 
   local vendor = C_Item.GetItemInfo and select(11, C_Item.GetItemInfo(id))
   if vendor and vendor > 0 then add(GREY .. "Vendor|r", ns.Money(vendor)) end
@@ -62,6 +83,8 @@ local function AddLines(tooltip, id)
     add(GREY .. "Disenchant|r", GREY .. "materials not scanned|r")
   end
 end
+
+ns.TooltipLines = { Add = AddLines, StackCount = StackCount }   -- exposed for tests
 
 function ns.InitTooltip()
   if not (TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType) then return end
