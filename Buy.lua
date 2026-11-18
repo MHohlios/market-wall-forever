@@ -66,50 +66,83 @@ local function AfterPurchase(id)
   end)
 end
 
-buyer:SetScript("OnEvent", function(_, event, _unitPrice, totalPrice)
+-- A purchase that ended without buying. Callers with their own onEnd decide what happens next.
+local function EndUnbought(message, note)
+  local id, onEnd = pending.id, pending.onEnd
+  ns.CancelPurchase()
+  if onEnd then
+    onEnd(false, note)
+  else
+    ns.Print(message .. " Rescanning.")
+    AfterPurchase(id)
+  end
+end
+
+function ns.HasPendingPurchase()
+  return pending ~= nil
+end
+
+function ns.ConfirmPurchase()
+  if pending and pending.kind == "commodity" and pending.total then
+    C_AuctionHouse.ConfirmCommoditiesPurchase(pending.id, pending.qty)
+    if dialog then dialog:Hide() end
+  end
+end
+
+local function ShowQuote(totalPrice)
+  local d = GetDialog()
+  d.text:SetText(string.format("Buy %d x %s\nTotal: %s  (about %s each)\nResale break-even after the cut: %s each",
+    pending.qty, ns.Name(pending.id), ns.Money(totalPrice), ns.Money(totalPrice / pending.qty),
+    ns.Money(math.ceil((totalPrice / pending.qty) / (1 - ns.Cfg("ahCut"))))))
+  d.confirm:SetScript("OnClick", ns.ConfirmPurchase)
+  d:Show()
+end
+
+buyer:SetScript("OnEvent", function(_, event, unitPrice, totalPrice)
   if not pending then return end
   if event == "COMMODITY_PRICE_UPDATED" then
+    if pending.onQuote then
+      pending.total = totalPrice
+      pending.onQuote(unitPrice, totalPrice)
+      return
+    end
     if not totalPrice or totalPrice > pending.maxTotal then
-      ns.Print("The price moved before the purchase. Nothing was bought. Rescanning.")
-      local id = pending.id
-      ns.CancelPurchase()
-      AfterPurchase(id)
+      EndUnbought("The price moved before the purchase. Nothing was bought.")
       return
     end
     pending.total = totalPrice
-    local d = GetDialog()
-    d.text:SetText(string.format("Buy %d x %s\nTotal: %s  (about %s each)\nResale break-even after the cut: %s each",
-      pending.qty, ns.Name(pending.id), ns.Money(totalPrice), ns.Money(totalPrice / pending.qty),
-      ns.Money(math.ceil((totalPrice / pending.qty) / (1 - ns.Cfg("ahCut"))))))
-    d.confirm:SetScript("OnClick", function()
-      if pending then
-        C_AuctionHouse.ConfirmCommoditiesPurchase(pending.id, pending.qty)
-        d:Hide()
-      end
-    end)
-    d:Show()
+    ShowQuote(totalPrice)
   elseif event == "COMMODITY_PRICE_UNAVAILABLE" then
-    ns.Print("Those units are no longer available. Rescanning.")
-    local id = pending.id
-    ns.CancelPurchase()
-    AfterPurchase(id)
+    EndUnbought("Those units are no longer available.", "No longer available")
   elseif event == "COMMODITY_PURCHASE_SUCCEEDED" then
-    local id, qty, total = pending.id, pending.qty, pending.total or pending.maxTotal
+    local id, qty, total, onEnd = pending.id, pending.qty, pending.total or pending.maxTotal, pending.onEnd
     ns.AddPosition(id, qty, total)
     ns.Print(string.format("Bought %d x %s for %s.", qty, ns.Name(id), ns.Money(total)))
     pending = nil
     Unregister()
     if dialog then dialog:Hide() end
-    AfterPurchase(id)
+    if onEnd then onEnd(true, string.format("Bought %d for %s", qty, ns.Money(total)), total) else AfterPurchase(id) end
   elseif event == "COMMODITY_PURCHASE_FAILED" then
     ns.Print("The purchase failed. Nothing was bought.")
-    local id = pending.id
+    local id, onEnd = pending.id, pending.onEnd
     pending = nil
     Unregister()
     if dialog then dialog:Hide() end
-    AfterPurchase(id)
+    if onEnd then onEnd(false, "Purchase failed") else AfterPurchase(id) end
   end
 end)
+
+-- Start buying the qty cheapest units of a commodity. The game answers with a price quote.
+-- onQuote(unitPrice, totalPrice): optional; replaces the confirm dialog, and the caller then
+-- calls ns.ConfirmPurchase or ns.CancelPurchase. onEnd(bought, note, total): optional; replaces the
+-- automatic rescan. Returns false when another purchase is still waiting.
+function ns.StartCommodityPurchase(id, qty, maxTotal, onQuote, onEnd)
+  if pending then return false end
+  pending = { id = id, qty = qty, maxTotal = maxTotal, kind = "commodity", onQuote = onQuote, onEnd = onEnd }
+  for i = 1, #PURCHASE_EVENTS do buyer:RegisterEvent(PURCHASE_EVENTS[i]) end
+  C_AuctionHouse.StartCommoditiesPurchase(id, qty)
+  return true
+end
 
 -- Buy every unit priced under limit. Needs listings scanned within the last two minutes.
 function ns.BuyUnder(id, limit)
@@ -130,9 +163,7 @@ function ns.BuyUnder(id, limit)
       ns.Print("Not enough gold: that costs " .. ns.Money(cost) .. ".")
       return
     end
-    pending = { id = id, qty = units, maxTotal = cost, kind = "commodity" }
-    for i = 1, #PURCHASE_EVENTS do buyer:RegisterEvent(PURCHASE_EVENTS[i]) end
-    C_AuctionHouse.StartCommoditiesPurchase(id, units)
+    ns.StartCommodityPurchase(id, units, cost)
   elseif held.kind == "item" then
     local auction = held.auctions and held.auctions[1]
     if not auction or auction.unit >= limit then

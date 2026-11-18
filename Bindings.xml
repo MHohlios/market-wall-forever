@@ -1,0 +1,5 @@
+<Bindings>
+  <Binding name="MARKETWALL_BAIT_ACTION" header="MARKETWALL" category="ADDONS">
+    MarketWall.BaitPress()
+  </Binding>
+</Bindings>

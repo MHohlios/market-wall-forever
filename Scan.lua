@@ -71,8 +71,10 @@ local function CompleteItem(ladderMap, kind, auctions)
   local a = state.active
   if not a then return end
   local ladder, total = W.SortLadder(ladderMap)
-  ns.ladders[a.id] = { ladder = ladder, total = total, t = time(), kind = kind, auctions = auctions }
-  ns.Record(a.id, ladder, total, time())
+  local now = time()
+  ns.ladders[a.id] = { ladder = ladder, total = total, t = now, kind = kind, auctions = auctions }
+  local wall = ns.Record(a.id, ladder, total, now)
+  ns.UpdateBait(a.id, ladder, wall, ns.StatsFor(a.id), now, kind == "commodity")
   state.done = state.done + 1
   state.active = nil
   if ns.RefreshUI then ns.RefreshUI() end
@@ -111,7 +113,7 @@ end
 local function Retry()
   local a = state.active
   a.tries = a.tries + 1
-  if a.tries >= MAX_TRIES then
+  if a.tries >= state.maxTries then
     -- nothing listed, or the server never answered: record as empty and move on
     CompleteItem({}, "none")
   else
@@ -191,7 +193,8 @@ Step = function()
 end
 
 -- ids: optional list of item IDs. Default is the whole watchlist.
-function ns.StartWatchScan(ids, onDone)
+-- maxTries: searches per item before giving up; 1 sends exactly one search per item.
+function ns.StartWatchScan(ids, onDone, maxTries)
   if not ns.ahOpen then
     ns.Print("Open the auction house first.")
     return
@@ -216,6 +219,7 @@ function ns.StartWatchScan(ids, onDone)
   state.done = 0
   state.running = true
   state.onDone = onDone
+  state.maxTries = maxTries or MAX_TRIES
   state.alert = (ids == nil)
   scanner:RegisterEvent("COMMODITY_SEARCH_RESULTS_UPDATED")
   scanner:RegisterEvent("ITEM_SEARCH_RESULTS_UPDATED")
@@ -266,6 +270,7 @@ local function Finalize(maps, names, stamp)
       local ladder, total = W.SortLadder(maps[id])
       local stats = ns.StatsFor(id)
       local wall, minPrice = ns.Record(id, ladder, total, stamp)
+      ns.UpdateBait(id, ladder, wall, stats, stamp)
       if wall then
         if r.watch[id] then
           ns.ladders[id] = { ladder = ladder, total = total, t = stamp, kind = "scan" }
@@ -300,6 +305,10 @@ local function Finalize(maps, names, stamp)
       ticker:Cancel()
       table.sort(snipes, function(a, b) return a.profit > b.profit end)
       table.sort(dips, function(a, b) return a.under > b.under end)
+      -- items with nothing listed any more have no bait level left
+      for id in pairs(r.bait) do
+        if not maps[id] then r.bait[id] = nil end
+      end
       ns.snipes, ns.dips = snipes, dips
       ns.hiddenSnipes, ns.bestHistory = hidden, bestHistory
       ns.lastFullScan = stamp

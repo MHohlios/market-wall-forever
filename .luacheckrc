@@ -13,6 +13,8 @@ globals = {
   "SlashCmdList",
   "StaticPopupDialogs",
   "AuctionHouseFrame",      -- the Market tab clears its displayMode
+  "BINDING_HEADER_MARKETWALL",            -- Key Bindings labels for Bindings.xml
+  "BINDING_NAME_MARKETWALL_BAIT_ACTION",
 }
 
 -- WoW API the addon reads
@@ -23,7 +25,7 @@ read_globals = {
   "C_AuctionHouse", "C_Container", "C_Item", "C_Timer", "C_UnitAuras",
   "Enum", "ItemLocation", "SOUNDKIT", "TooltipDataProcessor", "ChatFrameUtil",
   -- Functions
-  "CreateFrame", "GetBuildInfo", "GetItemInfo", "GetMoney", "GetNormalizedRealmName", "GetRealmName",
+  "CreateFrame", "GetBindingKey", "GetBuildInfo", "GetItemInfo", "GetMoney", "GetNormalizedRealmName", "GetRealmName",
   "GetTime", "PlaySound", "StaticPopup_Show", "hooksecurefunc", "ChatEdit_InsertLink",
   "PanelTemplates_DeselectTab", "PanelTemplates_SelectTab", "PanelTemplates_TabResize",
   -- Frames and constants

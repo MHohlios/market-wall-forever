@@ -19,6 +19,8 @@ ns.cfgDefaults = {
   autoScan = true,         -- start the daily full scan when the auction house opens
   staleMinutes = 60,       -- watchlist prices older than this are greyed out
   sellDuration = 2,        -- last auction duration picked on the Sell page: 1 = 12h, 2 = 24h, 3 = 48h
+  baitSearchGap = 1.0,     -- seconds between Bait Detect searches; never less than 1
+  baitConfirmPress = true, -- Bait Detect confirms each purchase with its own press
 }
 
 local function Print(...)
@@ -154,6 +156,8 @@ function ns.R()
   r.days = r.days or {}     -- [itemID] = { [day] = { wall, lowWall, highWall, units, minPrice } }
   r.snaps = r.snaps or {}   -- [itemID] = { {t, wall, minPrice, units}, ... } watched items only
   r.pos = r.pos or {}       -- [itemID] = { qty=, cost= } bought through the addon
+  r.buys = r.buys or {}     -- { {t, id, qty, unit, total}, ... } every purchase through the addon
+  r.bait = r.bait or {}     -- [itemID] = bait record, see Bait.lua; overwritten each scan
   ns.realmData = r
   return r
 end
