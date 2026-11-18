@@ -143,7 +143,7 @@ end
 -- r is a slot's price relative to normal (1.0 = normal), kept free of market trend:
 -- a time of day is compared with the median of its own day, and a day with the median of the days
 -- within NEIGHBOR_DAYS of it, so a drifting market moves both sides together. Medians ignore spikes.
--- A day with one observation says nothing about time of day, so it is left out of the parts.
+-- n counts observations; a day with no neighbours (or one observation) counts as normal, ratio 1.
 function W.Cycle(obs)
   local byDay = {}
   for _, o in ipairs(obs) do
@@ -160,11 +160,9 @@ function W.Cycle(obs)
   local levels = {}
   for dayKey, day in pairs(byDay) do
     levels[dayKey] = median(day.walls)
-    if #day.list > 1 then
-      for _, o in ipairs(day.list) do
-        partRatios[o.part] = partRatios[o.part] or {}
-        table.insert(partRatios[o.part], o.w / levels[dayKey])
-      end
+    for _, o in ipairs(day.list) do
+      partRatios[o.part] = partRatios[o.part] or {}
+      table.insert(partRatios[o.part], o.w / levels[dayKey])
     end
   end
   for dayKey, day in pairs(byDay) do
@@ -172,10 +170,9 @@ function W.Cycle(obs)
     for other = dayKey - NEIGHBOR_DAYS, dayKey + NEIGHBOR_DAYS do
       if other ~= dayKey and levels[other] then around[#around + 1] = levels[other] end
     end
-    if #around > 0 then
-      local group = WEEKEND[day.wday] and weekendRatios or weekdayRatios
-      group[#group + 1] = levels[dayKey] / median(around)
-    end
+    local ratio = #around > 0 and levels[dayKey] / median(around) or 1
+    local group = WEEKEND[day.wday] and weekendRatios or weekdayRatios
+    for _ = 1, #day.list do group[#group + 1] = ratio end
   end
 
   local function slot(ratios)

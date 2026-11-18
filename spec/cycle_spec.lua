@@ -37,10 +37,14 @@ describe("Wall.Cycle", function()
     for part = 1, 4 do assert.near(1.0, result.parts[part].r, 0.001) end
   end)
 
-  it("ignores days with a single observation when looking at time of day", function()
-    local obs = Observe(5, function(_, part) return part == 4 and 1100 or 1000 end)
-    for day = DAY0 + 5, DAY0 + 9 do obs[#obs + 1] = { day = day, part = 1, wday = 1, w = 1000 } end
-    assert.equal(5, W.Cycle(obs).parts[1].n)
+  it("counts every observation, including one scan a day and several scans on few days", function()
+    local morning = W.Cycle(Observe(3, function() return 1000 end, { 2 }))
+    assert.equal(3, morning.parts[2].n)
+    assert.near(1.0, morning.parts[2].r, 0.001)
+
+    -- Monday and Tuesday with all four parts: 8 weekday observations
+    local twoDays = W.Cycle(Observe(3, function() return 1000 end))
+    assert.equal(8, twoDays.weekday.n)
   end)
 
   it("splits weekdays from weekends", function()
