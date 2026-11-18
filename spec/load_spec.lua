@@ -16,6 +16,9 @@ describe("loading the addon", function()
     assert.is_table(ns.Wall)
     assert.is_function(ns.BuildSellPage)    -- from Sell.lua
     assert.is_function(ns.BaitPress)        -- from BaitUI.lua, called by Bindings.xml
+    assert.is_table(ns.PriceView)           -- from PriceView.lua, before Sell.lua uses it
+    assert.is_function(ns.ToggleSearch)     -- from Search.lua
+    assert.is_function(ns.InitMinimapButton) -- from Minimap.lua
     assert.is_function(ns.InitTooltip)      -- from Tooltip.lua, the last TOC file
   end)
 

@@ -15,6 +15,9 @@ Scan.lua
 Buy.lua
 Disenchant.lua
 UI.lua
+PriceView.lua
 Sell.lua
 BaitUI.lua
+Search.lua
+Minimap.lua
 Tooltip.lua

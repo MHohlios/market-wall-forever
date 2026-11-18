@@ -68,25 +68,30 @@ function ns.StatsFor(id)
   return W.Stats(ns.DayWalls(id))
 end
 
--- Points for the chart: per-scan snapshots when we have them, otherwise one point per day
-function ns.Series(id)
+-- Points for the chart: per-scan snapshots when we have them, otherwise one point per day.
+-- withOlderDays also keeps the daily points from the days before the first snapshot.
+function ns.Series(id, withOlderDays)
   local r = ns.R()
   local out = {}
   local snaps = r.snaps[id]
-  if snaps and #snaps >= 2 then
-    for i = 1, #snaps do
-      out[i] = { t = snaps[i][1], w = snaps[i][2], m = snaps[i][3], q = snaps[i][4] }
-    end
-    return out
-  end
+  local useSnaps = snaps and #snaps >= 2
   local days = r.days[id]
-  if not days then return out end
-  local keys = {}
-  for day in pairs(days) do keys[#keys + 1] = day end
-  table.sort(keys)
-  for i = 1, #keys do
-    local d = days[keys[i]]
-    out[i] = { t = ns.DayStart(keys[i]) + 43200, w = d[D_WALL], m = d[D_MIN], q = d[D_UNITS] }
+  if days and (withOlderDays or not useSnaps) then
+    local before = useSnaps and ns.DayOf(snaps[1][1]) or math.huge
+    local keys = {}
+    for day in pairs(days) do
+      if day < before then keys[#keys + 1] = day end
+    end
+    table.sort(keys)
+    for i = 1, #keys do
+      local d = days[keys[i]]
+      out[i] = { t = ns.DayStart(keys[i]) + 43200, w = d[D_WALL], m = d[D_MIN], q = d[D_UNITS] }
+    end
+  end
+  if useSnaps then
+    for i = 1, #snaps do
+      out[#out + 1] = { t = snaps[i][1], w = snaps[i][2], m = snaps[i][3], q = snaps[i][4] }
+    end
   end
   return out
 end
@@ -229,6 +234,17 @@ function ns.LatestWall(id)
     if not latestDay or day > latestDay then latestDay = day end
   end
   if latestDay then return days[latestDay][D_WALL], latestDay end
+end
+
+-- How many days an item has been recorded, and the lowest and highest wall seen on them
+function ns.WallHistory(id)
+  local history = { days = 0 }
+  for _, d in pairs(ns.R().days[id] or {}) do
+    history.days = history.days + 1
+    if not history.low or d[D_LOW] < history.low then history.low = d[D_LOW] end
+    if not history.high or d[D_HIGH] > history.high then history.high = d[D_HIGH] end
+  end
+  return history
 end
 
 -- How a price compares with the item's median wall: the difference (-0.1 is 10% under)
