@@ -74,6 +74,7 @@ function V.ActivityEntries(report)
   for i, group in ipairs(report.groups) do
     entries[i] = {
       group = group.name,
+      bar = group.share,
       cells = { group.name, ns.ShareText(group.share), ns.Money(group.value), ns.Money(group.perHour), V.TopText(group.top) },
       sort = { group.name, group.share, group.value, group.perHour, group.top[1] and group.top[1].value },
     }

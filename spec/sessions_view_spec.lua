@@ -58,6 +58,7 @@ describe("Sessions view", function()
       local names = {}
       for i, entry in ipairs(entries) do names[i] = entry.group end
       assert.same({ "Fishing", "Turtles", "Owls" }, names)
+      assert.same({ 0.5, 0.3, 0.2 }, { entries[1].bar, entries[2].bar, entries[3].bar })   -- share bars
       assert.same({ "Fishing", "50%", ns.Money(250), ns.Money(250), "Yellowtail x10, Turtle Scale x1" }, entries[1].cells)
       assert.same({ "Owls", "20%", ns.Money(100), ns.Money(100), "Feather x5" }, entries[3].cells)
     end)

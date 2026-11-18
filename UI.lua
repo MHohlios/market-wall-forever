@@ -177,6 +177,10 @@ local function CreateList(parent, rows)
     row:SetPoint("RIGHT")
     row.bg = row:CreateTexture(nil, "BACKGROUND")
     row.bg:SetAllPoints()
+    row.bar = row:CreateTexture(nil, "BORDER")   -- an entry's share, as a bar from the left
+    row.bar:SetPoint("TOPLEFT")
+    row.bar:SetPoint("BOTTOMLEFT")
+    row.bar:SetColorTexture(0.96, 0.77, 0.09, 0.18)
     local hl = row:CreateTexture(nil, "HIGHLIGHT")
     hl:SetAllPoints()
     hl:SetColorTexture(1, 1, 1, 0.08)
@@ -283,6 +287,8 @@ local function CreateList(parent, rows)
         for c = 1, #self.columns do row.cells[c]:SetText(entry.cells[c] or "") end
         row.icon:SetTexture(entry.id and ns.Icon(entry.id) or nil)
         row:SetAlpha(entry.dim and 0.45 or 1)
+        row.bar:SetShown(entry.bar ~= nil)
+        if entry.bar then row.bar:SetWidth(math.max(1, entry.bar * self:GetWidth())) end
         if entry.highlight then
           row.bg:SetColorTexture(0.18, 0.32, 0.45, 0.45)
         elseif entry.tint then
