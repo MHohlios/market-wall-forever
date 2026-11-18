@@ -52,22 +52,26 @@ function ns.Money(c)
   return out
 end
 
--- Accepts "80c", "1s 20c", "2g", "1g5s", or a plain copper number
+local MONEY_PART = "(%d*%.?%d+)%s*([gsc])"
+local COPPER_PER = { g = 10000, s = 100, c = 1 }
+
+-- Accepts "80c", "1s 20c", "2g", "1g5s", "1.5g", or a plain copper number. Fractions of a
+-- copper are dropped. Anything else, including negative amounts, is nil.
 function ns.ParseMoney(text)
   if not text then return nil end
   text = string.lower((text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")))
   local plain = tonumber(text)
-  if plain then return math.floor(plain) end
-  local total, found = 0, false
-  for num, unit in string.gmatch(text, "(%d+)%s*([gsc])") do
-    found = true
-    num = tonumber(num)
-    if unit == "g" then total = total + num * 10000
-    elseif unit == "s" then total = total + num * 100
-    else total = total + num end
+  if plain then
+    if plain < 0 then return nil end
+    return math.floor(plain)
   end
-  if found then return total end
-  return nil
+  local leftover, parts = string.gsub(text, MONEY_PART, "")
+  if parts == 0 or string.find(leftover, "%S") then return nil end
+  local total = 0
+  for num, unit in string.gmatch(text, MONEY_PART) do
+    total = total + tonumber(num) * COPPER_PER[unit]
+  end
+  return math.floor(total + 1e-9)
 end
 
 -- Days are counted in local time, so "today" flips at your midnight, not at midnight UTC
