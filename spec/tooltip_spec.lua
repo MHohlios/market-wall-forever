@@ -73,13 +73,13 @@ describe("item tooltip lines", function()
       assert.is_true(Has("down 6%"))
     end)
 
-    it("calls moves just inside 3% flat and just past it a trend", function()
-      SeedWalls(1000, 1029)
+    it("calls moves of 3% or less flat, exactly 3% included, and anything past it a trend", function()
+      SeedWalls(1000, 1030)
       ns.TooltipLines.Add(tooltip, ID)
       assert.is_true(Has("flat"))
 
       tooltip = NewTooltip()
-      SeedWalls(1000, 971)
+      SeedWalls(1000, 970)
       ns.TooltipLines.Add(tooltip, ID)
       assert.is_true(Has("flat"))
 

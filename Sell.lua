@@ -90,8 +90,9 @@ end
 
 local function TrendText(diff)
   local pct = math.abs(ns.Round(diff * 100)) .. "%"
-  if diff < -FLAT then return BLUE .. "down " .. pct .. "|r" end
-  if diff > FLAT then return ORANGE .. "up " .. pct .. "|r" end
+  local limit = FLAT + 1e-9   -- absorbs float error, so a change of exactly 3% (1000 to 1030) is flat
+  if diff < -limit then return BLUE .. "down " .. pct .. "|r" end
+  if diff > limit then return ORANGE .. "up " .. pct .. "|r" end
   return "flat"
 end
 ns.SellTrend = { WeekSummary = WeekSummary, TrendText = TrendText, RecentWalls = RecentWalls }   -- shared with the tooltip and tests
