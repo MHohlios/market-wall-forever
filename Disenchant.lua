@@ -237,28 +237,39 @@ end
 
 local ENCHANTING_SKILL_LINE = 333
 
+-- Each reader returns Enchanting's rank, or nil and whether it listed the character's skills
+-- without Enchanting
+local function FromProfessions()
+  if not (GetProfessions and GetProfessionInfo) then return nil, false end
+  local first, second = GetProfessions()
+  for _, index in pairs({ first, second }) do
+    local _, _, rank, _, _, _, skillLine = GetProfessionInfo(index)
+    if skillLine == ENCHANTING_SKILL_LINE then return rank end
+  end
+  return nil, (first or second) ~= nil
+end
+
+local function FromSkillLines()
+  if not (GetNumSkillLines and GetSkillLineInfo) then return nil, false end
+  local enchanting = (GetSpellInfo and GetSpellInfo(7411)) or "Enchanting"
+  local count, collapsed = GetNumSkillLines(), false
+  for i = 1, count do
+    local name, isHeader, isExpanded, rank = GetSkillLineInfo(i)
+    if isHeader and not isExpanded then
+      collapsed = true
+    elseif name == enchanting then
+      return rank
+    end
+  end
+  -- a collapsed section could be hiding Enchanting
+  return nil, count > 0 and not collapsed
+end
+
 -- This character's Enchanting skill: 0 without the profession, nil when the game will not say
 function ns.EnchantingSkill()
-  if GetProfessions and GetProfessionInfo then
-    local first, second = GetProfessions()
-    for _, index in pairs({ first, second }) do
-      local _, _, rank, _, _, _, skillLine = GetProfessionInfo(index)
-      if skillLine == ENCHANTING_SKILL_LINE then return rank end
-    end
-    return 0
-  end
-  if GetNumSkillLines and GetSkillLineInfo then
-    local enchanting = (GetSpellInfo and GetSpellInfo(7411)) or "Enchanting"
-    local collapsed = false
-    for i = 1, GetNumSkillLines() do
-      local name, isHeader, isExpanded, rank = GetSkillLineInfo(i)
-      if isHeader and not isExpanded then
-        collapsed = true
-      elseif name == enchanting then
-        return rank
-      end
-    end
-    -- a collapsed section could be hiding Enchanting
-    if not collapsed then return 0 end
-  end
+  local rank, listedWithout = FromProfessions()
+  if rank then return rank end
+  local lineRank, linesWithout = FromSkillLines()
+  if lineRank then return lineRank end
+  if listedWithout or linesWithout then return 0 end
 end

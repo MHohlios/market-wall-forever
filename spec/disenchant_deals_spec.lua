@@ -185,6 +185,33 @@ describe("EnchantingSkill", function()
 
   after_each(function()
     _G.GetNumSkillLines, _G.GetSkillLineInfo = nil, nil
+    _G.GetProfessions, _G.GetProfessionInfo = nil, nil
+  end)
+
+  -- professions: list of { rank, skillLine }, reported by index like the game
+  local function Professions(professions)
+    _G.GetProfessions = function() return professions[1] and 1, professions[2] and 2 end
+    _G.GetProfessionInfo = function(index)
+      local p = professions[index]
+      return "name", nil, p[1], 300, 0, 0, p[2]
+    end
+  end
+
+  it("reads the rank from the profession API", function()
+    Professions({ { 150, 197 }, { 260, 333 } })   -- Tailoring, Enchanting
+    assert.equal(260, ns.EnchantingSkill())
+  end)
+
+  it("falls back to the skill list when the profession API lists nothing", function()
+    Professions({})
+    lines = { { "Professions", true, true }, { "Enchanting", false, nil, 120 } }
+    assert.equal(120, ns.EnchantingSkill())
+  end)
+
+  it("is 0 when the profession API lists others and the skill list cannot say", function()
+    Professions({ { 150, 197 } })
+    lines = { { "Professions", true, false } }
+    assert.equal(0, ns.EnchantingSkill())
   end)
 
   it("reads the rank from the skill list", function()
