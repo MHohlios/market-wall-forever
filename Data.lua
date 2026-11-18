@@ -70,7 +70,7 @@ end
 
 -- Weekly history is saved as one compact string per item: the first week's start day, then one
 -- "wall,wall-low,high-wall" segment per consecutive week, all base 36, and an empty segment for a
--- week with no data. "fr1;2n9,1c,8;;2p1,0,3" is three weeks, the middle one missing.
+-- week with no data. "fqx;2n9,1c,8;;2p1,0,3" is three weeks, the middle one missing.
 local DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz"
 
 local function Base36(n)
@@ -96,20 +96,26 @@ function ns.PackWeeks(weeks)
   return table.concat(segments, ";")
 end
 
--- The weeks in a packed string, oldest first, skipping missing weeks
+-- First day of the Monday-start week holding a day; day 0, 1 Jan 1970, was a Thursday
+local function WeekStart(day)
+  return day - (day + 3) % 7
+end
+
+-- The weeks in a packed string, oldest first, skipping missing weeks. Empty when the string is
+-- missing or malformed.
 function ns.UnpackWeeks(text)
-  local weeks = {}
-  if not text then return weeks end
-  local first, start
+  if type(text) ~= "string" then return {} end
+  local weeks, start = {}, nil
   for segment in (text .. ";"):gmatch("([^;]*);") do
-    if not first then
-      first = tonumber(segment, 36)
-      start = first
+    if not start then
+      start = tonumber(segment, 36)
+      if not start or WeekStart(start) ~= start then return {} end
     else
-      local wall, below, above = segment:match("^(%w+),(%w+),(%w+)$")
-      if wall then
-        wall = tonumber(wall, 36)
-        weeks[#weeks + 1] = { start = start, wall = wall, low = wall - tonumber(below, 36), high = wall + tonumber(above, 36) }
+      if segment ~= "" then
+        local wall, below, above = segment:match("^(%w+),(%w+),(%w+)$")
+        wall, below, above = tonumber(wall or "", 36), tonumber(below or "", 36), tonumber(above or "", 36)
+        if not (wall and below and above) then return {} end
+        weeks[#weeks + 1] = { start = start, wall = wall, low = wall - below, high = wall + above }
       end
       start = start + 7
     end
@@ -162,11 +168,6 @@ function ns.Series(id, withHistory)
   return out
 end
 
--- First day of the Monday-start week holding a day; day 0, 1 Jan 1970, was a Thursday
-local function WeekStart(day)
-  return day - (day + 3) % 7
-end
-
 local function Median(values)
   table.sort(values)
   return W.Percentile(values, 0.5)
@@ -174,33 +175,41 @@ end
 
 -- Folds an item's daily records from whole weeks before `cutoff` into one weekly point each:
 -- the median, lowest and highest wall. A week straddling the cutoff waits until all its days
--- have passed it. Keeps the newest retainWeeks weeks.
+-- have passed it. A folded week replaces a saved one with the same start. Keeps the newest
+-- retainWeeks weeks.
 function ns.FoldWeeks(id, cutoff)
   local r = ns.R()
   local days = r.days[id]
+  local limit = WeekStart(cutoff)   -- days before it sit in whole weeks before the cutoff
+  local anyExpired = false   -- checked first, as every recorded item comes through here on each scan
+  for day in pairs(days) do
+    if day < limit then anyExpired = true break end
+  end
+  if not anyExpired then return end
+
   local expired = {}   -- [week start] = daily records
-  for day, d in pairs(days or {}) do
-    local week = WeekStart(day)
-    if week + 7 <= cutoff then
+  for day, d in pairs(days) do
+    if day < limit then
+      local week = WeekStart(day)
       expired[week] = expired[week] or {}
       table.insert(expired[week], d)
       days[day] = nil
     end
   end
-  local starts = {}
-  for week in pairs(expired) do starts[#starts + 1] = week end
-  if #starts == 0 then return end
-  table.sort(starts)
 
-  local weeks = ns.UnpackWeeks(r.weeks[id])
-  for _, week in ipairs(starts) do
+  local byStart = {}
+  for _, week in ipairs(ns.UnpackWeeks(r.weeks[id])) do byStart[week.start] = week end
+  for start, records in pairs(expired) do
     local walls, low, high = {}, math.huge, 0
-    for i, d in ipairs(expired[week]) do
+    for i, d in ipairs(records) do
       walls[i] = d[D_WALL]
       low, high = math.min(low, d[D_LOW]), math.max(high, d[D_HIGH])
     end
-    weeks[#weeks + 1] = { start = week, wall = ns.Round(Median(walls)), low = low, high = high }
+    byStart[start] = { start = start, wall = ns.Round(Median(walls)), low = low, high = high }
   end
+  local weeks = {}
+  for _, week in pairs(byStart) do weeks[#weeks + 1] = week end
+  table.sort(weeks, function(a, b) return a.start < b.start end)
   local oldest = weeks[#weeks].start - (ns.Cfg("retainWeeks") - 1) * 7
   while weeks[1].start < oldest do table.remove(weeks, 1) end
   r.weeks[id] = ns.PackWeeks(weeks)

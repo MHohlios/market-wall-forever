@@ -280,6 +280,22 @@ describe("price view", function()
       assert.same({ Week(monday - 21, 50), Week(monday, 200) }, SavedWeeks())
     end)
 
+    it("merges a folded week older than the saved ones into an ordered string", function()
+      ns.R().weeks[ID] = ns.PackWeeks({ Week(monday - 7, 50), Week(monday, 60) })
+      Day(monday - 21, 200)   -- older than the first saved week
+      Day(monday, 300)        -- the same week as a saved one: the folded data wins
+      ns.FoldWeeks(ID, today)
+      assert.same({ Week(monday - 21, 200), Week(monday - 7, 50), Week(monday, 300) }, SavedWeeks())
+    end)
+
+    it("unpacks a malformed string to no weeks without raising", function()
+      local first = ns.PackWeeks({ Week(monday, 100) }):match("^[^;]+")   -- a valid Monday
+      assert.equal(1, #ns.UnpackWeeks(first .. ";2s,0,0"))
+      for _, text in ipairs({ "", "garbage", "zz;1,2", first .. ";2n9,1c", first .. ";!!,0,0", first .. ";2s,0,0,9", ";;", 42 }) do
+        assert.same({}, ns.UnpackWeeks(text))
+      end
+    end)
+
     it("keeps the days of a week straddling the cutoff until the whole week has expired", function()
       Day(monday - 1, 100)   -- the Sunday before
       Day(monday, 200)
