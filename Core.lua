@@ -276,6 +276,8 @@ SlashCmdList["MARKETWALL"] = function(msg)
   elseif cmd == "resetpos" then
     local id = ns.ResolveItem(rest)
     if id then ns.R().pos[id] = nil Print("Position cleared for " .. ns.Name(id)) end
+  elseif cmd == "probe" then
+    ns.ProbeCommand(rest)
   else
     Print("Open the auction house and use the Market tab. Commands:")
     print("  /mw add <item link, id or name>   watch an item")
@@ -284,5 +286,6 @@ SlashCmdList["MARKETWALL"] = function(msg)
     print("  /mw full                          full market scan")
     print("  /mw set <setting> <value>         change a setting, /mw set lists them")
     print("  /mw resetpos <item>               clear your tracked position")
+    print("  /mw probe start|stop|status       record what the client exposes for kills, loot and money")
   end
 end
