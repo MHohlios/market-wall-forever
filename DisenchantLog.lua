@@ -195,6 +195,8 @@ Log.tracker = tracker
 ns.Recording.On("disenchant", function(event)
   local store = Store()
   if store then Add(store, event) end
+  ns.Mobs.Invalidate()   -- a 20th result changes the disenchant value in mobs' Optimal
+  ns.SearchChanged()
 end)
 
 -- The item ID locked in your bags, nil when none or several are
