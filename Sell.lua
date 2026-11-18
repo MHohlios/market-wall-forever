@@ -2,7 +2,7 @@
 -- Top: what you are posting (left) and the item's last 7 days with its key numbers (right).
 -- Bottom: what you can sell (left) and the auctions listed right now (right).
 local _, ns = ...
-local W = ns.Wall
+local W, B = ns.Wall, ns.Bait
 local ui = ns.ui
 
 local DAYS = 7
@@ -21,10 +21,10 @@ local BAG_COLUMNS = {
   { "Vs normal", 80, "RIGHT", "The wall price against the item's median. Blue is low, orange is high." },
 }
 local AUCTION_COLUMNS = {
-  { "Price each", 150, nil, "Each price level listed right now, cheapest first." },
+  { "Price each", 120, nil, "Each price level listed right now, cheapest first." },
   { "Quantity", 80, "RIGHT", "Units listed at this price." },
   { "Running total", 110, "RIGHT", "Units listed at this price or cheaper." },
-  { "Note", 100, "RIGHT", "Wall: the price level with real supply behind it. The highlighted row is where your price would sit." },
+  { "Note", 130, "RIGHT", "Wall: the price level with real supply behind it. Bait?: a few units far under the wall, posted so others copy the price, with the copies posted since. The highlighted row is where your price would sit." },
 }
 
 local page
@@ -97,6 +97,14 @@ local function TrendText(diff)
 end
 ns.SellTrend = { WeekSummary = WeekSummary, TrendText = TrendText, RecentWalls = RecentWalls }   -- shared with the tooltip and tests
 
+-- The Note column: the bait level Bait Detect tracks, or the wall
+local function AuctionNote(tier, wall, bait)
+  if bait and tier.p == bait.p then return ORANGE .. "bait? " .. B.LevelNote(bait) .. "|r" end
+  if tier.p == wall then return GOLD .. "wall|r" end
+  return ""
+end
+ns.SellPricing = { SuggestedPrice = SuggestedPrice, AuctionNote = AuctionNote }   -- exposed for tests
+
 local function IsCommodity(location)
   return C_AuctionHouse.GetItemCommodityStatus(location) == Enum.ItemCommodityStatus.Commodity
 end
@@ -133,7 +141,10 @@ local function Warnings(item, price, quantity)
       ns.Money(netEach), ns.Money(vendor))
   end
   local market = SuggestedPrice(item.id)
-  if market and price < market * (1 - FLAT) then
+  local bait = B.PostWarning(ns.R().bait[item.id], price, FLAT)
+  if bait then
+    warnings[#warnings + 1] = bait   -- says more than Below market, which it replaces
+  elseif market and price < market * (1 - FLAT) then
     warnings[#warnings + 1] = string.format("Below market: %d%% under the %s wall.",
       ns.Round((1 - price / market) * 100), ns.Money(market))
   end
@@ -246,6 +257,7 @@ local function RefreshAuctions(id)
   local rows = {}
   local price = ns.ParseMoney(page.price:GetText())
   local wall = LiveWall(id)
+  local bait = ns.R().bait[id]
   local running, marked = 0, false
   for _, tier in ipairs(held and held.ladder or {}) do
     running = running + tier.q
@@ -253,7 +265,7 @@ local function RefreshAuctions(id)
     if here then marked = true end
     rows[#rows + 1] = {
       highlight = here,
-      cells = { ns.Money(tier.p), tostring(tier.q), tostring(running), tier.p == wall and GOLD .. "wall|r" or "" },
+      cells = { ns.Money(tier.p), tostring(tier.q), tostring(running), AuctionNote(tier, wall, bait) },
     }
   end
   local empty
