@@ -225,7 +225,8 @@ function ns.Cycle(id)
   return result
 end
 
--- The most recent recorded wall price and its day, or nil when the item has no history
+-- The most recent recorded wall price, its day and the units listed in that day's last scan,
+-- or nil when the item has no history
 function ns.LatestWall(id)
   local days = ns.R().days[id]
   if not days then return nil end
@@ -233,7 +234,7 @@ function ns.LatestWall(id)
   for day in pairs(days) do
     if not latestDay or day > latestDay then latestDay = day end
   end
-  if latestDay then return days[latestDay][D_WALL], latestDay end
+  if latestDay then return days[latestDay][D_WALL], latestDay, days[latestDay][D_UNITS] end
 end
 
 -- How many days an item has been recorded, and the lowest and highest wall seen on them

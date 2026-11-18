@@ -1,0 +1,217 @@
+local addon = require("spec.helpers.addon")
+
+local MONEY, ITEM = 2, 1
+local WOLF, BOAR = 1234, 5678
+local LINEN, FANG, LEATHER = 2589, 3300, 2318
+
+local function Guid(npc, spawn)
+  return "Creature-0-5250-0-12-" .. npc .. "-" .. spawn
+end
+
+local function Slot(itemID, quantity, ...)
+  return { type = ITEM, link = "|Hitem:" .. itemID .. "::::|h[x]|h", quantity = quantity, sources = { n = select("#", ...), ... } }
+end
+
+local function Coin(text, ...)
+  return { type = MONEY, text = text, quantity = 0, sources = { n = select("#", ...), ... } }
+end
+
+describe("Kills", function()
+  local K, events, answers, tracker
+
+  before_each(function()
+    local ns = addon.Load()
+    K = ns.Kills
+    events, answers = {}, {}
+    tracker = K.NewTracker(function(e) events[#events + 1] = e end, function(guid) return answers[guid] end)
+  end)
+
+  local function Of(kind)
+    local out = {}
+    for _, e in ipairs(events) do
+      if e.kind == kind then out[#out + 1] = e end
+    end
+    return out
+  end
+
+  describe("ParseCoin", function()
+    it("reads gold, silver and copper as the loot window writes them", function()
+      assert.equal(12, K.ParseCoin("12 Copper"))
+      assert.equal(105, K.ParseCoin("1 Silver\n5 Copper"))
+      assert.equal(20304, K.ParseCoin("2 Gold\n3 Silver\n4 Copper"))
+      assert.equal(10500, K.ParseCoin("1g 5s"))
+      assert.equal(1234 * 10000, K.ParseCoin("1,234 Gold"))
+    end)
+
+    it("reads coin icons", function()
+      local text = "3|TInterface\\MoneyFrame\\UI-SilverIcon:0:0:2:0|t 7|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:2:0|t"
+      assert.equal(307, K.ParseCoin(text))
+    end)
+
+    it("falls back to the quantity field when the text has no amount", function()
+      assert.equal(250, K.ParseCoin("", 250))
+      assert.equal(250, K.ParseCoin(nil, 250))
+      assert.equal(0, K.ParseCoin("Coins", 0))
+    end)
+  end)
+
+  it("counts each victim once", function()
+    local wolf = Guid(WOLF, 1)
+    assert.is_table(tracker:Kill(wolf, 100))
+    assert.is_nil(tracker:Kill(wolf, 101))
+    tracker:Loot({ Slot(LINEN, 1, wolf, 1) }, false, 102)
+    tracker:Tick(1000)
+    assert.equal(1, #Of("kill"))
+  end)
+
+  it("ignores players and objects as kills", function()
+    assert.is_nil(tracker:Kill("Player-5250-0ABC", 100))
+    assert.is_nil(tracker:Kill("GameObject-0-5250-0-12-777-1", 100))
+  end)
+
+  it("credits each slot of an area loot to its own corpse", function()
+    local wolf, boar = Guid(WOLF, 1), Guid(BOAR, 2)
+    tracker:Kill(wolf, 100)
+    tracker:Kill(boar, 100)
+    tracker:Loot({
+      Slot(LINEN, 5, wolf, 2, boar, 3),       -- one stack merged from both corpses
+      Slot(FANG, 1, wolf, 1),
+      Coin("1 Silver\n20 Copper", wolf, 70, boar, 50),
+    }, false, 105)
+    local kills = Of("kill")
+    assert.equal(2, #kills)
+    local byGuid = {}
+    for _, e in ipairs(kills) do byGuid[e.guid] = e end
+    assert.same({ [LINEN] = 2, [FANG] = 1 }, byGuid[wolf].drops)
+    assert.equal(70, byGuid[wolf].coin)
+    assert.same({ [LINEN] = 3 }, byGuid[boar].drops)
+    assert.equal(50, byGuid[boar].coin)
+    assert.equal(K.LOOTED, byGuid[boar].outcome)
+    assert.equal("loot", byGuid[boar].via)
+    assert.equal(2, #Of("loot"))
+  end)
+
+  it("records the whole coin slot for a single corpse, before any party split", function()
+    local wolf = Guid(WOLF, 1)
+    tracker:Kill(wolf, 100)
+    tracker:Loot({ Coin("1 Gold\n2 Silver", wolf, 0) }, false, 101)
+    assert.equal(10200, Of("kill")[1].coin)
+  end)
+
+  it("splits a coin slot evenly when several corpses give no amounts", function()
+    local wolf, boar = Guid(WOLF, 1), Guid(BOAR, 2)
+    tracker:Loot({ Coin("5 Copper", wolf, nil, boar, nil) }, false, 101)
+    local coin = {}
+    for _, e in ipairs(Of("kill")) do coin[e.guid] = e.coin end
+    assert.same({ [wolf] = 3, [boar] = 2 }, coin)
+  end)
+
+  it("counts a corpse looted without a PARTY_KILL as a kill", function()
+    tracker:Loot({ Slot(LINEN, 1, Guid(WOLF, 9), 1) }, false, 100)
+    assert.equal(1, #Of("kill"))
+  end)
+
+  describe("a kill you did not loot", function()
+    it("is 0c when CanLootUnit says it had no loot", function()
+      local wolf = Guid(WOLF, 1)
+      answers[wolf] = "empty"
+      tracker:Kill(wolf, 100)
+      tracker:Tick(101)
+      assert.equal(0, #Of("kill"))     -- still lootable until the window passes
+      tracker:Tick(190)
+      local kill = Of("kill")[1]
+      assert.same({ K.EMPTY, "canloot" }, { kill.outcome, kill.via })
+      assert.is_nil(kill.coin)
+    end)
+
+    it("is unseen when CanLootUnit says someone else has it", function()
+      local wolf = Guid(WOLF, 1)
+      answers[wolf] = "theirs"
+      tracker:Kill(wolf, 100)
+      tracker:Tick(101)
+      answers[wolf] = "empty"          -- later answers are ignored: they looted it meanwhile
+      tracker:Tick(190)
+      assert.same({ K.UNSEEN, "canloot" }, { Of("kill")[1].outcome, Of("kill")[1].via })
+    end)
+
+    it("is unseen when CanLootUnit gives no answer, by the window rule", function()
+      tracker:Kill(Guid(WOLF, 1), 100)
+      tracker:Tick(101)
+      tracker:Tick(190)
+      assert.same({ K.UNSEEN, "window" }, { Of("kill")[1].outcome, Of("kill")[1].via })
+      assert.same({ loot = 0, canloot = 0, window = 1 }, tracker.paths)
+    end)
+
+    it("is still credited when looted inside the window", function()
+      local wolf = Guid(WOLF, 1)
+      answers[wolf] = "mine"
+      tracker:Kill(wolf, 100)
+      tracker:Tick(101)
+      tracker:Loot({ Slot(LINEN, 2, wolf, 2) }, false, 150)
+      assert.same({ K.LOOTED, { [LINEN] = 2 } }, { Of("kill")[1].outcome, Of("kill")[1].drops })
+    end)
+
+    it("settles at once on logout", function()
+      tracker:Kill(Guid(WOLF, 1), 100)
+      tracker:Tick(101, true)
+      assert.equal(1, #Of("kill"))
+    end)
+  end)
+
+  describe("Classify", function()
+    it("waits out the window unless looted", function()
+      assert.is_nil(K.Classify({ t = 0, check = "empty" }, 10, 90))
+      assert.equal(K.LOOTED, K.Classify({ t = 0, looted = true }, 10, 90))
+      assert.equal(K.EMPTY, K.Classify({ t = 0, check = "empty" }, 90, 90))
+      assert.equal(K.UNSEEN, K.Classify({ t = 0, check = "mine" }, 90, 90))
+      assert.equal(K.UNSEEN, K.Classify({ t = 0, check = false }, 90, 90))
+    end)
+  end)
+
+  describe("gathering", function()
+    it("records a second window on an emptied corpse as a gather", function()
+      local wolf = Guid(WOLF, 1)
+      tracker:Kill(wolf, 100)
+      tracker:Loot({ Slot(LINEN, 1, wolf, 1) }, false, 101)
+      tracker:Closed(true)
+      tracker:Loot({ Slot(LEATHER, 2, wolf, 2) }, false, 105)
+      assert.equal(1, #Of("kill"))
+      local gather = Of("gather")[1]
+      assert.same({ WOLF, { [LEATHER] = 2 } }, { gather.npc, gather.drops })
+      assert.equal(1, #Of("loot"))
+    end)
+
+    it("ignores reopening a corpse with items left in it", function()
+      local wolf = Guid(WOLF, 1)
+      tracker:Loot({ Slot(LINEN, 1, wolf, 1), Slot(FANG, 1, wolf, 1) }, false, 101)
+      tracker:Closed(false)
+      tracker:Loot({ Slot(FANG, 1, wolf, 1) }, false, 110)
+      assert.same({ 1, 1, 0 }, { #Of("kill"), #Of("loot"), #Of("gather") })
+    end)
+
+    it("records a window right after a skinning cast as a gather and keeps it on the kill", function()
+      local wolf = Guid(WOLF, 1)
+      answers[wolf] = "empty"
+      tracker:Kill(wolf, 100)
+      tracker:Cast(8613, 102)
+      tracker:Loot({ Slot(LEATHER, 1, wolf, 1) }, false, 103)
+      tracker:Tick(200)
+      local kill = Of("kill")[1]
+      assert.same({ K.EMPTY, { [LEATHER] = 1 } }, { kill.outcome, kill.gather })
+    end)
+
+    it("treats a window long after the cast as loot", function()
+      local wolf = Guid(WOLF, 1)
+      tracker:Cast(8613, 100)
+      tracker:Loot({ Slot(LINEN, 1, wolf, 1) }, false, 110)
+      assert.same({ 1, 0 }, { #Of("kill"), #Of("gather") })
+    end)
+  end)
+
+  it("keeps fishing out of mob records", function()
+    tracker:Loot({ Slot(6291, 1, "GameObject-0-5250-0-12-35591-1", 1), Coin("3 Copper") }, true, 100)
+    local fish = Of("fish")[1]
+    assert.same({ "fishing", 3, { [6291] = 1 } }, { fish.source, fish.coin, fish.drops })
+    assert.same({ 0, 0 }, { #Of("kill"), #Of("loot") })
+  end)
+end)

@@ -103,6 +103,7 @@ describe("probe", function()
       Stub("IsFishingLoot", function() return false end)
       Stub("GetLootSlotType", function() return 1 end)
       Stub("GetLootSlotLink", function() return "|Hitem:2589::|h[Linen Cloth]|h" end)
+      Stub("GetLootSlotInfo", function() return 0, "Linen Cloth", 1 end)   -- read by the kill tracker
       Stub("GetLootSourceInfo", function(slot)
         if slot == 1 then return CREATURE, 1, OTHER_CREATURE, 1 end
         return PLAYER, 1
