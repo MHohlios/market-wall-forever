@@ -8,6 +8,8 @@ A World of Warcraft (Forever) auction house addon. It adds a Market tab with:
   See below.
 - **Sell**: your sellable bag items with their wall price, a 7-day chart, and posting
   at the wall price.
+- **Item search**: an MW button on the minimap opens a window, anywhere in the world,
+  to look up any item MarketWall has seen. See below.
 - **Tooltips**: market wall, normal range, high/low against the median, vendor price
   and expected disenchant value.
 
@@ -26,7 +28,20 @@ not tracked here.
 
 **New files need a full client restart.** `/reload` picks up edits to files the game
 already knows, but a new file in `MarketWall.toc`, or a new `Bindings.xml`, loads only
-after quitting and restarting the game.
+after quitting and restarting the game. The item search window added `PriceView.lua`,
+`Search.lua` and `Minimap.lua`, so restart the game once after updating to it.
+
+## Item search
+
+Click the **MW** button on the minimap's edge to open or close the search window. Drag
+the button to move it round the edge. `/mw minimap`, or **Minimap button** in Settings,
+hides or shows it; `/mw search` opens the window either way.
+
+Type part of a name to match items MarketWall has seen in a scan, or shift-click an item
+link into the box. Your last 10 searches are listed under Recent. The item view has the
+chart with a 7 days / 30 days / All switch, the item's numbers, and Add to watchlist.
+Live listings load only while the auction house is open. The window moves by dragging,
+remembers where you left it, and closes with Escape.
 
 ## Bait Detect
 

@@ -18,8 +18,9 @@ local function MarketLines(add, id, count)
     add(GREY .. (age == 0 and "Against median" or "Against median (last scan)") .. "|r", ns.VersusText(diff, word))
   end
 
-  local week = ns.SellTrend.WeekSummary(ns.SellTrend.RecentWalls(id))
-  if week and week.trend then add(GREY .. "7-day trend|r", ns.SellTrend.TrendText(week.trend)) end
+  local PV = ns.PriceView
+  local week = PV.WeekSummary(PV.InRange(ns.Series(id), 7, time()))
+  if week and week.trend then add(GREY .. "7-day trend|r", PV.TrendText(week.trend)) end
 
   local cycle = ns.Cycle(id)
   local best, worst

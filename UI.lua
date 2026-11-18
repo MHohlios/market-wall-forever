@@ -46,6 +46,15 @@ local function HideTip()
   if GameTooltip then GameTooltip:Hide() end
 end
 
+-- Shift-clicking an item while the box has focus hands the item's link to onLink
+local function OnLinkInsert(box, onLink)
+  local function Insert(link)
+    if box:IsVisible() and box:HasFocus() and type(link) == "string" then onLink(link) end
+  end
+  if ChatEdit_InsertLink then hooksecurefunc("ChatEdit_InsertLink", Insert) end
+  if ChatFrameUtil and ChatFrameUtil.InsertLink then hooksecurefunc(ChatFrameUtil, "InsertLink", Insert) end
+end
+
 -------------------------------------------------------------------------------
 -- Generic list: sortable headers with hover help, icon per row
 -------------------------------------------------------------------------------
@@ -471,7 +480,7 @@ local function CreateChart(parent)
 end
 ns.widgets = {
   MakeButton = MakeButton, MakeText = MakeText, MakeEdit = MakeEdit, ShowTip = ShowTip, HideTip = HideTip,
-  CreateList = CreateList, CreateChart = CreateChart, ListHeight = function(rows) return 22 + rows * ROW_H end,
+  OnLinkInsert = OnLinkInsert, CreateList = CreateList, CreateChart = CreateChart, ListHeight = function(rows) return 22 + rows * ROW_H end,
 }
 
 -------------------------------------------------------------------------------
@@ -727,9 +736,10 @@ local SETTINGS = {
   { key = "sound", label = "Sound on deals", kind = "bool", tip = "Play a sound when a scan finds units under your buy price or new snipes." },
   { key = "baitSearchGap", label = "Bait search gap (seconds)", kind = "secs", tip = "Bait Detect waits at least this long between searches. Never less than 1 second." },
   { key = "baitConfirmPress", label = "Bait confirm press", kind = "bool", tip = "Bait Detect confirms each purchase with its own press of the button. Untick to confirm straight after the price quote." },
+  { key = "minimapButton", label = "Minimap button", kind = "bool", tip = "Show the MW button on the minimap, which opens the item search window. /mw minimap does the same." },
 }
 
-local SETTING_ROW_H = 27   -- every row, plus Reset, fits above the frame's bottom edge
+local SETTING_ROW_H = 25  -- every row, plus Reset, fits above the frame's bottom edge
 
 local function FormatSetting(def)
   local value = ns.Cfg(def.key)
@@ -781,6 +791,7 @@ local function BuildSettings(parent)
       control:SetPoint("TOPLEFT", 216, y + 5)
       control:SetScript("OnClick", function(self)
         MarketWallDB.cfg[def.key] = self:GetChecked() and true or false
+        ns.UpdateMinimapButton()
       end)
     else
       control = MakeEdit(page, 80)
@@ -809,6 +820,7 @@ local function BuildSettings(parent)
   reset:SetScript("OnClick", function()
     for k in pairs(MarketWallDB.cfg) do MarketWallDB.cfg[k] = nil end
     RefreshSettings()
+    ns.UpdateMinimapButton()
   end)
   local note = MakeText(page, "GameFontDisableSmall")
   note:SetPoint("LEFT", reset, "RIGHT", 12, 0)
@@ -893,6 +905,7 @@ local function RefreshDisenchant()
 end
 
 function ns.RefreshUI()
+  ns.RefreshSearch()   -- the search window stands apart from the auction house
   if not ui.frame or not ui.frame:IsShown() then return end
   local view = ui.view
   if view == "item" then
@@ -1080,14 +1093,7 @@ local function Build()
   end)
   f:SetScript("OnShow", function() ui.Show(ui.view) end)
 
-  -- shift-clicking an item while the Add box has focus drops its link in
-  local function Insert(link)
-    if ui.addBox and ui.addBox:IsVisible() and ui.addBox:HasFocus() and type(link) == "string" then
-      ui.addBox:SetText(link)
-    end
-  end
-  if ChatEdit_InsertLink then hooksecurefunc("ChatEdit_InsertLink", Insert) end
-  if ChatFrameUtil and ChatFrameUtil.InsertLink then hooksecurefunc(ChatFrameUtil, "InsertLink", Insert) end
+  OnLinkInsert(ui.addBox, function(link) ui.addBox:SetText(link) end)
 end
 
 -- Market is a display mode of its own. It is non-empty, so other tab addons such as

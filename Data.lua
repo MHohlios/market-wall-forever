@@ -231,6 +231,17 @@ function ns.LatestWall(id)
   if latestDay then return days[latestDay][D_WALL], latestDay end
 end
 
+-- How many days an item has been recorded, and the lowest and highest wall seen on them
+function ns.WallHistory(id)
+  local history = { days = 0 }
+  for _, d in pairs(ns.R().days[id] or {}) do
+    history.days = history.days + 1
+    if not history.low or d[D_LOW] < history.low then history.low = d[D_LOW] end
+    if not history.high or d[D_HIGH] > history.high then history.high = d[D_HIGH] end
+  end
+  return history
+end
+
 -- How a price compares with the item's median wall: the difference (-0.1 is 10% under)
 -- and "low", "high" or "normal". Nil until there are 3 days of history.
 function ns.Versus(price, stats)

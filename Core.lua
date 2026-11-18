@@ -24,6 +24,7 @@ ns.cfgDefaults = {
   sellDuration = 2,        -- last auction duration picked on the Sell page: 1 = 12h, 2 = 24h, 3 = 48h
   baitSearchGap = 1.0,     -- seconds between Bait Detect searches; never less than 1
   baitConfirmPress = true, -- Bait Detect confirms each purchase with its own press
+  minimapButton = true,    -- show the MW button on the minimap
 }
 
 local function Print(...)
@@ -165,6 +166,7 @@ function ns.R()
   r.pos = r.pos or {}       -- [itemID] = { qty=, cost= } bought through the addon
   r.buys = r.buys or {}     -- { {t, id, qty, unit, total}, ... } every purchase through the addon
   r.bait = r.bait or {}     -- [itemID] = bait record, see Bait.lua; overwritten each scan
+  r.recent = r.recent or {} -- item IDs looked up in the search window, newest first
   ns.realmData = r
   return r
 end
@@ -234,6 +236,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
     ns.realmData = nil
     ns.R()
     if ns.InitTooltip then ns.InitTooltip() end
+    if ns.InitMinimapButton then ns.InitMinimapButton() end
   elseif event == "AUCTION_HOUSE_SHOW" then
     ns.ahOpen = true
     if ns.OnAuctionHouseShow then ns.OnAuctionHouseShow() end
@@ -270,12 +273,19 @@ SlashCmdList["MARKETWALL"] = function(msg)
         MarketWallDB.cfg[key] = tonumber(value) or default
       end
       Print(key .. " = " .. tostring(MarketWallDB.cfg[key]))
+      ns.UpdateMinimapButton()
     else
       Print("Settings:")
       for k, d in pairs(ns.cfgDefaults) do
         print("  " .. k .. " = " .. tostring(ns.Cfg(k)) .. " (default " .. tostring(d) .. ")")
       end
     end
+  elseif cmd == "minimap" then
+    MarketWallDB.cfg.minimapButton = not ns.Cfg("minimapButton")
+    ns.UpdateMinimapButton()
+    Print(ns.Cfg("minimapButton") and "Minimap button shown." or "Minimap button hidden. /mw minimap shows it again.")
+  elseif cmd == "search" then
+    ns.ToggleSearch(true)
   elseif cmd == "resetpos" then
     local id = ns.ResolveItem(rest)
     if id then ns.R().pos[id] = nil Print("Position cleared for " .. ns.Name(id)) end
@@ -290,5 +300,7 @@ SlashCmdList["MARKETWALL"] = function(msg)
     print("  /mw set <setting> <value>         change a setting, /mw set lists them")
     print("  /mw resetpos <item>               clear your tracked position")
     print("  /mw probe start|stop|status       record what the client exposes for kills, loot and money")
+    print("  /mw search                        open the item search window")
+    print("  /mw minimap                       hide or show the minimap button")
   end
 end

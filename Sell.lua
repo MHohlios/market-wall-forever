@@ -2,17 +2,16 @@
 -- Top: what you are posting (left) and the item's last 7 days with its key numbers (right).
 -- Bottom: what you can sell (left) and the auctions listed right now (right).
 local _, ns = ...
-local W, B = ns.Wall, ns.Bait
+local B, PV = ns.Bait, ns.PriceView
 local ui = ns.ui
 
-local DAYS = 7
-local FLAT = 0.03   -- moves within 3% count as flat
-local BLUE, ORANGE, GREY, GOLD = "|cff7cc0ff", "|cffffb057", "|cffa3acac", "|cfff5c518"
+local FLAT = PV.FLAT
+local ORANGE, GREY, GOLD = "|cffffb057", "|cffa3acac", "|cfff5c518"
 local DURATIONS = { { 1, "12h" }, { 2, "24h" }, { 3, "48h" } }
 
 local LEFT_WIDTH, RIGHT_X, RIGHT_WIDTH = 330, 340, 442
 local TOP, BOTTOM_Y, LIST_ROWS = -50, -250, 9
-local CELL_WIDTH = 110
+local CELLS = { "wallNow", "lowestListing", "supply", "trend", "average", "median", "normalRange", "versusMedian" }
 
 local BAG_COLUMNS = {
   { "Item", 130, nil, "Items in your bags that can be sold here, most valuable first. Click one to price it." },
@@ -57,45 +56,9 @@ local function BagItems()
   return items
 end
 
--- Wall and lowest price from the latest listings MarketWall has loaded this session
-local function LiveWall(id)
-  local held = ns.ladders[id]
-  if not held or held.total == 0 then return nil end
-  return W.Compute(held.ladder, held.total, ns.Cfg("wallShare"), ns.Cfg("wallMinUnits"))
-end
-
 local function SuggestedPrice(id)
-  return LiveWall(id) or ns.LatestWall(id)
+  return PV.LiveWall(id) or ns.LatestWall(id)
 end
-
-local function RecentWalls(id)
-  local from, out = time() - DAYS * 86400, {}
-  for _, point in ipairs(ns.Series(id)) do
-    if point.t >= from then out[#out + 1] = point end
-  end
-  return out
-end
-
--- Average, low, high and trend of the wall over the last 7 days
-local function WeekSummary(points)
-  if #points == 0 then return nil end
-  local sum, lo, hi = 0, math.huge, 0
-  for _, p in ipairs(points) do
-    sum = sum + p.w
-    lo, hi = math.min(lo, p.w), math.max(hi, p.w)
-  end
-  local trend = #points >= 2 and (points[#points].w / points[1].w - 1) or nil
-  return { average = sum / #points, low = lo, high = hi, trend = trend }
-end
-
-local function TrendText(diff)
-  local pct = math.abs(ns.Round(diff * 100)) .. "%"
-  local limit = FLAT + 1e-9   -- absorbs float error, so a change of exactly 3% (1000 to 1030) is flat
-  if diff < -limit then return BLUE .. "down " .. pct .. "|r" end
-  if diff > limit then return ORANGE .. "up " .. pct .. "|r" end
-  return "flat"
-end
-ns.SellTrend = { WeekSummary = WeekSummary, TrendText = TrendText, RecentWalls = RecentWalls }   -- shared with the tooltip and tests
 
 -- The Note column: the bait level Bait Detect tracks, or the wall
 local function AuctionNote(tier, wall, bait)
@@ -228,35 +191,11 @@ local function Select(id)
   ns.RefreshUI()
 end
 
-local function SetCell(i, label, value)
-  page.cells[i].label:SetText(GREY .. label .. "|r")
-  page.cells[i].value:SetText(value or GREY .. "-|r")
-end
-
-local function RefreshStats(id, points, stats)
-  local held = ns.ladders[id]
-  local wall, lowest = LiveWall(id)
-  local week = WeekSummary(points)
-  local diff, word = ns.Versus(SuggestedPrice(id), stats)
-  if wall then
-    SetCell(1, "Wall now (" .. ns.Ago(held.t) .. ")", ns.Money(wall))
-  else
-    SetCell(1, "Wall (last scan)", ns.LatestWall(id) and ns.Money(ns.LatestWall(id)))
-  end
-  SetCell(2, "Lowest listing", lowest and ns.Money(lowest))
-  SetCell(3, "Supply", held and held.total > 0 and (held.total .. " units") or nil)
-  SetCell(4, "7-day trend", week and week.trend and TrendText(week.trend))
-  SetCell(5, "7-day average", week and ns.Money(week.average))
-  SetCell(6, "Median (" .. stats.n .. " days)", stats.n >= 3 and ns.Money(stats.median) or nil)
-  SetCell(7, "Normal range", stats.n >= 3 and (ns.Money(stats.p25) .. " - " .. ns.Money(stats.p75)) or nil)
-  SetCell(8, "Vs median", diff and ns.VersusText(diff, word))
-end
-
 local function RefreshAuctions(id)
   local held = ns.ladders[id]
   local rows = {}
   local price = ns.ParseMoney(page.price:GetText())
-  local wall = LiveWall(id)
+  local wall = PV.LiveWall(id)
   local bait = ns.R().bait[id]
   local running, marked = 0, false
   for _, tier in ipairs(held and held.ladder or {}) do
@@ -289,9 +228,7 @@ local function RefreshSelected(item)
     return
   end
   local id = item.id
-  local stats = ns.StatsFor(id)
   local entry = ns.R().watch[id]
-  local points = RecentWalls(id)
 
   page.icon:SetTexture(ns.Icon(id))
   page.title:SetText(ns.ColorName(id))
@@ -303,8 +240,7 @@ local function RefreshSelected(item)
   end
   page.notes:SetText(GREY .. table.concat(notes, "  ·  ") .. "|r")
 
-  page.chart:Draw(points, nil, entry and entry.sell, stats)
-  RefreshStats(id, points, stats)
+  page.view:SetItem(id, nil, entry and entry.sell)
 
   page.maxQuantity = C_AuctionHouse.GetAvailablePostCount(item.location) or item.count
   page.ofQuantity:SetText("of " .. page.maxQuantity)
@@ -455,30 +391,14 @@ local function BuildSale(w)
 end
 
 -- Top right: the last 7 days and the numbers that matter
-local function BuildInfo(w)
+local function BuildInfo()
   local f = CreateFrame("Frame", nil, page)
   f:SetPoint("TOPLEFT", RIGHT_X, TOP)
   f:SetSize(RIGHT_WIDTH, BOTTOM_Y - TOP)
   page.info = f
 
-  page.chart = w.CreateChart(f)
-  page.chart:SetSize(RIGHT_WIDTH - 66, 100)
-  page.chart:SetPoint("TOPLEFT", 66, -6)
-  page.chart.legend:Hide()   -- too wide here; the numbers below describe the lines
-
-  page.cells = {}
-  for i = 1, 8 do
-    local col, row = (i - 1) % 4, math.floor((i - 1) / 4)
-    local label = w.MakeText(f, "GameFontHighlightSmall")
-    label:SetPoint("TOPLEFT", col * CELL_WIDTH, -128 - row * 34)
-    label:SetWidth(CELL_WIDTH - 4)
-    label:SetWordWrap(false)
-    local value = w.MakeText(f, "GameFontHighlight")
-    value:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -2)
-    value:SetWidth(CELL_WIDTH - 4)
-    value:SetWordWrap(false)
-    page.cells[i] = { label = label, value = value }
-  end
+  page.view = PV.CreateView(f, { width = RIGHT_WIDTH, chartHeight = 100, cellWidth = 110, cells = CELLS })
+  page.view:SetPoint("TOPLEFT")
 end
 
 function ns.BuildSellPage(parent)
@@ -487,7 +407,7 @@ function ns.BuildSellPage(parent)
   page:SetAllPoints()
 
   BuildSale(w)
-  BuildInfo(w)
+  BuildInfo()
 
   page.pick = w.MakeText(page, "GameFontDisable", "CENTER")
   page.pick:SetPoint("TOPLEFT", 0, -130)
