@@ -101,18 +101,12 @@ function ns.Record(id, ladder, total, t)
   local r = ns.R()
   local wall, minPrice = W.Compute(ladder, total, ns.Cfg("wallShare"), ns.Cfg("wallMinUnits"))
   local watched = r.watch[id]
-  local recorded = wall and (watched or total >= ns.Cfg("minRecordSupply"))
-  if not recorded then
-    -- a scan too thin to record still updates today's supply, so it never reads as plentiful
-    local today = r.days[id] and r.days[id][ns.DayOf(t)]
-    if today then today[D_UNITS] = total end
-  end
   if not wall then
     if watched then watched.cur = { t = t, q = 0, under = 0, cost = 0 } end
     return nil, nil
   end
 
-  if recorded then
+  if watched or total >= ns.Cfg("minRecordSupply") then
     local days = r.days[id]
     if not days then days = {} r.days[id] = days end
     local today = ns.DayOf(t)
@@ -231,8 +225,7 @@ function ns.Cycle(id)
   return result
 end
 
--- The most recent recorded wall price, its day and the units listed in that day's last scan,
--- or nil when the item has no history
+-- The most recent recorded wall price and its day, or nil when the item has no history
 function ns.LatestWall(id)
   local days = ns.R().days[id]
   if not days then return nil end
@@ -240,7 +233,7 @@ function ns.LatestWall(id)
   for day in pairs(days) do
     if not latestDay or day > latestDay then latestDay = day end
   end
-  if latestDay then return days[latestDay][D_WALL], latestDay, days[latestDay][D_UNITS] end
+  if latestDay then return days[latestDay][D_WALL], latestDay end
 end
 
 -- How many days an item has been recorded, and the lowest and highest wall seen on them

@@ -217,6 +217,14 @@ function Kills.NewTracker(emit, canLoot)
       drops = share.drops })
   end
 
+  -- Whether any source in a window died: a kill was seen for it
+  function tracker:FromCorpse(shares)
+    for guid in pairs(shares) do
+      if self.corpses[guid] then return true end
+    end
+    return false
+  end
+
   -- A loot window opened. slots as in SplitLoot; target is your target's GUID, which names the
   -- corpse of a window with nothing in it.
   function tracker:Loot(slots, fishing, t, target)
@@ -226,10 +234,12 @@ function Kills.NewTracker(emit, canLoot)
       emit({ t = t, kind = "fish", source = "fishing", coin = total.coin, drops = total.drops })
       return
     end
-    if Within(self.lastPickPocket, t) then return end   -- a living mob's pockets, not its drops
     local shares = Kills.SplitLoot(slots)
+    if Within(self.lastPickPocket, t) and not self:FromCorpse(shares) then
+      return   -- a living mob's pockets, not its drops
+    end
     local opened = target and self.pending[target]
-    if not next(shares) and opened then
+    if #slots == 0 and opened then   -- slots without readable sources leave the kill pending
       self.corpses[target].loot = "emptied"
       Settle(opened, Kills.EMPTY, "loot")
       return
