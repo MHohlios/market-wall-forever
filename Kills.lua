@@ -5,7 +5,8 @@
 --
 -- How a kill settles, in Kills.Classify:
 --   looted   you opened its loot: its items and full coin are recorded ("loot")
---   0c       CanLootUnit, asked once about a second after the kill, said it had no loot ("canloot")
+--   0c       you opened its loot and it was empty ("loot"), or CanLootUnit, asked once about a
+--            second after the kill, said it had no loot ("canloot")
 --   unseen   CanLootUnit said the loot was not yours, or yours but never opened in WINDOW ("canloot");
 --            or CanLootUnit gave no answer and you never opened it in WINDOW (the PRD default, "window")
 -- The rule that settled each kill is on the kill event as `via`, and counted in Kills.paths.
@@ -18,7 +19,8 @@ Kills.LOOTED, Kills.EMPTY, Kills.UNSEEN = 1, 2, 3
 
 local WINDOW = 90          -- seconds a kill waits for you to loot it
 local CHECK_DELAY = 1      -- seconds after a kill before CanLootUnit is asked, so the loot exists
-local GATHER_WINDOW = 3    -- seconds after a gathering cast in which a loot window is the gather
+local CAST_WINDOW = 3      -- seconds after a gathering or Pick Pocket cast in which a loot window is its own
+local PICK_POCKET = 921
 local FORGET_AFTER = 1800  -- seconds a corpse is remembered for dedupe and repeat loot windows
 local MONEY_SLOT = 2       -- LOOT_SLOT_MONEY
 
@@ -87,6 +89,7 @@ end
 -- Each source's part of a slot: one source takes the whole slot, several take their own
 -- quantities, and an amount with no per-source quantities is split evenly
 local function Shares(total, sources)
+  if #sources == 0 then return {} end   -- no readable source: the slot cannot be credited
   if #sources == 1 then return { total } end
   local sum, out = 0, {}
   for i, source in ipairs(sources) do
@@ -116,12 +119,13 @@ function Kills.SplitLoot(slots)
   local byGuid = {}
   for _, slot in ipairs(slots) do
     local sources = Sources(slot.sources or {})
+    local single = #sources == 1 and sources[1][2]
+    local quantity = (single and single > 0) and single or slot.quantity
     local total
     if IsCoin(slot) then
-      local single = #sources == 1 and sources[1][2]
-      total = Kills.ParseCoin(slot.text, single or slot.quantity)
+      total = Kills.ParseCoin(slot.text, quantity)
     else
-      total = (#sources == 1 and sources[1][2]) or slot.quantity or 1
+      total = quantity or 1
     end
     for i, amount in ipairs(Shares(total, sources)) do
       local guid = sources[i][1]
@@ -162,7 +166,7 @@ end
 function Kills.NewTracker(emit, canLoot)
   local tracker = {
     pending = {},   -- [guid] = { guid, npc, t, looted, check, coin, drops, gather }
-    corpses = {},   -- [guid] = { t =, loot = nil, "partial" or "emptied" }
+    corpses = {},   -- [guid] = { t =, loot = nil, "partial", "emptied" or "gathered" }
     names = {},     -- [npcID] = name, from units you targeted or hovered
     window = {},    -- guids in the open loot window
     paths = { loot = 0, canloot = 0, window = 0 },
@@ -195,33 +199,51 @@ function Kills.NewTracker(emit, canLoot)
 
   function tracker:Cast(spellID, t)
     if GATHER_SPELLS[spellID] then self.lastGather = t end
+    if spellID == PICK_POCKET then self.lastPickPocket = t end
   end
 
+  local function Within(castAt, t)
+    return castAt and t - castAt <= CAST_WINDOW
+  end
+
+  -- Each corpse or node is gathered once; reopening its gather window adds nothing
   local function Gather(guid, kind, id, share, t)
+    local corpse = tracker.corpses[guid] or { t = t }
+    corpse.loot = "gathered"
+    tracker.corpses[guid] = corpse
     local kill = tracker.pending[guid]
     if kill then kill.gather = Merge(kill.gather or {}, share.drops) end
     emit({ t = t, kind = "gather", source = SourceOf(kind, id), guid = guid, npc = kind == "npc" and id or nil,
       drops = share.drops })
   end
 
-  -- A loot window opened. slots as in SplitLoot.
-  function tracker:Loot(slots, fishing, t)
+  -- A loot window opened. slots as in SplitLoot; target is your target's GUID, which names the
+  -- corpse of a window with nothing in it.
+  function tracker:Loot(slots, fishing, t, target)
     self.window = {}
     if fishing then
       local total = Kills.TotalLoot(slots)
       emit({ t = t, kind = "fish", source = "fishing", coin = total.coin, drops = total.drops })
       return
     end
-    local gathering = self.lastGather and t - self.lastGather <= GATHER_WINDOW
-    for guid, share in pairs(Kills.SplitLoot(slots)) do
+    if Within(self.lastPickPocket, t) then return end   -- a living mob's pockets, not its drops
+    local shares = Kills.SplitLoot(slots)
+    local opened = target and self.pending[target]
+    if not next(shares) and opened then
+      self.corpses[target].loot = "emptied"
+      Settle(opened, Kills.EMPTY, "loot")
+      return
+    end
+    local gathering = Within(self.lastGather, t)
+    for guid, share in pairs(shares) do
       local kind, id = Kills.ParseGUID(guid)
-      local corpse = self.corpses[guid]
-      if gathering or (corpse and corpse.loot == "emptied") then
+      local state = self.corpses[guid] and self.corpses[guid].loot
+      if state ~= "gathered" and (gathering or state == "emptied") then
         Gather(guid, kind, id, share, t)
-      elseif not (corpse and corpse.loot) then   -- a corpse reopened with items left is not new loot
+      elseif not state then   -- a corpse reopened with items left is not new loot
         self.window[#self.window + 1] = guid
         local kill = self.pending[guid] or self:Kill(guid, t)
-        corpse = self.corpses[guid] or { t = t }
+        local corpse = self.corpses[guid] or { t = t }
         corpse.loot = "partial"
         self.corpses[guid] = corpse
         emit({ t = t, kind = "loot", source = SourceOf(kind, id), guid = guid, npc = kind == "npc" and id or nil,
@@ -314,7 +336,7 @@ local HANDLERS = {
     looting = true
     local slots = ReadLootWindow()
     slotCount, cleared = #slots, {}
-    tracker:Loot(slots, Readable(IsFishingLoot()) == true, time())
+    tracker:Loot(slots, Readable(IsFishingLoot()) == true, time(), Readable(UnitGUID("target")))
   end,
   LOOT_SLOT_CLEARED = function(slot) cleared[slot] = true end,
   LOOT_CLOSED = function()
