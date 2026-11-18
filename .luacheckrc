@@ -12,7 +12,7 @@ globals = {
   "SLASH_MARKETWALL2",
   "SlashCmdList",
   "StaticPopupDialogs",
-  "AuctionHouseFrame",      -- the Market tab clears its displayMode
+  "AuctionHouseFrame",      -- the Market tab clears its displayMode and adds MarketWallFrame
   "BINDING_HEADER_MARKETWALL",            -- Key Bindings labels for Bindings.xml
   "BINDING_NAME_MARKETWALL_BAIT_ACTION",
 }
@@ -29,6 +29,7 @@ read_globals = {
   "GetTime", "PlaySound", "StaticPopup_Show", "hooksecurefunc", "ChatEdit_InsertLink",
   "PanelTemplates_DeselectTab", "PanelTemplates_SelectTab", "PanelTemplates_TabResize",
   -- Frames and constants
+  "LibStub",                -- only to find Auctionator's tabs, when it is installed
   "UIParent", "GameTooltip", "ItemRefTooltip", "ITEM_QUALITY_COLORS", "NUM_BAG_SLOTS", "YES", "NO",
   -- Disenchantry's SavedVariables, read for your own disenchant results
   "DisenchantryDB",

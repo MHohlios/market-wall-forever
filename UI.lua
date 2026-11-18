@@ -1023,6 +1023,19 @@ local function Build()
   if ChatFrameUtil and ChatFrameUtil.InsertLink then hooksecurefunc(ChatFrameUtil, "InsertLink", Insert) end
 end
 
+-- Market is a display mode of its own. It is non-empty, so other tab addons such as
+-- Auctionator's (LibAHTab), which hide their pages only on a non-empty mode, step aside too.
+local MARKET_MODE = { "MarketWallFrame" }
+
+-- The tab to sit after: Auctionator's last tab when its tabs already exist, else the last
+-- Blizzard tab. If Auctionator adds its tabs later, it anchors them after ours instead.
+local function TabToFollow(tabs)
+  local libAHTab = LibStub and LibStub("LibAHTab-1-0", true)
+  local theirs = libAHTab and libAHTab.internalState and libAHTab.internalState.Tabs
+  if theirs and #theirs > 0 then return theirs[#theirs] end
+  return tabs[#tabs]
+end
+
 -- The Market tab. Blizzard's tab-group functions taint the bags, so the tab only borrows
 -- the auction house's tab button template and switches the display itself.
 local function CreateTab(frame)
@@ -1031,26 +1044,29 @@ local function CreateTab(frame)
     ns.Print("Could not add the Market tab to the auction house.")
     return
   end
-  -- The template appends the new button to AuctionHouseFrame.Tabs (parentArray), so the last
-  -- Blizzard tab must be read first. We leave our tab in that array rather than edit Blizzard's
-  -- table (taint); nothing else here treats it as a display mode.
-  local lastBlizzardTab = tabs[#tabs]
+  -- The one key we add to AuctionHouseFrame, so its SetDisplayMode can show our page.
+  AuctionHouseFrame.MarketWallFrame = frame
+  -- The template appends the new button to AuctionHouseFrame.Tabs (parentArray), so the tab
+  -- to follow must be read first. We leave our tab in that array rather than edit Blizzard's
+  -- table (taint).
+  local previousTab = TabToFollow(tabs)
   local tab = CreateFrame("Button", "MarketWallTab", AuctionHouseFrame, "AuctionHouseFrameDisplayModeTabTemplate")
   tab:SetText("Market")
   PanelTemplates_TabResize(tab, 20, nil, 70)
-  tab:SetPoint("TOPLEFT", lastBlizzardTab, "TOPRIGHT", 3, 0)
+  tab:SetPoint("TOPLEFT", previousTab, "TOPRIGHT", 3, 0)
   PanelTemplates_DeselectTab(tab)
   tab:SetScript("OnClick", function()
-    AuctionHouseFrame:SetDisplayMode({})
+    AuctionHouseFrame:SetDisplayMode(MARKET_MODE)
+    -- Blizzard's code never sees our mode, and a second click switches again
     AuctionHouseFrame.displayMode = nil
     for _, blizzardTab in ipairs(tabs) do PanelTemplates_DeselectTab(blizzardTab) end
     PanelTemplates_SelectTab(tab)
     AuctionHouseFrame:SetTitle("MarketWall")
     frame:Show()
   end)
-  -- any of Blizzard's own tabs sets a real display mode: step aside
+  -- any other mode, Blizzard's or another addon's empty one, belongs to another tab: step aside
   hooksecurefunc(AuctionHouseFrame, "SetDisplayMode", function(_, mode)
-    if mode and #mode > 0 then
+    if mode ~= MARKET_MODE then
       frame:Hide()
       PanelTemplates_DeselectTab(tab)
     end
