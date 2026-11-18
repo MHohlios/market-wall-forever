@@ -157,6 +157,11 @@ local function RefreshItem()
   win.listings:SetText(ListingsText(id))
 end
 
+-- Redraws the open window on its next update tick, for changes no window event announces
+function ns.SearchChanged()
+  if win then win.dirty = true end
+end
+
 function ns.RefreshSearch()
   if not (win and win:IsShown()) then return end
   local mobs = win.mode == "mobs"

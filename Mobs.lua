@@ -305,6 +305,7 @@ ns.Recording.On("kill", function(event)
   local record = Mobs.Add(MarketWallDB.mobs, event)
   recent[event.guid] = { MarketWallDB.mobs[event.npc], record }
   cache[event.npc] = nil
+  ns.SearchChanged()
 end)
 
 ns.Recording.On("gather", function(event)
@@ -312,5 +313,13 @@ ns.Recording.On("gather", function(event)
   if stored then
     Mobs.AddGather(stored[1], stored[2], event.drops)
     cache[event.npc] = nil
+    ns.SearchChanged()
   end
 end)
+
+-- Vendor prices and item levels arrive late after login, and professions may not be known at
+-- first hover: stats priced without them are dropped, and recomputed when next asked for
+local loader = CreateFrame("Frame")
+loader:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+loader:RegisterEvent("SKILL_LINES_CHANGED")
+loader:SetScript("OnEvent", Mobs.Invalidate)

@@ -122,5 +122,20 @@ describe("mob tooltip", function()
       ns.Mobs.Invalidate()   -- a finished scan or a settings change
       assert.are_not.equal(second, ns.Mobs.For(RAPTOR))
     end)
+
+    it("reprices once item info that was still loading arrives", function()
+      assert.equal(50, ns.Mobs.For(RAPTOR).vendor.median)   -- the flesh has no vendor price yet
+      _G.C_Item = { GetItemInfo = function() return "Raptor Flesh", nil, nil, nil, nil, nil, nil, nil, nil, nil, 25 end }
+      fire("GET_ITEM_INFO_RECEIVED", FLESH, true)
+      assert.equal(75, ns.Mobs.For(RAPTOR).vendor.median)
+    end)
+
+    it("asks the open search window to redraw when a kill is recorded", function()
+      local changed = 0
+      ns.SearchChanged = function() changed = changed + 1 end
+      ns.Recording.Emit({ t = 3, kind = "kill", npc = RAPTOR, guid = "Creature-0-1-0-1-" .. RAPTOR .. "-3",
+        outcome = ns.Kills.EMPTY })
+      assert.equal(1, changed)
+    end)
   end)
 end)
