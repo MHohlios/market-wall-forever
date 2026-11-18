@@ -49,6 +49,12 @@ describe("Sell page bait handling", function()
       assert.is_nil(B.PostWarning(record, 102, FLAT))
     end)
 
+    it("does not round a band under a copper up to a whole copper", function()
+      assert.is_nil(B.PostWarning(record, 31, FLAT))   -- 3.3% over a 30c bait
+      assert.is_nil(B.PostWarning(record, 29, FLAT))
+      assert.is_nil(B.PostWarning({ p = 20, u = 1, q = 1, w = 100 }, 21, FLAT))
+    end)
+
     it("does not warn without a bait record", function()
       assert.is_nil(B.PostWarning(nil, 30, FLAT))
     end)

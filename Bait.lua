@@ -61,10 +61,11 @@ function B.LevelNote(record)
   return string.format("(%d) + %d copies", record.u, B.Copies(record))
 end
 
--- A warning when posting at price would match the bait: at its price or within band of it,
--- rounded to whole copper. Returns nil when there is no bait record or the price is away from it.
+-- A warning when posting at price would match the bait: at its price or within band of it.
+-- Returns nil when there is no bait record or the price is away from it.
+local EDGE = 1e-9   -- 1000 * 0.03 is just under 30 in floating point; keep the exact edge in the band
 function B.PostWarning(record, price, band)
-  if not record or math.abs(price - record.p) > ns.Round(record.p * band) then return nil end
+  if not record or math.abs(price - record.p) > record.p * band + EDGE then return nil end
   return string.format("%d unit%s at %s sits %d%% under the %s wall. Likely bait; don't match it.",
     record.u, record.u == 1 and "" or "s", ns.Money(record.p), ns.Round(B.Under(record) * 100), ns.Money(record.w))
 end
