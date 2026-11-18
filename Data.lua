@@ -101,12 +101,18 @@ function ns.Record(id, ladder, total, t)
   local r = ns.R()
   local wall, minPrice = W.Compute(ladder, total, ns.Cfg("wallShare"), ns.Cfg("wallMinUnits"))
   local watched = r.watch[id]
+  local recorded = wall and (watched or total >= ns.Cfg("minRecordSupply"))
+  if not recorded then
+    -- a scan too thin to record still updates today's supply, so it never reads as plentiful
+    local today = r.days[id] and r.days[id][ns.DayOf(t)]
+    if today then today[D_UNITS] = total end
+  end
   if not wall then
     if watched then watched.cur = { t = t, q = 0, under = 0, cost = 0 } end
     return nil, nil
   end
 
-  if watched or total >= ns.Cfg("minRecordSupply") then
+  if recorded then
     local days = r.days[id]
     if not days then days = {} r.days[id] = days end
     local today = ns.DayOf(t)

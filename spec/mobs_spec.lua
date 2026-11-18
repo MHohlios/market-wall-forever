@@ -54,6 +54,25 @@ describe("Mobs", function()
     end)
   end)
 
+  describe("GamePrices", function()
+    local DAY = 86400
+
+    it("reads supply as gone once a later scan finds none", function()
+      local t = os.time()
+      ns.Record(LINEN, { { p = 100, q = 30 } }, 30, t)
+      assert.same({ 100, 30 }, { M.GamePrices().wall(LINEN) })
+      ns.Record(LINEN, {}, 0, t + 1)
+      assert.same({ 100, 0 }, { M.GamePrices().wall(LINEN) })
+    end)
+
+    it("reads supply as gone when the last full scan did not list the item", function()
+      local t = os.time()
+      ns.Record(LINEN, { { p = 100, q = 30 } }, 30, t - 2 * DAY)
+      ns.R().lastFull = t
+      assert.same({ 100, 0 }, { M.GamePrices().wall(LINEN) })
+    end)
+  end)
+
   describe("Stats", function()
     local vendor, walls, de, opts
 

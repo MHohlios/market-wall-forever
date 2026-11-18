@@ -221,7 +221,9 @@ function Mobs.GamePrices()
   return {
     vendor = function(id) return ItemInfo(id, 11) end,
     wall = function(id)
-      local wall, _, units = ns.LatestWall(id)
+      local wall, day, units = ns.LatestWall(id)
+      local lastFull = ns.R().lastFull
+      if wall and lastFull and day < ns.DayOf(lastFull) then units = 0 end   -- gone by the last full scan
       return wall, units
     end,
     disenchant = function(id)
