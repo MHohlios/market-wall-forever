@@ -290,6 +290,7 @@ SlashCmdList["MARKETWALL"] = function(msg)
       end
       Print(key .. " = " .. tostring(MarketWallDB.cfg[key]))
       ns.UpdateMinimapButton()
+      ns.Mobs.Invalidate()   -- the cut and the mob settings feed mob values
     else
       Print("Settings:")
       for k, d in pairs(ns.cfgDefaults) do

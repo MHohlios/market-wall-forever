@@ -41,9 +41,46 @@ describe("Mobs view", function()
     return names
   end
 
-  it("sorts by median per kill, with mobs short of kills last, most kills first", function()
-    assert.same({ "Young Panther", "Stranglethorn Raptor", "Lashtail Raptor", "NPC 4", "Jungle Stalker" },
-      Names(V.Rows(All(), "optimal", "")))
+  it("sorts by median per kill, with mobs short of kills last, most seen kills first", function()
+    local rows = V.Rows(All(), "optimal", "")
+    assert.same({ "Young Panther", "Stranglethorn Raptor", "Lashtail Raptor", "Jungle Stalker", "NPC 4" }, Names(rows))
+    assert.equal(2, rows[5].kills)   -- the seen kills the minimum counts, not all 12
+  end)
+
+  describe("header sort", function()
+    local function Entries()
+      local entries = {}
+      for i, row in ipairs(V.Rows(All(), "optimal", "")) do entries[i] = { name = row.name, sort = V.MobSortValues(row) } end
+      return entries
+    end
+
+    it("keeps the median order until a header is clicked", function()
+      local entries = Entries()
+      V.Sort(entries, nil)
+      assert.same({ "Young Panther", "Stranglethorn Raptor", "Lashtail Raptor", "Jungle Stalker", "NPC 4" }, Names(entries))
+    end)
+
+    it("sorts by a column either way, with mobs that have no value last", function()
+      local entries = Entries()
+      V.Sort(entries, { col = 2, desc = true })
+      assert.same({ "Stranglethorn Raptor", "Lashtail Raptor", "Young Panther", "Jungle Stalker", "NPC 4" }, Names(entries))
+      V.Sort(entries, { col = 3, desc = false })
+      assert.same({ "Lashtail Raptor", "Stranglethorn Raptor", "Young Panther" }, { entries[1].name, entries[2].name, entries[3].name })
+      assert.same({ "Jungle Stalker", "NPC 4" }, { entries[4].name, entries[5].name })
+    end)
+
+    it("sorts the drop table by name or by any lens value", function()
+      ns.R().names[1], ns.R().names[2] = "Raptor Flesh", "Raptor Hide"
+      local function Drop(id, share, optimal)
+        local drop = { id = id, share = share, quantity = 1, vendor = 1, market = 1, optimal = optimal }
+        return { name = id, sort = V.DropSortValues(drop) }
+      end
+      local entries = { Drop(2, 0.1, 50), Drop(1, 0.5, 10) }
+      V.Sort(entries, { col = 1, desc = false })
+      assert.same({ 1, 2 }, Names(entries))
+      V.Sort(entries, { col = 6, desc = true })
+      assert.same({ 2, 1 }, Names(entries))
+    end)
   end)
 
   it("filters on any part of the name, ignoring case", function()
@@ -72,6 +109,6 @@ describe("Mobs view", function()
     local lashtail = V.MobCells(rows[3], 10)
     assert.same({ "Lashtail Raptor", "58", ns.Money(80), ns.Money(160), ns.Money(120), "item:7 31%", "|cffffb057" .. "1|r" }, lashtail)
     assert.same({ "Jungle Stalker", "7", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", GREY .. "needs 10 kills|r", "" },
-      V.MobCells(rows[5], 10))
+      V.MobCells(rows[4], 10))
   end)
 end)

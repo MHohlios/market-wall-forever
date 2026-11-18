@@ -32,40 +32,46 @@ describe("mob tooltip", function()
     return texts
   end
 
-  local function Pair(median, average) return ns.Money(median) .. "     " .. ns.Money(average) end
+  local GOLD = "|cfff5c518"
 
   describe("lines", function()
     local Lines
     before_each(function() Lines = ns.TooltipLines.Mob end)
 
-    it("shows the kill count, the median and average table, without-rare and the top drop", function()
+    it("shows seen kills, a median and an average block, without-rare and the top drop", function()
       assert.same({
-        "Stranglethorn Raptor|" .. GREY .. "142 kills|r",
-        " |" .. GREY .. "Median     Average|r",
-        GREY .. "Vendor|r|" .. Pair(45, 112),
-        GREY .. "Market|r|" .. Pair(62, 280),
-        GREY .. "Skinning|r|" .. Pair(30, 34),
-        "Optimal " .. GREY .. "(incl. skinning, DE)|r|" .. Pair(95, 320),
-        GREY .. "Optimal, without rare drops|r|" .. ns.Money(105),
+        "Stranglethorn Raptor|" .. GREY .. "140 kills (2 unseen)|r",
+        GOLD .. "Median per kill|r",
+        GREY .. "  Vendor|r|" .. ns.Money(45),
+        GREY .. "  Market|r|" .. ns.Money(62),
+        GREY .. "  Skinning|r|" .. ns.Money(30),
+        "  Optimal " .. GREY .. "(incl. skinning, DE)|r|" .. ns.Money(95),
+        GOLD .. "Average per kill|r",
+        GREY .. "  Vendor|r|" .. ns.Money(112),
+        GREY .. "  Market|r|" .. ns.Money(280),
+        GREY .. "  Skinning|r|" .. ns.Money(34),
+        "  Optimal " .. GREY .. "(incl. skinning, DE)|r|" .. ns.Money(320),
+        GREY .. "  Optimal, without rare drops|r|" .. ns.Money(105),
         GREY .. "Top drop:|r Raptor Hide 4.2%" .. GREY .. " of kills|r",
       }, Texts(Lines(FullStats(), true, 10)))
     end)
 
     it("leaves out skinning when it is not included", function()
       local texts = Texts(Lines(FullStats(), false, 10))
-      assert.equal(7, #texts)
-      assert.equal(GREY .. "Market|r|" .. Pair(62, 280), texts[4])
+      assert.equal(11, #texts)
+      assert.equal(GREY .. "  Market|r|" .. ns.Money(62), texts[4])
+      assert.equal(GOLD .. "Average per kill|r", texts[6])
     end)
 
     it("shows a bare Optimal label when it includes neither skinning nor disenchanting", function()
       local stats = FullStats()
       stats.optimal.label = "Optimal"
-      assert.equal("Optimal|" .. Pair(95, 320), Texts(Lines(stats, false, 10))[5])
+      assert.equal("  Optimal|" .. ns.Money(95), Texts(Lines(stats, false, 10))[5])
     end)
 
-    it("shows only the kill count and when values start below the minimum kills", function()
-      local stats = { name = "Jungle Stalker", kills = 7, lifetime = 7, seen = 7 }
-      assert.same({ "Jungle Stalker|" .. GREY .. "7 kills|r", GREY .. "Values show from 10 kills.|r" },
+    it("shows only the seen kill count, which the minimum counts, below the minimum kills", function()
+      local stats = { name = "Jungle Stalker", kills = 12, lifetime = 12, seen = 7 }
+      assert.same({ "Jungle Stalker|" .. GREY .. "7 kills (5 unseen)|r", GREY .. "Values show from 10 kills.|r" },
         Texts(Lines(stats, true, 10)))
     end)
 
