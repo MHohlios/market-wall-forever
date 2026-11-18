@@ -1031,10 +1031,14 @@ local function CreateTab(frame)
     ns.Print("Could not add the Market tab to the auction house.")
     return
   end
+  -- The template appends the new button to AuctionHouseFrame.Tabs (parentArray), so the last
+  -- Blizzard tab must be read first. We leave our tab in that array rather than edit Blizzard's
+  -- table (taint); nothing else here treats it as a display mode.
+  local lastBlizzardTab = tabs[#tabs]
   local tab = CreateFrame("Button", "MarketWallTab", AuctionHouseFrame, "AuctionHouseFrameDisplayModeTabTemplate")
   tab:SetText("Market")
   PanelTemplates_TabResize(tab, 20, nil, 70)
-  tab:SetPoint("TOPLEFT", tabs[#tabs], "TOPRIGHT", 3, 0)
+  tab:SetPoint("TOPLEFT", lastBlizzardTab, "TOPRIGHT", 3, 0)
   PanelTemplates_DeselectTab(tab)
   tab:SetScript("OnClick", function()
     AuctionHouseFrame:SetDisplayMode({})
