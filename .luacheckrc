@@ -26,6 +26,7 @@ read_globals = {
   "Enum", "ItemLocation", "SOUNDKIT", "TooltipDataProcessor", "ChatFrameUtil",
   -- Functions
   "CreateFrame", "GetBindingKey", "GetBuildInfo", "GetItemInfo", "GetMoney", "GetNormalizedRealmName", "GetRealmName",
+  "GetProfessions", "GetProfessionInfo", "GetNumSkillLines", "GetSkillLineInfo", "GetSpellInfo",
   "GetTime", "PlaySound", "StaticPopup_Show", "hooksecurefunc", "ChatEdit_InsertLink",
   "PanelTemplates_DeselectTab", "PanelTemplates_SelectTab", "PanelTemplates_TabResize",
   -- Frames and constants

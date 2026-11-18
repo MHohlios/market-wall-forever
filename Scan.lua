@@ -126,9 +126,32 @@ local function Retry()
   end
 end
 
+-- Scanned gear whose item data was still loading when the full scan ended: { [itemID] = price }
+local loadingGear = {}
+
+-- Prices one item from loadingGear now its data has arrived, and slots any deal into the
+-- Disenchant list by profit. The Market tab redraws on the same event.
+local function AddLoadedGear(id)
+  local price = loadingGear[id]
+  if not price then return end
+  loadingGear[id] = nil
+  if not next(loadingGear) then scanner:UnregisterEvent("GET_ITEM_INFO_RECEIVED") end
+  local deal = ns.FindDisenchantDeals({ [id] = price }, ns.Cfg("ahCut"), ns.Cfg("minDisenchantProfit"), ns.Cfg("minDisenchantPct"))[1]
+  if not deal then return end
+  local at = #ns.disenchants + 1
+  for i, d in ipairs(ns.disenchants) do
+    if deal.profit > d.profit then at = i break end
+  end
+  table.insert(ns.disenchants, at, deal)
+end
+
 scanner:SetScript("OnEvent", function(_, event, arg1)
   if event == "REPLICATE_ITEM_LIST_UPDATE" then
     ns.OnReplicateReady()
+    return
+  end
+  if event == "GET_ITEM_INFO_RECEIVED" then
+    AddLoadedGear(arg1)
     return
   end
   local a = state.active
@@ -266,13 +289,14 @@ function ns.FullScanCooldown()
   return left
 end
 
--- Turn accumulated { [itemID] = { [unitPrice] = units } } into records, snipes and dips
+-- Turn accumulated { [itemID] = { [unitPrice] = units } } into records, snipes, dips and disenchant deals
 local function Finalize(maps, names, stamp)
   local r = ns.R()
   local ids = {}
   for id in pairs(maps) do ids[#ids + 1] = id end
   for id, name in pairs(names) do r.names[id] = name end
   local snipes, dips = {}, {}
+  local gearPrices = {}   -- cheapest buyout of each weapon and armor item, for disenchant deals
   local hidden, bestHistory = 0, 0
   local minDays = ns.Cfg("minHistoryDays")
   local cut = ns.Cfg("ahCut")
@@ -288,6 +312,7 @@ local function Finalize(maps, names, stamp)
       local stats = ns.StatsFor(id)
       local wall, minPrice = ns.Record(id, ladder, total, stamp)
       ns.UpdateBait(id, ladder, wall, stats, stamp)
+      if ns.IsGear(id) then gearPrices[id] = ladder[1].p end
       if wall then
         if r.watch[id] then
           ns.ladders[id] = { ladder = ladder, total = total, t = stamp, kind = "scan" }
@@ -327,6 +352,13 @@ local function Finalize(maps, names, stamp)
         if not maps[id] then r.bait[id] = nil end
       end
       ns.snipes, ns.dips = snipes, dips
+      -- after the loop, so materials are priced at today's walls
+      ns.disenchants, loadingGear = ns.FindDisenchantDeals(gearPrices, cut, ns.Cfg("minDisenchantProfit"), ns.Cfg("minDisenchantPct"))
+      if next(loadingGear) then
+        scanner:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+      else
+        scanner:UnregisterEvent("GET_ITEM_INFO_RECEIVED")
+      end
       ns.hiddenSnipes, ns.bestHistory = hidden, bestHistory
       ns.lastFullScan = stamp
       r.lastFull = stamp
