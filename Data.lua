@@ -1,5 +1,5 @@
 -- MarketWall: recording and reading history
-local ADDON, ns = ...
+local _, ns = ...
 local W = ns.Wall
 
 ns.ladders = {}   -- [itemID] = { ladder=, total=, t=, kind=, auctions= } session only

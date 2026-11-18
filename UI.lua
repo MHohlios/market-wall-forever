@@ -1,5 +1,5 @@
 -- MarketWall: the Market tab
-local ADDON, ns = ...
+local _, ns = ...
 local W = ns.Wall
 
 local ui = { view = "watch", limits = {}, sort = {} }
