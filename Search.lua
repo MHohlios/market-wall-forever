@@ -55,11 +55,16 @@ end
 
 local win
 local selectedID
+local waitingID   -- an item whose listings load once the scanner is free
 
 local function LoadListings(id)
+  waitingID = nil
   local held = ns.ladders[id]
   local stale = not held or held.kind == "scan" or time() - held.t > 30
-  if ns.ahOpen and stale and not ns.scanState.running and not ns.fullScanRunning then
+  if not (ns.ahOpen and stale) then return end
+  if ns.scanState.running or ns.fullScanRunning then
+    waitingID = id
+  else
     ns.StartWatchScan({ id })
   end
 end
@@ -121,7 +126,8 @@ local function ListingsText(id)
   if not ns.ahOpen then return GREY .. "Live listings load when the auction house is open.|r" end
   local held = ns.ladders[id]
   if not held then
-    return GREY .. (ns.scanState.running and "Loading current auctions..." or "No auctions loaded.") .. "|r"
+    local loading = ns.scanState.running or waitingID == id
+    return GREY .. (loading and "Loading current auctions..." or "No auctions loaded.") .. "|r"
   end
   if #held.ladder == 0 then return GREY .. "Nothing listed right now.|r" end
   local wall = PV.LiveWall(id)
@@ -270,6 +276,10 @@ local function Build()
     elapsed = elapsed + dt
     if elapsed > 0.5 then
       elapsed = 0
+      if waitingID and not (ns.scanState.running or ns.fullScanRunning) then
+        LoadListings(waitingID)
+        f.dirty = true
+      end
       if f.dirty then
         f.dirty = false
         ns.RefreshSearch()
