@@ -172,6 +172,8 @@ local function CreateList(parent, rows)
         row:SetAlpha(entry.dim and 0.45 or 1)
         if entry.highlight then
           row.bg:SetColorTexture(0.18, 0.32, 0.45, 0.45)
+        elseif entry.tint then
+          row.bg:SetColorTexture(entry.tint[1], entry.tint[2], entry.tint[3], entry.tint[4])
         elseif (i + self.offset) % 2 == 0 then
           row.bg:SetColorTexture(1, 1, 1, 0.03)
         else
@@ -694,6 +696,8 @@ local SETTINGS = {
   { key = "staleMinutes", label = "Grey out after (minutes)", kind = "int", tip = "Watchlist rows are greyed out when their last scan is older than this." },
   { key = "autoScan", label = "Daily full scan on open", kind = "bool", tip = "Start a full scan when you open the auction house, if none has run today." },
   { key = "sound", label = "Sound on deals", kind = "bool", tip = "Play a sound when a scan finds units under your buy price or new snipes." },
+  { key = "baitSearchGap", label = "Bait search gap (seconds)", kind = "secs", tip = "Bait Detect waits at least this long between searches. Never less than 1 second." },
+  { key = "baitConfirmPress", label = "Bait confirm press", kind = "bool", tip = "Bait Detect confirms each purchase with its own press of the button. Untick to confirm straight after the price quote." },
 }
 
 local function FormatSetting(def)
@@ -710,6 +714,9 @@ local function ParseSetting(def, text)
   elseif def.kind == "money" then
     local n = ns.ParseMoney(text)
     if n and n >= 0 then return n end
+  elseif def.kind == "secs" then
+    local n = tonumber(text)
+    if n and n >= 1 then return n end
   else
     local n = tonumber(text)
     if n and n >= 0 then return math.floor(n) end
@@ -796,11 +803,12 @@ end
 function ui.Show(view)
   ui.view = view
   if not ui.frame then return end
-  local isItem, isSettings, isSell = (view == "item"), (view == "settings"), (view == "sell")
-  local isList = not isItem and not isSettings and not isSell
+  local isItem, isSettings, isSell, isBait = (view == "item"), (view == "settings"), (view == "sell"), (view == "bait")
+  local isList = not isItem and not isSettings and not isSell and not isBait
   ui.item:SetShown(isItem)
   ui.settings:SetShown(isSettings)
   ui.sell:SetShown(isSell)
+  ui.bait:SetShown(isBait)
   ui.list:SetShown(isList)
   ui.footer:SetShown(view == "watch")
   ui.hint:SetShown(isList)
@@ -846,6 +854,8 @@ function ns.RefreshUI()
     RefreshSettings()
   elseif view == "sell" then
     ns.RefreshSell()
+  elseif view == "bait" then
+    ns.RefreshBait()
   elseif view == "watch" then
     ListView("watch", WatchData(),
       "Your watchlist is empty.\nType an item name below, or shift-click an item into the box, then press Add.",
@@ -906,15 +916,15 @@ local function Build()
 
   ui.nav = {}
   local previous
-  for _, def in ipairs({ { "watch", "Watchlist" }, { "snipes", "Snipes" }, { "dips", "Dips" }, { "sell", "Sell" }, { "settings", "Settings" } }) do
-    local b = MakeButton(f, def[2], 90)
+  for _, def in ipairs({ { "watch", "Watchlist" }, { "snipes", "Snipes" }, { "dips", "Dips" }, { "bait", "Bait Detect" }, { "sell", "Sell" }, { "settings", "Settings" } }) do
+    local b = MakeButton(f, def[2], 74)
     if previous then b:SetPoint("LEFT", previous, "RIGHT", 4, 0) else b:SetPoint("TOPLEFT", 8, -6) end
     b:SetScript("OnClick", function() ui.Show(def[1]) end)
     ui.nav[def[1]] = b
     previous = b
   end
 
-  ui.fullButton = MakeButton(f, "Full scan", 130)
+  ui.fullButton = MakeButton(f, "Full scan", 116)
   ui.fullButton:SetPoint("TOPRIGHT", -8, -6)
   ui.fullButton:SetScript("OnClick", function() ns.StartFullScan() end)
   ui.fullButton:SetMotionScriptsWhileDisabled(true)
@@ -923,7 +933,7 @@ local function Build()
     ShowTip(self, "Full scan", "Records the wall price of every item and looks for snipes and dips. The game allows one every 15 minutes.", "Last full scan: " .. ns.Ago(r.lastFull))
   end)
   ui.fullButton:SetScript("OnLeave", HideTip)
-  local scan = MakeButton(f, "Scan watchlist", 110)
+  local scan = MakeButton(f, "Scan watchlist", 100)
   scan:SetPoint("RIGHT", ui.fullButton, "LEFT", -4, 0)
   scan:SetScript("OnClick", function() ns.StartWatchScan() end)
   scan:SetScript("OnEnter", function(self)
@@ -975,6 +985,8 @@ local function Build()
   ui.settings:Hide()
   ui.sell = ns.BuildSellPage(f)
   ui.sell:Hide()
+  ui.bait = ns.BuildBaitPage(f)
+  ui.bait:Hide()
 
   -- item names and icons arrive late; redraw at most twice a second while that happens.
   -- The same tick keeps the status line and the cooldown on the Full scan button current.

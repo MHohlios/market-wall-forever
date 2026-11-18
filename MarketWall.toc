@@ -8,10 +8,12 @@
 
 Core.lua
 Wall.lua
+Bait.lua
 Data.lua
 Scan.lua
 Buy.lua
 Disenchant.lua
 UI.lua
 Sell.lua
+BaitUI.lua
 Tooltip.lua

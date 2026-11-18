@@ -4,6 +4,8 @@ A World of Warcraft (Forever) auction house addon. It adds a Market tab with:
 
 - **Watchlist, Snipes and Dips** built on each item's wall price: the lowest price
   level with real supply behind it, tracked over time.
+- **Bait Detect**: commodities that look baited, and one button to buy the cheap copies.
+  See below.
 - **Sell**: your sellable bag items with their wall price, a 7-day chart, and posting
   at the wall price.
 - **Tooltips**: market wall, normal range, high/low against the median, vendor price
@@ -21,6 +23,44 @@ ln -s "$PWD" "/Applications/World of Warcraft/_forever_/Interface/AddOns/MarketW
 
 Saved data lives in `WTF/Account/<account>/SavedVariables/MarketWall.lua` and is
 not tracked here.
+
+**New files need a full client restart.** `/reload` picks up edits to files the game
+already knows, but a new file in `MarketWall.toc`, or a new `Bindings.xml`, loads only
+after quitting and restarting the game.
+
+## Bait Detect
+
+A seller posts a unit or two far under the market so others copy that price, then buys
+the copies and relists them. The newest listing at a price sells first.
+
+An item is listed as possibly baited when its cheapest price level sits under the wall,
+below the item's own normal range, and has stayed at that price for two scans in a row
+(full scans or live searches). Items need the usual days of history; commodities only.
+Copies are the units posted at the bait price since it first appeared.
+
+Click an item to search it. Set **Buy at or below** (it starts at the bait price) and
+choose **Leave bait** or **Buy bait**, then press the action button. Each press does
+one thing: one search, one buy, or one confirm. Presses during the game's search
+throttle or the minimum gap between searches (`baitSearchGap`, at least 1 second) do
+nothing. A sound plays when a search finds units to buy.
+
+- **Leave bait** buys the copies and leaves the original bait listed. The game always
+  sells the cheapest units first, so levels above the bait can only be bought with
+  Buy bait; the page says how many that leaves out.
+- The game quotes the final price before a purchase completes. MarketWall confirms only
+  if no unit is over your price, otherwise it cancels and says why on the button. With
+  Leave bait it also cancels unless every unit is at the bait price, since any other
+  quote means the supply changed and the purchase could take the bait.
+- By default the confirm is its own press. Untick **Bait confirm press** in Settings to
+  confirm right after the quote, if the game allows that without a key press.
+- Every purchase through MarketWall is logged with its time, item, units, unit price
+  and total.
+
+**Key binding:** Key Bindings > AddOns > MarketWall > "Bait Detect: search or buy" does
+exactly what the button does.
+
+Press the key yourself. Turbo keys, auto-clickers and macro software can get your
+account banned. MarketWall never searches or buys on its own.
 
 ## Development
 

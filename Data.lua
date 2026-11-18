@@ -1,6 +1,7 @@
 -- MarketWall: recording and reading history
 local _, ns = ...
 local W = ns.Wall
+local B = ns.Bait
 
 ns.ladders = {}   -- [itemID] = { ladder=, total=, t=, kind=, auctions= } session only
 ns.snipes = {}    -- last full scan results
@@ -138,6 +139,29 @@ function ns.Record(id, ladder, total, t)
   return wall, minPrice
 end
 
+-- Stackable items trade as commodities: one price per unit, cheapest units sold first.
+-- Nil while the game has not loaded the item's info yet.
+function ns.IsCommodity(id)
+  local stack = C_Item and C_Item.GetItemMaxStackSizeByID and C_Item.GetItemMaxStackSizeByID(id)
+  if not stack and GetItemInfo then stack = select(8, GetItemInfo(id)) end
+  if not stack then return nil end
+  return stack > 1
+end
+
+-- Track whether an item's cheapest level looks like bait. Runs on every full scan and live search.
+-- isCommodity: true when the caller already knows (a commodity search), else it is looked up.
+-- While that is unknown the record stays as it was, so an uncached item keeps its history.
+function ns.UpdateBait(id, ladder, wall, stats, t, isCommodity)
+  local commodity = isCommodity or ns.IsCommodity(id)
+  if commodity == nil then return end
+  local r = ns.R()
+  if not commodity then
+    r.bait[id] = nil
+    return
+  end
+  r.bait[id] = B.Update(r.bait[id], ladder, wall, stats, ns.Cfg("minHistoryDays"), t)
+end
+
 -- Status for a watched item: "buy", "sell", "normal" or "nodata"
 function ns.WatchStatus(id)
   local entry = ns.R().watch[id]
@@ -163,6 +187,7 @@ function ns.AddPosition(id, qty, cost)
   pos.qty = pos.qty + qty
   pos.cost = pos.cost + cost
   r.pos[id] = pos
+  r.buys[#r.buys + 1] = { t = time(), id = id, qty = qty, unit = ns.Round(cost / qty), total = cost }
   -- running totals for the summary printed when the auction house closes
   local session = ns.session
   session.buys = session.buys + 1
