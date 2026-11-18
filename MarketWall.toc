@@ -16,6 +16,7 @@ Buy.lua
 Disenchant.lua
 Record.lua
 Kills.lua
+DisenchantLog.lua
 Mobs.lua
 UI.lua
 PriceView.lua

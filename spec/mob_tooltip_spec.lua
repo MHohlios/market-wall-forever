@@ -143,5 +143,15 @@ describe("mob tooltip", function()
         outcome = ns.Kills.EMPTY })
       assert.equal(1, changed)
     end)
+
+    it("reprices and redraws when a disenchant is recorded", function()
+      local changed = 0
+      ns.SearchChanged = function() changed = changed + 1 end
+      local first = ns.Mobs.For(RAPTOR)
+      ns.Recording.Emit({ t = 3, kind = "disenchant", item = 1001, quality = 2, level = 28, classID = 4,
+        salvager = false, materials = { [11083] = 1 } })
+      assert.are_not.equal(first, ns.Mobs.For(RAPTOR))
+      assert.equal(1, changed)
+    end)
   end)
 end)

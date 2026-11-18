@@ -22,6 +22,7 @@ describe("loading the addon", function()
     assert.is_function(ns.Recording.Emit)   -- the recording core, Record.lua
     assert.is_table(ns.Kills.tracker)       -- Kills.lua
     assert.is_function(ns.Mobs.For)         -- Mobs.lua
+    assert.is_table(ns.DisenchantLog.tracker) -- DisenchantLog.lua
     assert.is_function(ns.MobsView.Build)   -- MobsView.lua, before Search.lua builds it
     assert.is_function(ns.InitTooltip)      -- from Tooltip.lua, the last TOC file
   end)
@@ -29,6 +30,6 @@ describe("loading the addon", function()
   it("creates its SavedVariables on ADDON_LOADED", function()
     local _, fire = addon.Load()
     fire("ADDON_LOADED", addon.ADDON)
-    assert.same({ version = 1, cfg = {}, realms = {}, mobs = {} }, MarketWallDB)
+    assert.same({ version = 1, cfg = {}, realms = {}, mobs = {}, disenchants = {} }, MarketWallDB)
   end)
 end)
