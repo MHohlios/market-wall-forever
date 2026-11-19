@@ -1,6 +1,11 @@
 package-as: MarketWall
 
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown
+
 ignore:
+  - scripts
   - spec
   - flake.nix
   - flake.lock

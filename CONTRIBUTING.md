@@ -37,12 +37,32 @@ A change that breaks one of these will not be merged.
 
 ## Releasing
 
-CurseForge builds releases from tags on `main`, using [.pkgmeta](.pkgmeta). The tag name
-becomes the addon version, so tag `v0.2.0` for a release. A tag containing `alpha` or
-`beta`, such as `v0.2.0-beta1`, is published as that file type. Untagged commits are not
-released. `make package-check` lists the files a package would contain.
+Release notes are written by hand in [CHANGELOG.md](CHANGELOG.md), one pull request at a
+time. Every pull request, bug fixes included, adds a line under `## Unreleased` at the top
+of the file, creating that heading if it is missing. CI fails a pull request that does not
+change CHANGELOG.md; only Dependabot's pull requests are exempt. Write the line for
+players: what changed for them, not how the code changed.
+
+A release takes two steps, because `main` is protected:
+
+1. On a branch, run `make release-notes VERSION=v0.7.0`. It renames `## Unreleased` to
+   `## v0.7.0 (YYYY-MM-DD)` with today's date, and stops with an error if there is no
+   Unreleased section or it is empty. Open a pull request with that change and merge it.
+2. On an up-to-date `main`, run `make release VERSION=v0.7.0`. It fetches from origin and
+   stops unless `main` matches `origin/main`, the working tree is clean, the tag does not
+   exist yet and CHANGELOG.md has a `## v0.7.0` heading. Then it creates an annotated tag
+   and pushes it.
+
+The pushed tag starts the [release workflow](.github/workflows/release.yml), which checks
+the heading again and packages the addon with [.pkgmeta](.pkgmeta) for CurseForge and a
+GitHub release. Only tags are released; pushes to `main` are not. The tag name becomes
+the addon version. A tag containing `alpha` or `beta`, such as `v0.7.0-beta1`, is
+published as that file type; any other tag is a release. CurseForge shows the whole
+CHANGELOG.md at the tagged commit as the file's changelog, newest release first.
+`make package-check` lists the files a package would contain.
 
 ## Pull requests
 
 Open pull requests into `main`, one topic per pull request. Fill in the template's
-summary and how you tested it.
+summary and how you tested it, and add a line to CHANGELOG.md under `## Unreleased`, as
+[Releasing](#releasing) describes.
