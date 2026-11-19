@@ -114,7 +114,7 @@ describe("FindDisenchantDeals", function()
 end)
 
 describe("a full scan's Disenchant list", function()
-  local ns, fire, loaded, tickers
+  local ns, fire, loaded, tickers, vendor
 
   before_each(function()
     ns, fire = addon.Load()
@@ -122,11 +122,11 @@ describe("a full scan's Disenchant list", function()
     MarketWallDB.cfg.minDisenchantProfit, MarketWallDB.cfg.minDisenchantPct = 0, 0
     local prices = { [STRANGE_DUST] = 100, [LESSER_MAGIC_ESSENCE] = 1000 }
     ns.LatestWall = function(id) return prices[id] end
-    loaded = false
+    loaded, vendor = false, 0
     _G.C_Item = {
       GetItemInfoInstant = function() return 1001, "", "", "", 0, ARMOR end,
       GetItemInfo = function()
-        if loaded then return "item", "link", UNCOMMON, 10, 1, "", "", 1, "", 0, 0, ARMOR end
+        if loaded then return "item", "link", UNCOMMON, 10, 1, "", "", 1, "", 0, vendor, ARMOR end
       end,
     }
     _G.C_AuctionHouse = {
@@ -168,6 +168,34 @@ describe("a full scan's Disenchant list", function()
     fire("GET_ITEM_INFO_RECEIVED", 1001, true)
     assert.equal(1, #ns.disenchants)
     assert.equal(300, ns.disenchants[1].price)
+  end)
+
+  describe("repricing when the deposits change", function()
+    -- materials at a 200c vendor price, 1.5 expected per disenchant: 45 in deposits at 12h
+    -- (354 net, 54 profit at 300c) and 180 at 48h (219 net, a loss)
+    before_each(function()
+      loaded, vendor = true, 200
+      MarketWallDB.cfg.sellDuration = 1
+      ns.fullScanRunning = true
+      ns.OnReplicateReady()
+      RunTickers()
+    end)
+
+    it("starts from the scan's deals at the Sell duration", function()
+      assert.equal(1, #ns.DisenchantDeals())
+      assert.near(354, ns.DisenchantDeals()[1].value, 1e-6)
+    end)
+
+    it("drops a deal that no longer pays at a longer Sell duration", function()
+      MarketWallDB.cfg.sellDuration = 3
+      ns.DisenchantDepositsChanged()
+      assert.same({}, ns.DisenchantDeals())
+    end)
+
+    it("drops a deal that no longer pays once a higher deposit rate is learned", function()
+      ns.Outlet.LearnDepositRate(1, 120, 200)   -- 60% at 12h
+      assert.same({}, ns.DisenchantDeals())
+    end)
   end)
 
   -- not a Disenchant list check, but this is where a full scan already runs end to end

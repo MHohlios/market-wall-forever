@@ -445,7 +445,8 @@ local function BuildPostControls(w, s)
     radio:SetPoint("TOPLEFT", POST_X - 2 + (i - 1) * 56, -20)
     radio:SetScript("OnClick", function()
       MarketWallDB.cfg.sellDuration = duration
-      ns.Mobs.Invalidate()   -- the duration prices the deposits in mob values
+      ns.Mobs.Invalidate()   -- the duration prices the deposits in mob values and disenchant deals
+      ns.DisenchantDepositsChanged()
       ns.RefreshUI()
     end)
     local label = w.MakeText(s, "GameFontHighlightSmall")

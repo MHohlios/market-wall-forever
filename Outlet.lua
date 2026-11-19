@@ -80,13 +80,14 @@ function Outlet.DepositRate(duration)
 end
 
 -- Keeps the rate of a real deposit for vendorValue copper of items, the latest one winning. A
--- new rate reprices mob values, which are cached.
+-- new rate reprices mob values and disenchant deals, which are kept.
 function Outlet.LearnDepositRate(duration, deposit, vendorValue)
   if vendorValue <= 0 then return end
   local rate = deposit / vendorValue
   if MarketWallDB.depositRate[duration] == rate then return end
   MarketWallDB.depositRate[duration] = rate
   ns.Mobs.Invalidate()
+  ns.DisenchantDepositsChanged()
 end
 
 -- The deposit for one unit of an item away from the auction house: 0 without a vendor price

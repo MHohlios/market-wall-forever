@@ -486,7 +486,7 @@ local function DisenchantData()
   local skill = ns.EnchantingSkill()
   local showAll = ns.Cfg("disenchantShowAll") or skill == nil
   local data, hidden = {}, 0
-  for _, d in ipairs(ns.disenchants) do
+  for _, d in ipairs(ns.DisenchantDeals()) do
     if showAll or d.skill <= skill then
       data[#data + 1] = { id = d.id,
         cells = { ns.ColorName(d.id), ns.Money(d.price), ns.Money(d.value), ns.Money(d.profit), Pct(d.pct), d.odds },
