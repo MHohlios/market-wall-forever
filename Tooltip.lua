@@ -6,10 +6,12 @@ local Outlet = ns.Outlet
 
 local MIN_SHOWN_CHANCE = 0.01
 
--- The outlet that pays most for one unit after the cut, by the Sell page's bag-group rule.
--- No deposit: the tooltip knows no auction duration or bag slot to price one.
+-- The outlet that pays most for one unit after the cut, by the Sell page's bag-group rule, and
+-- whether the market is too thin to trust. No deposit: the tooltip knows no auction duration or
+-- bag slot to price one.
 local function BestOutlet(id)
-  return ns.SellPricing.Group(Outlet.Game()(id, 0))
+  local values = Outlet.Game()(id, 0)
+  return ns.SellPricing.Group(values), values.thin
 end
 
 local function OutletLabel(name, outlet, best)
@@ -22,12 +24,13 @@ local function Decimal(x)
 end
 
 local function OutletLines(add, id, count)
-  local best = BestOutlet(id)
+  local best, thin = BestOutlet(id)
   local wall, day = ns.LatestWall(id)
   if wall then
     local age = ns.Today() - day
     local when = (age == 0 and "today") or (age == 1 and "yesterday") or (age .. " days ago")
-    add(OutletLabel("Market", Outlet.AUCTION, best), ns.Money(wall) .. " " .. GREY .. "(" .. when .. ")|r")
+    add(OutletLabel("Market", Outlet.AUCTION, best),
+      ns.Money(wall) .. " " .. GREY .. "(" .. when .. ")" .. (thin and " (thin market)" or "") .. "|r")
     if count and count > 1 then add(GREY .. "Stack of " .. count .. "|r", ns.Money(wall * count)) end
   end
 
@@ -42,7 +45,8 @@ local function OutletLines(add, id, count)
   end
 end
 
--- One indented line per likely material, most likely first, then where the odds come from
+-- One indented line per likely material, most likely first, then where the odds come from.
+-- True when it added lines.
 local function DisenchantLines(add, id)
   local outcomes, source = ns.DisenchantOutcomes(id)
   if not outcomes then return end
@@ -56,6 +60,7 @@ local function DisenchantLines(add, id)
       GREY .. Decimal(o.quantity) .. "× · " .. Decimal(o.chance * 100) .. "%|r " .. ns.Money(ns.LatestWall(o.id)))
   end
   add(GREY .. "  odds: " .. source .. "|r", "")
+  return true
 end
 
 local function MarketContextLines(add, id)
@@ -96,17 +101,18 @@ end
 
 local function AddLines(tooltip, id)
   if not id or not MarketWallDB then return end
-  local spaced = false
+  -- A blank line before the next line added, so a block that adds nothing leaves no gap
+  local gap = true
   local function add(left, right)
-    if not spaced then
+    if gap then
       tooltip:AddLine(" ")
-      spaced = true
+      gap = false
     end
     tooltip:AddDoubleLine(left, right)
   end
 
   OutletLines(add, id, StackCount(tooltip, id))
-  DisenchantLines(add, id)
+  if DisenchantLines(add, id) then gap = true end
   MarketContextLines(add, id)
 end
 
