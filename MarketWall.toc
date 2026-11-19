@@ -2,7 +2,7 @@
 ## Title: MarketWall
 ## Notes: Wall-price history, watchlist, snipes and dips for the auction house. Adds a Market tab.
 ## Author: Mike
-## Version: 0.1.0
+## Version: @project-version@
 ## SavedVariables: MarketWallDB
 ## Category-enUS: Auctions
 

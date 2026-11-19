@@ -1,0 +1,10 @@
+package-as: MarketWall
+
+ignore:
+  - spec
+  - flake.nix
+  - flake.lock
+  - Makefile
+  - CONTRIBUTING.md
+  - CODE_OF_CONDUCT.md
+  - SECURITY.md

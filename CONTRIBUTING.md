@@ -35,6 +35,13 @@ request should say what you checked in game and on which client: WoW Forever, in
 
 A change that breaks one of these will not be merged.
 
+## Releasing
+
+CurseForge builds releases from tags on `main`, using [.pkgmeta](.pkgmeta). The tag name
+becomes the addon version, so tag `v0.2.0` for a release. A tag containing `alpha` or
+`beta`, such as `v0.2.0-beta1`, is published as that file type. Untagged commits are not
+released. `make package-check` lists the files a package would contain.
+
 ## Pull requests
 
 Open pull requests into `main`, one topic per pull request. Fill in the template's
