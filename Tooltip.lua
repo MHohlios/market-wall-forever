@@ -122,8 +122,6 @@ end
 
 -- Mob tooltips -------------------------------------------------------------------------------
 
-local ORANGE = "|cffffb057"
-
 -- Seen kills, the ones values count, or an orange flag while they are under reliableKills
 local function KillCount(seen, reliableKills)
   if seen < reliableKills then return ORANGE .. "< " .. reliableKills .. " kills|r" end
