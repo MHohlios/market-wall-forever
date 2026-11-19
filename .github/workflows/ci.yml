@@ -22,19 +22,3 @@ jobs:
       - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
       - run: nix develop --command make check
 
-  # Every pull request adds a CHANGELOG.md line, except Dependabot's, which can't write one.
-  changelog:
-    if: github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Check the pull request changes CHANGELOG.md
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          git diff --name-only "$BASE_SHA...$HEAD_SHA" | grep -qx CHANGELOG.md ||
-            { echo "::error file=CHANGELOG.md::Add a line under '## Unreleased' in CHANGELOG.md."; exit 1; }

@@ -2,9 +2,6 @@
 
 <!-- What changes and why. -->
 
-- [ ] CHANGELOG.md has a line for this change under `## Unreleased` (add the heading if
-      it is missing). Every pull request needs one, bug fixes included; CI checks it.
-
 ## How tested
 
 - [ ] `make check` passes

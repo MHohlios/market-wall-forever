@@ -162,13 +162,10 @@ With direnv, `direnv allow` once and then run `make check` directly. `make lint`
 
 ## Releasing
 
-Releases go to CurseForge from version tags only, never from pushes to `main`. Every pull
-request, bug fixes included, adds a line under `## Unreleased` in
-[CHANGELOG.md](CHANGELOG.md); CI enforces this for all but Dependabot's pull requests. To release, `make release-notes VERSION=v0.7.0` turns that
-section into `## v0.7.0` with today's date in a pull request; once it merges,
-`make release VERSION=v0.7.0` checks `main` and pushes the tag, and the release workflow
-packages it. CurseForge shows the whole CHANGELOG.md at the tagged commit, newest release
-first. A tag containing `alpha` or `beta` is published as that file type.
+Releases are made in the GitHub UI. Draft a new release with a new tag on `main`, generate
+the release notes, edit them for players and publish. The release workflow then builds the
+addon and uploads it to CurseForge, which shows the release's text as the file's changelog.
+A tag containing `alpha` or `beta` is published as that file type.
 [CONTRIBUTING.md](CONTRIBUTING.md#releasing) has the details.
 
 ## Contributing

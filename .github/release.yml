@@ -1,0 +1,7 @@
+# What "Generate release notes" leaves out: dependency updates mean nothing to players.
+changelog:
+  exclude:
+    labels:
+      - dependencies
+    authors:
+      - dependabot[bot]
