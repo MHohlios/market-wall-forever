@@ -136,27 +136,30 @@ function P.Group(values)
   return values.outlet
 end
 
+-- The bag groups in the order the Sell page shows them. The first two always show, even when empty.
+local GROUP_ORDER = { Outlet.AUCTION, Outlet.VENDOR, Outlet.DISENCHANT, Outlet.NO_DATA }
+local ALWAYS_SHOWN = 2
+
 -- Bags grouped by best outlet (P.Group). items: { id, count, values = Outlet.Values }. Each group:
--- { outlet, items, value }; items and groups most valuable first, empty groups left out.
+-- { outlet, items, value }; items most valuable first. Groups keep GROUP_ORDER; the auction house
+-- and Vendor groups are always present, the others only when they hold items.
 function P.Groups(items)
-  local byOutlet, groups = {}, {}
+  local byOutlet = {}
+  for _, outlet in ipairs(GROUP_ORDER) do byOutlet[outlet] = { outlet = outlet, items = {}, value = 0 } end
   for _, item in ipairs(items) do
-    local key = P.Group(item.values)
-    local group = byOutlet[key]
-    if not group then
-      group = { outlet = key, items = {}, value = 0 }
-      byOutlet[key] = group
-      groups[#groups + 1] = group
-    end
+    local group = byOutlet[P.Group(item.values)]
     item.value = item.values.best * item.count
     group.items[#group.items + 1] = item
     group.value = group.value + item.value
   end
-  local function Before(a, b)
-    if a.value ~= b.value then return a.value > b.value end
-    return (a.id or a.outlet) < (b.id or b.outlet)
+  local groups = {}
+  for i, outlet in ipairs(GROUP_ORDER) do
+    local group = byOutlet[outlet]
+    table.sort(group.items, function(a, b)
+      if a.value ~= b.value then return a.value > b.value end
+      return a.id < b.id
+    end)
+    if i <= ALWAYS_SHOWN or #group.items > 0 then groups[#groups + 1] = group end
   end
-  for _, group in ipairs(groups) do table.sort(group.items, Before) end
-  table.sort(groups, Before)
   return groups
 end

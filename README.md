@@ -8,7 +8,8 @@ A World of Warcraft (Forever) auction house addon. It adds a Market tab with:
   See below.
 - **Sell**: your sellable bag items as an icon grid, grouped by the best outlet for each
   (auction house, disenchant or vendor, by the same rule as mob values' Optimal, except that
-  Optimal can also value a container at what it opens into), with the current listings or
+  Optimal can also value a container at what it opens into), always in the order auction
+  house, vendor, disenchant, no reliable price (the first two show even when empty), with the current listings or
   the price history beside them. The price starts at the lowest
   listing, skipping flagged bait, and warns before a post that looks like a mistake.
 - **Item search**: an MW button on the minimap opens a window, anywhere in the world,

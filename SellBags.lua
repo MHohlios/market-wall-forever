@@ -125,7 +125,7 @@ function SellBags.Grid(parent, width, onPick)
     for i = #groups + 1, #headers do headers[i]:Hide() end
     for i = used + 1, #slots do slots[i]:Hide() end
     content:SetHeight(math.max(1, y))
-    self.empty:SetShown(#groups == 0)
+    self.empty:SetShown(used == 0)
   end
   return scroll
 end
