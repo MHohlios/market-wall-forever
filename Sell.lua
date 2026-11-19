@@ -282,7 +282,9 @@ local function RefreshSelected(item)
   page.info:SetShown(item ~= nil)
   page.pick:SetShown(item == nil)
   page.listingsTitle:SetShown(item ~= nil and page.tab == "listings")
+  page.view:SetShown(item ~= nil and page.tab == "history")
   if not item then
+    page.view.id = nil   -- the item left the bags: drop its chart and stats with the listings
     page.warnings:Hide()
     page.auctions:SetData({}, "Pick an item from your bags.")
     page.listingsAge:SetText("")
@@ -533,7 +535,7 @@ local function ShowTab(name)
   page.listingsTitle:SetShown(listings and page.item ~= nil)
   page.listingsAge:SetShown(listings)
   page.rowHint:SetShown(listings)
-  page.view:SetShown(not listings)
+  page.view:SetShown(not listings and page.item ~= nil)
   for key, button in pairs(page.tabs) do
     if key == name then button:LockHighlight() else button:UnlockHighlight() end
   end
