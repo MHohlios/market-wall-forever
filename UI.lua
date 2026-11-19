@@ -637,9 +637,9 @@ local function CreateChart(parent)
       end
     end
 
-    self.yLabels[1]:SetText(ns.Money(hi))
-    self.yLabels[2]:SetText(ns.Money((hi + lo) / 2))
-    self.yLabels[3]:SetText(ns.Money(lo))
+    self.yLabels[1]:SetText(ns.MoneyShort(hi))
+    self.yLabels[2]:SetText(ns.MoneyShort((hi + lo) / 2))
+    self.yLabels[3]:SetText(ns.MoneyShort(lo))
     self.xFirst:SetText(date("%b %d %H:%M", t0))
     self.xLast:SetText(date("%b %d %H:%M", t1))
     local legend = "White: wall price   " .. BLUE .. "Blue: buy below|r   " .. ORANGE .. "Orange: sell at|r   " .. GOLD .. "Gold band: normal range|r   Bars: supply"

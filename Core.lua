@@ -82,9 +82,13 @@ local COIN_ICON = {
   c = "|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:0:0|t",
 }
 
-local function JoinCoins(c, mark)
+local function JoinCoins(c, mark, dropCopperOverGold)
   if not c then return "-" end
+  if dropCopperOverGold and math.abs(c) >= 10000 then
+    c = (c < 0 and -1 or 1) * ns.Round(math.abs(c) / 100) * 100   -- to the nearest silver, either sign
+  end
   local parts, neg = CoinParts(c)
+  if dropCopperOverGold and #parts == 3 then parts[3] = nil end
   local out = {}
   for i, part in ipairs(parts) do out[i] = part[1] .. mark(part[2]) end
   return (neg and "-" or "") .. table.concat(out, " ")
@@ -93,6 +97,11 @@ end
 -- For display: the number then its coin icon, in the colour of the surrounding text
 function ns.Money(c)
   return JoinCoins(c, function(unit) return COIN_ICON[unit] end)
+end
+
+-- For chart axis labels, which have a narrow gutter: at 1g and over, copper is left out ("12g 34s")
+function ns.MoneyShort(c)
+  return JoinCoins(c, function(unit) return COIN_ICON[unit] end, true)
 end
 
 -- Letters instead of icons ("1g 41s 23c"), for edit boxes and anything ParseMoney reads back
