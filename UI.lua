@@ -404,7 +404,7 @@ local DIP_COLUMNS = {
 local DISENCHANT_COLUMNS = {
   { "Item", 220, nil, "Weapons and armor, uncommon or better, listed under what disenchanting them is worth. Click a row to load live listings before buying." },
   { "Price", 90, "RIGHT", "The cheapest buyout found in the scan." },
-  { "Net DE value", 130, "RIGHT", "Expected value of the materials from one disenchant, at their wall prices, after the auction house cut and the deposit to list each material, as the item tooltip's Net disenchant shows it." },
+  { "Net DE value", 130, "RIGHT", "Expected value of the materials from one disenchant, at their wall prices, after the auction house cut and the deposit to list each material, as the item tooltip's Disenchant (net) shows it." },
   { "Profit", 100, "RIGHT", "Net disenchant value minus the price." },
   { "Profit %", 80, "RIGHT", "Profit as a share of the price." },
   { "Odds from", 150, nil, "Where the material odds come from: your own disenchants (recorded by MarketWall), a Forever estimate, or the classic disenchanting table." },
