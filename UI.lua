@@ -350,10 +350,11 @@ local WALL_TIP = "The item's real price: the lowest price level that has meaning
 -- hover text for this column's cells in entry.cellTips.
 local DATA_COLUMN = { "Data", 44, "RIGHT", "Days of data behind the normal price. Orange: fewer than the \"Days before data is reliable\" setting, so the normal price may be off.", cellTip = true }
 local WATCH_COLUMNS = {
-  { "Item", 170, nil, "Items you are tracking. Click a row for its chart and live listings. An item with few days of data says so in its tooltip." },
+  { "Item", 170, nil, "Items you are tracking. Click a row for its chart and live listings." },
   { "Wall price", 80, "RIGHT", WALL_TIP },
   { "Lowest", 80, "RIGHT", "The single cheapest listing right now, even if it is only one unit." },
-  { "Normal range", 140, "RIGHT", "Where the wall price usually sits: the middle half of its daily history. On an item's first day, today's wall." },
+  -- the watchlist has no room for a Data column, so this column's cells carry its badge
+  { "Normal range", 140, "RIGHT", "Where the wall price usually sits: the middle half of its daily history. On an item's first day, today's wall. No room for a Data column here: hover a cell for the item's days of data.", cellTip = true },
   { "Buy below", 80, "RIGHT", "Your buy threshold. Units listed under this price count as deals. Set it on the item's page." },
   { "Sell at", 80, "RIGHT", "Your target resale price. The row says Sell when the wall price reaches it." },
   { "Units under", 75, "RIGHT", "How many units are listed under your buy price as of the last scan." },
@@ -418,6 +419,7 @@ local function WatchData()
         cur.under and tostring(cur.under) or "-", statusText,
       },
       sort = { name, cur.w, cur.m, stats.n > 0 and stats.p25 or nil, entry.buy, entry.sell, cur.under, -STATUS_ORDER[status] },
+      cellTips = { [4] = ns.DataBadgeTip(ns.DaysOfData(id)) },
     }
   end
   table.sort(data, function(a, b)

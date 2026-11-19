@@ -97,8 +97,9 @@ is today's wall.
 
 Every number shows from an item's first scan. Until an item has `minHistoryDays` days of
 data (5 by default, "Days before data is reliable"), tooltips, the item window, the Sell page
-and the Snipes and Dips Data column flag it in orange; the setting hides nothing. Dips need at
-least one earlier day to compare against.
+and the Snipes and Dips Data column flag it in orange; the setting hides nothing. The Watchlist
+and Bait Detect lists have no room for that column, so hovering their Normal range and Wall
+cells shows the same badge. Dips need at least one earlier day to compare against.
 Copies are the units posted at the bait price since it first appeared.
 
 Click an item to search it. Set **Buy at or below** (it starts at the bait price) and

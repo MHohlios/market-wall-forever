@@ -87,6 +87,10 @@ describe("data from an item's first scan", function()
     assert.equal("|cffa3acac5 d|r", ns.DataBadge(5))
   end)
 
+  it("gives lists with no Data column the badge and its hover in one cell tip", function()
+    assert.equal("Data: 1 d\nOnly 1 day of data; the normal price may be off.", Plain(ns.DataBadgeTip(1)))
+  end)
+
   it("counts past days without a scan today", function()
     ns.R().days[ID] = { [ns.Today() - 2] = { 1000 }, [ns.Today() - 1] = { 1000 } }
     assert.equal(2, ns.DaysOfData(ID))

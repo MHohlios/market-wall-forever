@@ -107,6 +107,11 @@ function ns.DataBadge(days)
   return (ns.IsLowData(days) and ORANGE or GREY) .. days .. " d|r"
 end
 
+-- The badge and its hover in one cell tip, for lists with no room for a Data column
+function ns.DataBadgeTip(days)
+  return "Data: " .. ns.DataBadge(days) .. "\n" .. ns.DataTip(days)
+end
+
 -- Weekly history is saved as one compact string per item: the first week's start day, then one
 -- "wall,wall-low,high-wall" segment per consecutive week, all base 36, and an empty segment for a
 -- week with no data. "fqx;2n9,1c,8;;2p1,0,3" is three weeks, the middle one missing.
