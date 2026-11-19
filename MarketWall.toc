@@ -5,6 +5,7 @@
 ## Version: @project-version@
 ## SavedVariables: MarketWallDB
 ## Category-enUS: Auctions
+## X-Curse-Project-ID: 1815744
 
 Core.lua
 Probe.lua

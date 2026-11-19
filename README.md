@@ -160,6 +160,17 @@ With direnv, `direnv allow` once and then run `make check` directly. `make lint`
   load every file in `MarketWall.toc`, in order, and returns the addon's namespace.
 - The tests cover logic only. The in-game check is still the real test for each change.
 
+## Releasing
+
+Releases go to CurseForge from version tags only, never from pushes to `main`. Each pull
+request a player would notice adds a line under `## Unreleased` in
+[CHANGELOG.md](CHANGELOG.md). To release, `make release-notes VERSION=v0.7.0` turns that
+section into `## v0.7.0` with today's date in a pull request; once it merges,
+`make release VERSION=v0.7.0` checks `main` and pushes the tag, and the release workflow
+packages it. CurseForge shows the whole CHANGELOG.md at the tagged commit, newest release
+first. A tag containing `alpha` or `beta` is published as that file type.
+[CONTRIBUTING.md](CONTRIBUTING.md#releasing) has the details.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and the rules a change must keep, and

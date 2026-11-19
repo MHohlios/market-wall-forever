@@ -2,6 +2,9 @@
 
 <!-- What changes and why. -->
 
+- [ ] If a player would notice this change, CHANGELOG.md has a line for it under
+      `## Unreleased` (add the heading if it is missing).
+
 ## How tested
 
 - [ ] `make check` passes
