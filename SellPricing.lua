@@ -102,7 +102,7 @@ function P.Warnings(f)
   if group == Outlet.NO_DATA and outlet.auction then
     add("No reliable price: the market is too thin to price.")
   elseif group == Outlet.DISENCHANT then
-    add(string.format("Best outlet is disenchanting: %s each after the cut, more than the auction house or a vendor.",
+    add(string.format("Best outlet is disenchanting: %s each after fees, more than the auction house or a vendor.",
       ns.Money(outlet.disenchant)))
   elseif group == Outlet.VENDOR then
     add(outlet.thin

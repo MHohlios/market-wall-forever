@@ -68,16 +68,23 @@ local function IsCommodity(location)
   return C_AuctionHouse.GetItemCommodityStatus(location) == Enum.ItemCommodityStatus.Commodity
 end
 
-local function Deposit(item, quantity)
-  local duration = ns.Cfg("sellDuration")
-  if IsCommodity(item.location) then
-    return C_AuctionHouse.CalculateCommodityDeposit(item.id, duration, quantity) or 0
-  end
-  return C_AuctionHouse.CalculateItemDeposit(item.location, duration, quantity) or 0
-end
-
 local function Vendor(id)
   return C_Item.GetItemInfo and select(11, C_Item.GetItemInfo(id))
+end
+
+-- The game's deposit, which also teaches Outlet the rate it estimates deposits with elsewhere
+local function Deposit(item, quantity)
+  local duration = ns.Cfg("sellDuration")
+  local deposit
+  if IsCommodity(item.location) then
+    deposit = C_AuctionHouse.CalculateCommodityDeposit(item.id, duration, quantity)
+  else
+    deposit = C_AuctionHouse.CalculateItemDeposit(item.location, duration, quantity)
+  end
+  if not deposit then return 0 end
+  local vendor = Vendor(item.id)
+  if vendor then Outlet.LearnDepositRate(duration, deposit, vendor * quantity) end
+  return deposit
 end
 
 -------------------------------------------------------------------------------
@@ -438,6 +445,7 @@ local function BuildPostControls(w, s)
     radio:SetPoint("TOPLEFT", POST_X - 2 + (i - 1) * 56, -20)
     radio:SetScript("OnClick", function()
       MarketWallDB.cfg.sellDuration = duration
+      ns.Mobs.Invalidate()   -- the duration prices the deposits in mob values
       ns.RefreshUI()
     end)
     local label = w.MakeText(s, "GameFontHighlightSmall")

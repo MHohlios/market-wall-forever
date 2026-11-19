@@ -35,7 +35,7 @@ describe("item tooltip lines", function()
 
   before_each(function()
     ns = addon.Load()
-    _G.MarketWallDB = { version = 1, cfg = {}, realms = {} }
+    _G.MarketWallDB = { version = 1, cfg = {}, realms = {}, depositRate = {} }
     _G.C_Item = {}
     tooltip = NewTooltip()
   end)
@@ -276,10 +276,10 @@ describe("item tooltip lines", function()
       assert.is_nil(tooltip.lines[Find("Disenchant")]:find(BEST, 1, true))
     end)
 
-    it("shows the prices before the cut", function()
-      Wall(ID, 1000)
+    it("shows the market's net after the cut and a 24h deposit, with the listed price in grey", function()
+      Wall(ID, 1000)   -- 950 after the cut, less 30% of the 100c vendor price
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(tooltip.lines[Find("Market")]:find("|" .. ns.Money(1000) .. " ", 1, true))
+      assert.truthy(Find("|" .. ns.Money(920) .. " " .. GREY .. "net · 10s 0c listed (today)|r"))
     end)
 
     it("marks nothing without a wall, as the Sell page groups it with no market data", function()
@@ -287,7 +287,40 @@ describe("item tooltip lines", function()
       assert.is_nil(Find(BEST))
       assert.is_nil(Find("Market"))
       assert.truthy(Find("Vendor|r|" .. ns.Money(100)))
-      assert.truthy(Find("Disenchant|r|" .. ns.Money(587.5)))
+      assert.truthy(Find("Disenchant|r|" .. ns.Money(558.125) .. " " .. GREY .. "net · 5s 88c in mats|r"))
+    end)
+
+    it("takes each material's deposit off the disenchant net and says so under the breakdown", function()
+      items[DUST].vendor, items[ESSENCE].vendor, items[SHARD].vendor = 10, 100, 200
+      -- 75% × 2.5 × 3 + 20% × 1.5 × 30 + 5% × 60 = 17.625 in deposits at 30%
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.truthy(Find("Disenchant|r|" .. ns.Money(558.125 - 17.625) .. " "))
+      assert.truthy(Find("odds: classic table · net after the cut and each material's deposit|r"))
+      assert.truthy(Find("  Dust|" .. GREY .. "2.5× · 75%|r " .. ns.Money(100)))   -- materials keep their wall
+    end)
+
+    it("moves the best tag to the vendor once the deposits count", function()
+      -- a vest the vendor buys for 20s 52c, listed at 22s, whose materials list at 21s 80c
+      items[ID].vendor = 2052
+      Wall(ID, 2200)
+      Wall(DUST, 400)
+      Wall(ESSENCE, 3000)
+      Wall(SHARD, 10600)
+      items[DUST].vendor, items[ESSENCE].vendor, items[SHARD].vendor = 100, 400, 1000
+
+      -- without deposits the market pays most: 20s 90c, against 20s 71c from disenchanting
+      MarketWallDB.depositRate[2] = 0
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.truthy(tooltip.lines[Find("Market")]:find(BEST, 1, true))
+      assert.truthy(Find("|" .. ns.Money(2090) .. " " .. GREY .. "net · 22s 0c listed"))
+
+      -- at the standard 30% for 24h both drop below the vendor
+      MarketWallDB.depositRate[2] = nil
+      tooltip = NewTooltip()
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.truthy(tooltip.lines[Find("Vendor")]:find(BEST, 1, true))
+      assert.truthy(Find("|" .. ns.Money(2090 - 615.6) .. " " .. GREY .. "net · 22s 0c listed"))
+      assert.truthy(Find("|" .. ns.Money(2071 - 107.25) .. " " .. GREY .. "net · 21s 80c in mats"))
     end)
 
     it("leaves out the vendor row without a vendor price and the disenchant rows for an item that can't be", function()

@@ -269,6 +269,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
     MarketWallDB.sessions = MarketWallDB.sessions or {}   -- farm sessions, see Sessions.lua
     MarketWallDB.sessionGroups = MarketWallDB.sessionGroups or {}
     MarketWallDB.creatures = MarketWallDB.creatures or {}
+    MarketWallDB.depositRate = MarketWallDB.depositRate or {}   -- learned auction deposit rates, see Outlet.lua
   elseif event == "PLAYER_LOGIN" then
     ns.realmData = nil
     ns.R()

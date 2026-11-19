@@ -171,23 +171,26 @@ end
 -- Expected copper from disenchanting one item, at each material's latest wall price, and a
 -- short note on the source ("your 34 disenchants", "estimate", or nil for the classic table).
 -- Nil when the item cannot be disenchanted; false when a likely material has no price yet.
-function ns.DisenchantValue(id)
+-- With depositOf(materialID), the one-unit deposit to list a material, it also returns the
+-- expected deposits to list the materials; a material with no price counts neither.
+function ns.DisenchantValue(id, depositOf)
   local outcomes, source, samples = Outcomes(id)
   if not outcomes then return nil end
-  local total = 0
+  local total, deposits = 0, depositOf and 0
   for _, o in ipairs(outcomes) do
     local price = ns.LatestWall(o[1])
     if price then
       total = total + o[2] * o[3] * price
+      if deposits then deposits = deposits + o[2] * o[3] * depositOf(o[1]) end
     elseif o[2] >= 0.01 then
       return false
     end
   end
   if source == "observed" then
-    return total, "your " .. samples .. " disenchants"   -- already includes any Salvager bonus
+    return total, "your " .. samples .. " disenchants", deposits   -- already includes any Salvager bonus
   end
-  total = total * (1 + SalvagerBonus())
-  return total, source == "estimate" and "estimate" or nil
+  local scale = 1 + SalvagerBonus()
+  return total * scale, source == "estimate" and "estimate" or nil, deposits and deposits * scale
 end
 
 local SOURCE_NAMES = { estimate = "Forever estimate", table = "classic table" }

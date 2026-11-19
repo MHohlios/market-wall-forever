@@ -144,7 +144,7 @@ describe("Sell page pricing", function()
 
     it("names a better outlet than the auction house", function()
       local de = O.Values({ vendor = 100, wall = 1000, supplied = true, disenchant = 2000, cut = 0.05 })
-      assert.same({ "Best outlet is disenchanting: 19s 0c each after the cut, more than the auction house or a vendor." },
+      assert.same({ "Best outlet is disenchanting: 19s 0c each after fees, more than the auction house or a vendor." },
         Warnings({ price = 1000, outlet = de }))
       local vendor = O.Values({ vendor = 100, wall = 100, supplied = true, cut = 0.05 })
       assert.same({ "Best outlet is a vendor: 1s 0c each, at least what the auction house pays after fees." },

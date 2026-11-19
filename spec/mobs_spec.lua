@@ -72,13 +72,14 @@ describe("Mobs", function()
   end)
 
   describe("Stats", function()
-    local vendor, walls, de, opts
+    local vendor, walls, de, deposits, opts
 
     local function Prices()
       return {
         vendor = function(id) return vendor[id] end,
         wall = function(id) local w = walls[id] if w then return w[1], w[2] end end,
-        disenchant = function(id) return de[id] end,
+        deposit = function(id) return deposits[id] or 0 end,
+        disenchant = function(id) if de[id] then return de[id][1], de[id][2] end end,
       }
     end
 
@@ -91,7 +92,8 @@ describe("Mobs", function()
     before_each(function()
       vendor = { [LINEN] = 10, [FANG] = 50, [RING] = 100, [LEATHER] = 20, [DUSTLESS] = 7 }
       walls = { [LINEN] = { 100, true }, [FANG] = { 200, false }, [RING] = { 1000, true }, [LEATHER] = { 40, true } }
-      de = { [RING] = 5000 }
+      de = { [RING] = { 5000, 0 } }   -- the materials' walls, and the deposits to list them
+      deposits = {}
       opts = { cut = 0.05, disenchant = false, skinning = false, rareShare = 0.02 }
     end)
 
@@ -134,6 +136,21 @@ describe("Mobs", function()
       opts.disenchant = true
       local on = M.Stats(mob, Prices(), opts)
       assert.same({ 4750, "Optimal (incl. DE)" }, { on.optimal.median, on.optimal.label })
+    end)
+
+    it("lowers Market and Optimal by the deposit, and disenchanting by its materials' deposits", function()
+      deposits = { [LINEN] = 3, [RING] = 30 }
+      local lens = M.Lenses(Prices(), opts, {})
+      assert.same({ 92, 920 }, { lens.market(LINEN), lens.market(RING) })     -- 95 and 950 after the cut
+      assert.same({ 92, 920 }, { lens.optimal(LINEN), lens.optimal(RING) })
+      assert.same({ 10, 100 }, { lens.vendor(LINEN), lens.vendor(RING) })     -- vendors take no fees
+
+      local mob = Mob({ { K.LOOTED, 0, { [LINEN] = 1 } }, { K.LOOTED, 0, { [RING] = 1 } } })
+      assert.equal((92 + 920) / 2, M.Stats(mob, Prices(), opts).market.average)
+
+      opts.disenchant = true
+      de[RING] = { 5000, 250 }   -- 4750 after the cut, less 250 to list the materials
+      assert.equal(4500, M.Lenses(Prices(), opts, {}).optimal(RING))
     end)
 
     it("adds skinning to Optimal when it is on, and has its own lens from gathered kills", function()
@@ -179,6 +196,7 @@ describe("Mobs", function()
     local prices = {
       vendor = function(id) return ({ [LINEN] = 10, [RING] = 100 })[id] end,
       wall = function(id) return ({ [LINEN] = 100, [RING] = 1000 })[id], true end,
+      deposit = function() return 0 end,
       disenchant = function(id) return id == RING and 5000 or nil end,
     }
 

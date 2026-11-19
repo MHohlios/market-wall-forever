@@ -35,6 +35,6 @@ describe("loading the addon", function()
     local _, fire = addon.Load()
     fire("ADDON_LOADED", addon.ADDON)
     assert.same({ version = 1, cfg = {}, realms = {}, mobs = {}, disenchants = {}, ledger = {}, sessions = {},
-      sessionGroups = {}, creatures = {} }, MarketWallDB)
+      sessionGroups = {}, creatures = {}, depositRate = {} }, MarketWallDB)
   end)
 end)

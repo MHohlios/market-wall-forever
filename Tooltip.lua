@@ -6,14 +6,6 @@ local Outlet = ns.Outlet
 
 local MIN_SHOWN_CHANCE = 0.01
 
--- The outlet that pays most for one unit after the cut, by the Sell page's bag-group rule, and
--- whether the market is too thin to trust. No deposit: the tooltip knows no auction duration or
--- bag slot to price one.
-local function BestOutlet(id)
-  local values = Outlet.Game()(id, 0)
-  return ns.SellPricing.Group(values), values.thin
-end
-
 local function OutletLabel(name, outlet, best)
   return GOLD .. name .. "|r" .. (outlet == best and " " .. GREEN .. "best|r" or "")
 end
@@ -23,23 +15,33 @@ local function Decimal(x)
   return (string.format("%.1f", x):gsub("%.0$", ""))
 end
 
+-- Money without its coin colours, so it takes the colour of the text around it
+local function PlainMoney(copper)
+  return (ns.Money(copper):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
+end
+
+-- What one unit nets through each outlet, after the cut and an estimated deposit, with the
+-- listed price beside it. The best outlet follows the Sell page's bag-group rule.
 local function OutletLines(add, id, count)
-  local best, thin = BestOutlet(id)
+  local prices, opts = ns.Mobs.GamePrices(), ns.Mobs.GameOptions()
+  local values = Outlet.Priced(prices, opts, id)
+  local best = ns.SellPricing.Group(values)
   local wall, day = ns.LatestWall(id)
   if wall then
     local age = ns.Today() - day
     local when = (age == 0 and "today") or (age == 1 and "yesterday") or (age .. " days ago")
-    add(OutletLabel("Market", Outlet.AUCTION, best),
-      ns.Money(wall) .. " " .. GREY .. "(" .. when .. ")" .. (thin and " (thin market)" or "") .. "|r")
+    add(OutletLabel("Market", Outlet.AUCTION, best), ns.Money(values.auction) .. " " .. GREY .. "net · "
+      .. PlainMoney(wall) .. " listed (" .. when .. ")" .. (values.thin and " (thin market)" or "") .. "|r")
     if count and count > 1 then add(GREY .. "Stack of " .. count .. "|r", ns.Money(wall * count)) end
   end
 
-  local vendor = C_Item.GetItemInfo and select(11, C_Item.GetItemInfo(id))
-  if vendor and vendor > 0 then add(OutletLabel("Vendor", Outlet.VENDOR, best), ns.Money(vendor)) end
+  if values.vendor > 0 then add(OutletLabel("Vendor", Outlet.VENDOR, best), ns.Money(values.vendor)) end
 
-  local disenchant = ns.DisenchantValue(id)
+  -- shown whether or not disenchanting counts toward the best outlet
+  local disenchant, _, deposits = ns.DisenchantValue(id, prices.deposit)
   if disenchant then
-    add(OutletLabel("Disenchant", Outlet.DISENCHANT, best), ns.Money(disenchant))
+    add(OutletLabel("Disenchant", Outlet.DISENCHANT, best), ns.Money(Outlet.Net(disenchant, opts.cut, deposits))
+      .. " " .. GREY .. "net · " .. PlainMoney(disenchant) .. " in mats|r")
   elseif disenchant == false then
     add(OutletLabel("Disenchant", Outlet.DISENCHANT, best), GREY .. "materials not scanned|r")
   end
@@ -59,7 +61,7 @@ local function DisenchantLines(add, id)
     add("  " .. ns.ColorName(o.id),
       GREY .. Decimal(o.quantity) .. "× · " .. Decimal(o.chance * 100) .. "%|r " .. ns.Money(ns.LatestWall(o.id)))
   end
-  add(GREY .. "  odds: " .. source .. "|r", "")
+  add(GREY .. "  odds: " .. source .. " · net after the cut and each material's deposit|r", "")
   return true
 end
 
@@ -126,11 +128,6 @@ end
 local function KillCount(seen, reliableKills)
   if seen < reliableKills then return ORANGE .. "< " .. reliableKills .. " kills|r" end
   return GREY .. seen .. " kills|r"
-end
-
--- Money without its coin colours, so it takes the colour of the text around it
-local function PlainMoney(copper)
-  return (ns.Money(copper):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
 end
 
 -- The lines a mob adds to its tooltip, from Mobs.Stats, as { left, right } pairs: worth per
