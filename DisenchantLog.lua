@@ -205,7 +205,7 @@ end)
 local function LockedBagItem()
   if not (C_Container and C_Container.GetContainerItemInfo) then return nil end
   local found
-  for bag = 0, NUM_BAG_SLOTS or 4 do
+  for bag = 0, ns.LastBagIndex() do
     for slot = 1, C_Container.GetContainerNumSlots(bag) or 0 do
       local info = C_Container.GetContainerItemInfo(bag, slot)
       if info and info.isLocked and info.itemID then

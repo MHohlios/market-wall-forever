@@ -44,6 +44,11 @@ function ns.ResetSettings(cfg)
   end
 end
 
+-- The last bag index to scan for "all my bags": the backpack, the equipped bags and the reagent bag. Never the bank.
+function ns.LastBagIndex()
+  return NUM_TOTAL_EQUIPPED_BAG_SLOTS or ((NUM_BAG_SLOTS or 4) + (NUM_REAGENTBAG_SLOTS or 0))
+end
+
 local function Print(...)
   print("|cfff5c518MarketWall|r:", ...)
 end

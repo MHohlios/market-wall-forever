@@ -44,7 +44,7 @@ local selectedID
 -- Sellable bag items, one entry per item ID: { id, location, count }
 local function BagItems()
   local byID, items = {}, {}
-  for bag = 0, NUM_BAG_SLOTS or 4 do
+  for bag = 0, ns.LastBagIndex() do
     for slot = 1, C_Container.GetContainerNumSlots(bag) or 0 do
       local info = C_Container.GetContainerItemInfo(bag, slot)
       if info and info.itemID then
