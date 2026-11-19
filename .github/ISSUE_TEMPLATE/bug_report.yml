@@ -1,0 +1,44 @@
+name: Bug report
+description: Something in MarketWall doesn't work as it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the auction house
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: client-version
+    attributes:
+      label: Client version
+      placeholder: WoW Forever, interface 16001
+    validations:
+      required: true
+  - type: input
+    id: addon-version
+    attributes:
+      label: MarketWall version or commit
+    validations:
+      required: true
+  - type: textarea
+    id: other-addons
+    attributes:
+      label: Other addons
+      description: Other addons you had enabled, if any.
+  - type: textarea
+    id: lua-error
+    attributes:
+      label: Lua error
+      description: The full error text, if the game showed one.
+      render: text
