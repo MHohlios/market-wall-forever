@@ -26,16 +26,20 @@ function PV.InRange(series, days, now)
   return out
 end
 
--- Average, low, high and trend of the wall over a run of points
-function PV.WeekSummary(points)
+-- Count, average, median, low, high and trend of the wall over a run of points, and when it starts
+function PV.Summary(points)
   if #points == 0 then return nil end
-  local sum, lo, hi = 0, math.huge, 0
-  for _, p in ipairs(points) do
+  local sum, walls = 0, {}
+  for i, p in ipairs(points) do
     sum = sum + p.w
-    lo, hi = math.min(lo, p.w), math.max(hi, p.w)
+    walls[i] = p.w
   end
+  table.sort(walls)
   local trend = #points >= 2 and (points[#points].w / points[1].w - 1) or nil
-  return { average = sum / #points, low = lo, high = hi, trend = trend }
+  return {
+    n = #points, average = sum / #points, median = W.Percentile(walls, 0.5), low = walls[1], high = walls[#walls],
+    trend = trend, from = points[1].t,
+  }
 end
 
 function PV.TrendText(diff)
@@ -53,16 +57,21 @@ function PV.LiveWall(id)
   return W.Compute(held.ladder, held.total, ns.Cfg("wallShare"), ns.Cfg("wallMinUnits"))
 end
 
--- Everything the grid cells read about one item
-function PV.Facts(id, now)
+-- Everything the grid cells read about one item. With a chart range (an entry of PV.RANGES),
+-- `chart` holds the full history's points in that range and `range` summarizes them.
+function PV.Facts(id, now, range)
   local live, lowest = PV.LiveWall(id)
   local last, lastDay = ns.LatestWall(id)
   local series = ns.Series(id)
-  return {
+  local facts = {
     id = id, now = now, held = ns.ladders[id], live = live, lowest = lowest, last = last, lastDay = lastDay,
-    stats = ns.StatsFor(id), series = series, week = PV.WeekSummary(PV.InRange(series, 7, now)),
-    history = ns.WallHistory(id), entry = ns.R().watch[id],
+    stats = ns.StatsFor(id), series = series, week = PV.Summary(PV.InRange(series, 7, now)), entry = ns.R().watch[id],
   }
+  if range then
+    facts.chart = PV.InRange(ns.Series(id, true), range.days, now)
+    facts.range = PV.Summary(facts.chart)
+  end
+  return facts
 end
 
 local function DaysAgo(day)
@@ -76,10 +85,10 @@ PV.CELLS = {
     if f.live then return "Wall now (" .. ns.Ago(f.held.t) .. ")", ns.Money(f.live) end
     return "Wall (last scan)", f.last and ns.Money(f.last)
   end,
-  lastWall = function(f)
-    if f.live then return "Last wall (" .. ns.Ago(f.held.t) .. ")", ns.Money(f.live) end
-    if f.last then return "Last wall (" .. DaysAgo(f.lastDay) .. ")", ns.Money(f.last) end
-    return "Last wall", nil
+  current = function(f)
+    if f.live then return "Current (" .. ns.Ago(f.held.t) .. ")", ns.Money(f.live) end
+    if f.last then return "Current (" .. DaysAgo(f.lastDay) .. ")", ns.Money(f.last) end
+    return "Current", nil
   end,
   lowestListing = function(f) return "Lowest listing", f.lowest and ns.Money(f.lowest) end,
   supply = function(f) return "Supply", f.held and f.held.total > 0 and (f.held.total .. " units") or nil end,
@@ -95,11 +104,16 @@ PV.CELLS = {
     local diff, word = ns.Versus(f.live or f.last, f.stats)
     return "Vs median", diff and ns.VersusText(diff, word)
   end,
-  lowHigh = function(f)
-    local h = f.history
-    return "Lowest / highest", h.low and (ns.Money(h.low) .. " / " .. ns.Money(h.high))
+  -- the chart's selected range, from the points it draws
+  rangeMin = function(f) return "Min", f.range and ns.Money(f.range.low) end,
+  rangeMax = function(f) return "Max", f.range and ns.Money(f.range.high) end,
+  rangeAverage = function(f) return "Average", f.range and ns.Money(f.range.average) end,
+  rangeMedian = function(f) return "Median", f.range and ns.Money(f.range.median) end,
+  rangeTrend = function(f) return "Trend", f.range and f.range.trend and PV.TrendText(f.range.trend) end,
+  rangePoints = function(f)
+    local days = f.range and ns.DayOf(f.now) - ns.DayOf(f.range.from) + 1
+    return "Points", f.range and (f.range.n .. " over " .. days .. (days == 1 and " day" or " days"))
   end,
-  days = function(f) return "Days of data", f.history.days > 0 and tostring(f.history.days) or nil end,
   vendor = function(f)
     local vendor = C_Item.GetItemInfo and select(11, C_Item.GetItemInfo(f.id))
     return "Vendor", vendor and vendor > 0 and ns.Money(vendor) or nil
@@ -136,7 +150,7 @@ function PV.CreateView(parent, layout)
   local w = ns.widgets
   local view = CreateFrame("Frame", nil, parent)
   view:SetWidth(layout.width)
-  view.days = PV.RANGES[1].days
+  view.range = PV.RANGES[1]
 
   local chartTop = -6
   if layout.ranges then
@@ -148,7 +162,7 @@ function PV.CreateView(parent, layout)
       local button = w.MakeButton(view, range.label, 64)
       if previous then button:SetPoint("RIGHT", previous, "LEFT", -4, 0) else button:SetPoint("TOPRIGHT", 0, -2) end
       button:SetScript("OnClick", function()
-        view.days = range.days
+        view.range = range
         view:Redraw()
       end)
       view.rangeButtons[i] = button
@@ -185,16 +199,16 @@ function PV.CreateView(parent, layout)
 
   function view:Redraw()
     if not self.id then return end
-    local facts = PV.Facts(self.id, time())
-    -- the range switch reaches back past the snapshots into the daily history
-    local series = layout.ranges and ns.Series(self.id, true) or facts.series
-    self.chart:Draw(PV.InRange(series, self.days, facts.now), self.buy, self.sell, facts.stats)
+    -- the range switch reaches back past the snapshots into the daily and weekly history
+    local facts = PV.Facts(self.id, time(), layout.ranges and self.range)
+    local points = facts.chart or PV.InRange(facts.series, self.range.days, facts.now)
+    self.chart:Draw(points, self.buy, self.sell, facts.stats)
     for i, cell in ipairs(PV.Cells(facts, layout.cells)) do
       self.cells[i].label:SetText(cell.label)
       self.cells[i].value:SetText(cell.value)
     end
     for i, button in pairs(self.rangeButtons or {}) do
-      if PV.RANGES[i].days == self.days then button:LockHighlight() else button:UnlockHighlight() end
+      if PV.RANGES[i] == self.range then button:LockHighlight() else button:UnlockHighlight() end
     end
   end
 
