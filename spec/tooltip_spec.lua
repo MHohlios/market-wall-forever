@@ -271,11 +271,21 @@ describe("item tooltip lines", function()
       assert.truthy(Find("Shard"))
     end)
 
-    it("sorts materials by chance and shows quantity, chance and the material's wall", function()
+    it("shows each material's quantity, chance and wall", function()
       ns.TooltipLines.Add(tooltip, ID)
       assert.truthy(Find("  Dust|" .. "|cffa3acac2.5× · 75%|r " .. ns.Money(100)))
       assert.truthy(Find("  Essence|" .. "|cffa3acac1.5× · 20%|r " .. ns.Money(1000)))
       assert.truthy(Find("  Shard|" .. "|cffa3acac1× · 5%|r " .. ns.Money(2000)))
+    end)
+
+    it("sorts materials by chance, most likely first", function()
+      ns.DisenchantOutcomes = function()
+        return { { id = SHARD, chance = 0.05, quantity = 1 }, { id = DUST, chance = 0.75, quantity = 2.5 },
+          { id = ESSENCE, chance = 0.2, quantity = 1.5 } }, "classic table"
+      end
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.is_true(Find("  Dust|") < Find("  Essence|"))
+      assert.is_true(Find("  Essence|") < Find("  Shard|"))
     end)
 
     it("skips materials under 1% and names Forever's estimate", function()
