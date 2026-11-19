@@ -294,7 +294,7 @@ local function DrawDetail()
     page.blocked:SetText("")
   end
 
-  if not page.threshold:HasFocus() then page.threshold:SetText(thresholds[id] and ns.Money(thresholds[id]) or "") end
+  if not page.threshold:HasFocus() then page.threshold:SetText(thresholds[id] and ns.MoneyText(thresholds[id]) or "") end
   page.leave:SetChecked(not buyBait[id])
   page.take:SetChecked(buyBait[id] and true or false)
   UpdateButton()

@@ -60,24 +60,44 @@ function ns.ShareText(share)
   return string.format("%d%%", ns.Round(pct))
 end
 
-function ns.Money(c)
-  if not c then return "-" end
+-- The coins shown for a copper amount, and whether it was negative. Copper-only amounts leave
+-- out gold and silver; zero silver and copper still show once there is gold.
+local function CoinParts(c)
   c = ns.Round(c)
   local neg = c < 0
   if neg then c = -c end
   local g = math.floor(c / 10000)
   local s = math.floor((c % 10000) / 100)
   local k = c % 100
-  local out
-  if g > 0 then
-    out = string.format("|cffffd100%dg|r |cffc7c7cf%ds|r |cffeda55f%dc|r", g, s, k)
-  elseif s > 0 then
-    out = string.format("|cffc7c7cf%ds|r |cffeda55f%dc|r", s, k)
-  else
-    out = string.format("|cffeda55f%dc|r", k)
-  end
-  if neg then out = "-" .. out end
-  return out
+  local parts = {}
+  if g > 0 then parts[#parts + 1] = { g, "g" } end
+  if g > 0 or s > 0 then parts[#parts + 1] = { s, "s" } end
+  parts[#parts + 1] = { k, "c" }
+  return parts, neg
+end
+
+local COIN_ICON = {
+  g = "|TInterface\\MoneyFrame\\UI-GoldIcon:0:0:2:0|t",
+  s = "|TInterface\\MoneyFrame\\UI-SilverIcon:0:0:2:0|t",
+  c = "|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:2:0|t",
+}
+
+local function JoinCoins(c, mark)
+  if not c then return "-" end
+  local parts, neg = CoinParts(c)
+  local out = {}
+  for i, part in ipairs(parts) do out[i] = part[1] .. mark(part[2]) end
+  return (neg and "-" or "") .. table.concat(out, " ")
+end
+
+-- For display: the number then its coin icon, in the colour of the surrounding text
+function ns.Money(c)
+  return JoinCoins(c, function(unit) return COIN_ICON[unit] end)
+end
+
+-- Letters instead of icons ("1g 41s 23c"), for edit boxes and anything ParseMoney reads back
+function ns.MoneyText(c)
+  return JoinCoins(c, function(unit) return unit end)
 end
 
 local MONEY_PART = "(%d*%.?%d+)%s*([gsc])"

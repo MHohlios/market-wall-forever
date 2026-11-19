@@ -15,11 +15,6 @@ local function Decimal(x)
   return (string.format("%.1f", x):gsub("%.0$", ""))
 end
 
--- Money without its coin colours, so it takes the colour of the text around it
-local function PlainMoney(copper)
-  return (ns.Money(copper):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
-end
-
 -- What one unit nets through each outlet, after the cut and an estimated deposit, with the
 -- listed price beside it. The best outlet follows the Sell page's bag-group rule.
 local function OutletLines(add, id, count)
@@ -31,7 +26,7 @@ local function OutletLines(add, id, count)
     local age = ns.Today() - day
     local when = (age == 0 and "today") or (age == 1 and "yesterday") or (age .. " days ago")
     add(OutletLabel("Net market", Outlet.AUCTION, best), ns.Money(values.auction) .. " " .. GREY .. "· "
-      .. PlainMoney(wall) .. " listed (" .. when .. ")" .. (values.thin and " (thin market)" or "") .. "|r")
+      .. ns.Money(wall) .. " listed (" .. when .. ")" .. (values.thin and " (thin market)" or "") .. "|r")
     if count and count > 1 then add(GREY .. "Stack of " .. count .. "|r", ns.Money(wall * count)) end
   end
 
@@ -41,7 +36,7 @@ local function OutletLines(add, id, count)
   local disenchant, _, deposits = ns.DisenchantValue(id, prices.deposit)
   if disenchant then
     add(OutletLabel("Net disenchant", Outlet.DISENCHANT, best), ns.Money(Outlet.Net(disenchant, opts.cut, deposits))
-      .. " " .. GREY .. "· " .. PlainMoney(disenchant) .. " in mats|r")
+      .. " " .. GREY .. "· " .. ns.Money(disenchant) .. " in mats|r")
   elseif disenchant == false then
     add(OutletLabel("Net disenchant", Outlet.DISENCHANT, best), GREY .. "materials not scanned|r")
   end
@@ -136,8 +131,8 @@ end
 local function MobLines(stats, skinning, reliableKills)
   if not (stats and stats.optimal) then return {} end
   local optimal = stats.optimal
-  local outlets = "Vendor " .. PlainMoney(stats.vendor.median) .. " · Market " .. PlainMoney(stats.market.median)
-  if skinning and stats.skinning then outlets = outlets .. " · Skin " .. PlainMoney(stats.skinning.median) end
+  local outlets = "Vendor " .. ns.Money(stats.vendor.median) .. " · Market " .. ns.Money(stats.market.median)
+  if skinning and stats.skinning then outlets = outlets .. " · Skin " .. ns.Money(stats.skinning.median) end
   local lines = {
     { GOLD .. "Worth per kill|r",
       ns.Money(optimal.median) .. " " .. GREY .. "typical|r · " .. ns.Money(optimal.average) .. " " .. GREY .. "avg|r" },

@@ -4,9 +4,7 @@ describe("money", function()
   local ns
   before_each(function() ns = addon.Load() end)
 
-  local function Plain(text)
-    return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
-  end
+  local Plain = addon.Plain
 
   describe("Money", function()
     it("shows a dash for no price", function()
@@ -29,6 +27,25 @@ describe("money", function()
     it("puts the sign in front of negative amounts", function()
       assert.equal("-1s 5c", Plain(ns.Money(-105)))
     end)
+
+    it("shows each amount with its coin icon after the number", function()
+      assert.equal("1|TInterface\\MoneyFrame\\UI-GoldIcon:0:0:2:0|t 41|TInterface\\MoneyFrame\\UI-SilverIcon:0:0:2:0|t "
+        .. "23|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:2:0|t", ns.Money(14123))
+    end)
+
+    it("leaves the colour to the surrounding text", function()
+      assert.is_nil(ns.Money(14123):find("|c", 1, true))
+    end)
+  end)
+
+  describe("MoneyText", function()
+    it("writes the plain letter form", function()
+      assert.equal("1g 41s 23c", ns.MoneyText(14123))
+      assert.equal("5c", ns.MoneyText(5))
+      assert.equal("2g 0s 0c", ns.MoneyText(20000))
+      assert.equal("-1s 5c", ns.MoneyText(-105))
+      assert.equal("-", ns.MoneyText(nil))
+    end)
   end)
 
   describe("ParseMoney", function()
@@ -47,7 +64,7 @@ describe("money", function()
 
     it("reads its own formatted output back", function()
       for _, copper in ipairs({ 7, 105, 20000, 123456 }) do
-        assert.equal(copper, ns.ParseMoney(ns.Money(copper)))
+        assert.equal(copper, ns.ParseMoney(ns.MoneyText(copper)))
       end
     end)
 

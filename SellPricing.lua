@@ -75,9 +75,9 @@ end
 -- or more, a dash for an item with no vendor price
 function P.BeatsText(t)
   if not t.beats then return "—" end
-  local plain = ns.Money(t.beats):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
-  if t.beats > 0 then return GREEN .. "+" .. plain .. "|r" end
-  return RED .. plain .. "|r"
+  local amount = ns.Money(t.beats)
+  if t.beats > 0 then return GREEN .. "+" .. amount .. "|r" end
+  return RED .. amount .. "|r"
 end
 
 -- The warnings that apply to posting at a price, each one line. f: price; totals (P.Totals);

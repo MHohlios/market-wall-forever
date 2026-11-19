@@ -279,7 +279,7 @@ describe("item tooltip lines", function()
     it("shows the market's net after the cut and a 24h deposit, with the listed price in grey", function()
       Wall(ID, 1000)   -- 950 after the cut, less 30% of the 100c vendor price
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(Find("|" .. ns.Money(920) .. " " .. GREY .. "· 10s 0c listed (today)|r"))
+      assert.truthy(Find("|" .. ns.Money(920) .. " " .. GREY .. "· " .. ns.Money(1000) .. " listed (today)|r"))
     end)
 
     it("marks nothing without a wall, as the Sell page groups it with no market data", function()
@@ -287,7 +287,7 @@ describe("item tooltip lines", function()
       assert.is_nil(Find(BEST))
       assert.is_nil(Find("Net market"))
       assert.truthy(Find("Vendor|r|" .. ns.Money(100)))
-      assert.truthy(Find("Net disenchant|r|" .. ns.Money(558.125) .. " " .. GREY .. "· 5s 88c in mats|r"))
+      assert.truthy(Find("Net disenchant|r|" .. ns.Money(558.125) .. " " .. GREY .. "· " .. ns.Money(588) .. " in mats|r"))
     end)
 
     it("takes each material's deposit off the disenchant net and says so under the breakdown", function()
@@ -312,15 +312,15 @@ describe("item tooltip lines", function()
       MarketWallDB.depositRate[2] = 0
       ns.TooltipLines.Add(tooltip, ID)
       assert.truthy(tooltip.lines[Find("Net market")]:find(BEST, 1, true))
-      assert.truthy(Find("|" .. ns.Money(2090) .. " " .. GREY .. "· 22s 0c listed"))
+      assert.truthy(Find("|" .. ns.Money(2090) .. " " .. GREY .. "· " .. ns.Money(2200) .. " listed"))
 
       -- at the standard 30% for 24h both drop below the vendor
       MarketWallDB.depositRate[2] = nil
       tooltip = NewTooltip()
       ns.TooltipLines.Add(tooltip, ID)
       assert.truthy(tooltip.lines[Find("Vendor")]:find(BEST, 1, true))
-      assert.truthy(Find("|" .. ns.Money(2090 - 615.6) .. " " .. GREY .. "· 22s 0c listed"))
-      assert.truthy(Find("|" .. ns.Money(2071 - 107.25) .. " " .. GREY .. "· 21s 80c in mats"))
+      assert.truthy(Find("|" .. ns.Money(2090 - 615.6) .. " " .. GREY .. "· " .. ns.Money(2200) .. " listed"))
+      assert.truthy(Find("|" .. ns.Money(2071 - 107.25) .. " " .. GREY .. "· " .. ns.Money(2180) .. " in mats"))
     end)
 
     it("leaves out the vendor row without a vendor price and the disenchant rows for an item that can't be", function()

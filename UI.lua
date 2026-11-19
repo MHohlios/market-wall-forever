@@ -682,8 +682,8 @@ local function RefreshItem()
   page.icon:SetTexture(ns.Icon(id))
   page.title:SetText(ns.ColorName(id))
   page.watch:SetText(watched and "Stop watching" or "Add to watchlist")
-  if not page.buy:HasFocus() then page.buy:SetText(limits.buy and ns.Money(limits.buy) or "") end
-  if not page.sell:HasFocus() then page.sell:SetText(limits.sell and ns.Money(limits.sell) or "") end
+  if not page.buy:HasFocus() then page.buy:SetText(limits.buy and ns.MoneyText(limits.buy) or "") end
+  if not page.sell:HasFocus() then page.sell:SetText(limits.sell and ns.MoneyText(limits.sell) or "") end
 
   local wall, minPrice, total
   if held and held.total > 0 then
@@ -935,7 +935,7 @@ local function FormatSetting(def)
   if def.kind == "mode" then return MODE_TEXT[value] end
   if def.kind == "pct" then return ns.Round(value * 1000) / 10 .. "%" end
   if def.kind == "points" then return value .. "%" end
-  if def.kind == "money" then return ns.Money(value) end
+  if def.kind == "money" then return ns.MoneyText(value) end
   return tostring(value)
 end
 

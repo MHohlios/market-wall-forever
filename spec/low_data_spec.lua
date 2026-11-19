@@ -3,9 +3,7 @@ local addon = require("spec.helpers.addon")
 local ID = 7
 local FLAG = "Only 1 day of data · treat these numbers as rough"
 
-local function Plain(text)
-  return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
-end
+local Plain = addon.Plain
 
 describe("data from an item's first scan", function()
   local ns
