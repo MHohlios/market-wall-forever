@@ -6,8 +6,10 @@ A World of Warcraft (Forever) auction house addon. It adds a Market tab with:
   level with real supply behind it, tracked over time.
 - **Bait Detect**: commodities that look baited, and one button to buy the cheap copies.
   See below.
-- **Sell**: your sellable bag items with their wall price, a 7-day chart, and posting
-  at the wall price.
+- **Sell**: your sellable bag items as an icon grid, grouped by the best outlet for each
+  (auction house, disenchant or vendor, by the same rule as mob values' Optimal), with the
+  current listings or the price history beside them. The price starts at the lowest
+  listing, skipping flagged bait, and warns before a post that looks like a mistake.
 - **Item search**: an MW button on the minimap opens a window, anywhere in the world,
   to look up any item MarketWall has seen. See below.
 - **Tooltips**: market wall, normal range, high/low against the median, vendor price

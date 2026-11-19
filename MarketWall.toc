@@ -17,12 +17,15 @@ Disenchant.lua
 Record.lua
 Kills.lua
 DisenchantLog.lua
+Outlet.lua
 Mobs.lua
 Ledger.lua
 Quests.lua
 Sessions.lua
 UI.lua
 PriceView.lua
+SellPricing.lua
+SellBags.lua
 Sell.lua
 BaitUI.lua
 MobsView.lua
