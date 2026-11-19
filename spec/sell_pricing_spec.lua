@@ -48,10 +48,10 @@ describe("Sell page pricing", function()
 
     it("falls back to the last recorded wall without live listings", function()
       walls[ID] = 205
-      assert.same({ price = 205, source = "wall" }, P.StartingPrice(ID))
+      assert.same({ price = 205, source = "wall", skipped = false }, P.StartingPrice(ID))
       List({ [20] = 2 })
       ns.R().bait[ID] = bait   -- only the bait is listed
-      assert.same({ price = 205, source = "wall" }, P.StartingPrice(ID))
+      assert.same({ price = 205, source = "wall", skipped = true }, P.StartingPrice(ID))
     end)
 
     it("has no price without listings or history", function()
@@ -81,6 +81,11 @@ describe("Sell page pricing", function()
     it("names the wall fallback", function()
       assert.equal("No listings loaded, so the price starts at the last recorded wall, 2s 5c.",
         Plain(P.InfoLine(205, { price = 205, source = "wall" }, 205)))
+    end)
+
+    it("says when listings are loaded but every level is flagged bait", function()
+      assert.equal("Every level listed is flagged bait, so the price starts at the last recorded wall, 2s 5c.",
+        Plain(P.InfoLine(205, { price = 205, source = "wall", skipped = true }, 205)))
     end)
   end)
 
@@ -142,6 +147,16 @@ describe("Sell page pricing", function()
       assert.same({ "Best outlet is a vendor: the market is too thin to trust." }, Warnings({ price = 1000, outlet = thin }))
       assert.same({}, Warnings({ price = 1000, outlet = O.Values({ vendor = 10, cut = 0.05 }) }))
     end)
+
+    it("never sends an item with no vendor price to a vendor", function()
+      local reliable = { "No reliable price: the market is too thin to price." }
+      for _, vendor in ipairs({ 0, false }) do
+        local thin = O.Values({ vendor = vendor or nil, wall = 1000, supplied = false, cut = 0.05 })
+        assert.same(reliable, Warnings({ price = 1000, outlet = thin }))
+        local nothingNet = O.Values({ vendor = vendor or nil, wall = 10, supplied = true, deposit = 9.5, cut = 0.05 })
+        assert.same(reliable, Warnings({ price = 10, outlet = nothingNet }))   -- 9.5 after the cut, minus 9.5
+      end
+    end)
   end)
 
   describe("totals", function()
@@ -190,8 +205,8 @@ describe("Sell page pricing", function()
     it("groups by outlet, most valuable group and item first", function()
       local ah = function(best) return { outlet = O.AUCTION, best = best } end
       local groups = P.Groups({
-        Item(1, 1, ah(100)), Item(2, 10, { outlet = O.VENDOR, best = 50 }), Item(3, 5, ah(100)),
-        Item(4, 3, { outlet = O.NO_DATA, best = 0 }),
+        Item(1, 1, ah(100)), Item(2, 10, { outlet = O.VENDOR, vendor = 50, best = 50 }), Item(3, 5, ah(100)),
+        Item(4, 3, { outlet = O.NO_DATA, vendor = 0, best = 0 }),
       })
       local summary = {}
       for i, group in ipairs(groups) do
@@ -200,6 +215,15 @@ describe("Sell page pricing", function()
         summary[i] = { group.outlet, group.value, ids }
       end
       assert.same({ { O.AUCTION, 600, { 3, 1 } }, { O.VENDOR, 500, { 2 } }, { O.NO_DATA, 0, { 4 } } }, summary)
+    end)
+
+    it("puts an item with no vendor price and no reliable market under No reliable price", function()
+      local thin = O.Values({ wall = 1000, supplied = false, cut = 0.05 })
+      local nothingNet = O.Values({ vendor = 0, wall = 10, supplied = true, deposit = 20, cut = 0.05 })
+      assert.same({ O.VENDOR, O.VENDOR }, { thin.outlet, nothingNet.outlet })   -- Outlet's own values are unchanged
+      local groups = P.Groups({ Item(1, 1, thin), Item(2, 1, nothingNet) })
+      assert.same({ O.NO_DATA, 2 }, { groups[1].outlet, #groups[1].items })
+      assert.equal(1, #groups)
     end)
   end)
 end)

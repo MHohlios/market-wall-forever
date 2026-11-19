@@ -9,7 +9,7 @@ local GROUP_TITLES = {
   [Outlet.AUCTION] = "Sell on the auction house",
   [Outlet.DISENCHANT] = "Disenchant",
   [Outlet.VENDOR] = "Vendor",
-  [Outlet.NO_DATA] = "No market data yet",
+  [Outlet.NO_DATA] = "No reliable price",
 }
 
 local SellBags = {}

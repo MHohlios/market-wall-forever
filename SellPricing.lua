@@ -17,6 +17,7 @@ end
 -- Where Price each starts: the lowest level listed now, past a level Bait Detect has flagged,
 -- or the last recorded wall without live listings. Returns { price, source = "lowest" or
 -- "wall", skipped = whether a bait level was passed over }, or nil with no price at all.
+-- skipped with source "wall" means every level listed was flagged bait.
 function P.StartingPrice(id)
   local held = ns.ladders[id]
   local bait = ns.R().bait[id]
@@ -29,7 +30,7 @@ function P.StartingPrice(id)
     end
   end
   local wall = ns.LatestWall(id)
-  if wall then return { price = wall, source = "wall" } end
+  if wall then return { price = wall, source = "wall", skipped = skipped } end
 end
 
 -- Where the price came from and how it sits against the wall. Under the wall is information,
@@ -39,6 +40,8 @@ function P.InfoLine(price, start, wall)
   if start and price == start.price then
     if start.source == "lowest" then
       parts[1] = "Price set to the lowest listing, " .. ns.Money(price) .. (start.skipped and " (bait level skipped)" or "") .. "."
+    elseif start.skipped then
+      parts[1] = "Every level listed is flagged bait, so the price starts at the last recorded wall, " .. ns.Money(price) .. "."
     else
       parts[1] = "No listings loaded, so the price starts at the last recorded wall, " .. ns.Money(price) .. "."
     end
@@ -95,10 +98,13 @@ function P.Warnings(f)
   local bait = B.PostWarning(f.bait, f.price, ns.PriceView.FLAT)
   if bait then add("Matches a bait price: " .. bait) end
   local outlet = f.outlet
-  if outlet and outlet.outlet == Outlet.DISENCHANT then
+  local group = outlet and P.Group(outlet)
+  if group == Outlet.NO_DATA and outlet.auction then
+    add("No reliable price: the market is too thin to price.")
+  elseif group == Outlet.DISENCHANT then
     add(string.format("Best outlet is disenchanting: %s each after the cut, more than the auction house or a vendor.",
       ns.Money(outlet.disenchant)))
-  elseif outlet and outlet.outlet == Outlet.VENDOR then
+  elseif group == Outlet.VENDOR then
     add(outlet.thin
       and "Best outlet is a vendor: the market is too thin to trust."
       or string.format("Best outlet is a vendor: %s each, at least what the auction house pays after fees.", ns.Money(outlet.vendor)))
@@ -122,12 +128,20 @@ function P.AuctionNote(tier, wall, bait)
   return ""
 end
 
--- Bags grouped by best outlet. items: { id, count, values = Outlet.Values }. Each group:
+-- The bag group for an item: its best outlet, except that an item a vendor won't buy never goes
+-- to Vendor. Outlet.Values picks Vendor for it only when the market is thin or the auction house
+-- nets nothing, so it has no reliable price and joins the items with no market data.
+function P.Group(values)
+  if values.outlet == Outlet.VENDOR and values.vendor <= 0 then return Outlet.NO_DATA end
+  return values.outlet
+end
+
+-- Bags grouped by best outlet (P.Group). items: { id, count, values = Outlet.Values }. Each group:
 -- { outlet, items, value }; items and groups most valuable first, empty groups left out.
 function P.Groups(items)
   local byOutlet, groups = {}, {}
   for _, item in ipairs(items) do
-    local key = item.values.outlet
+    local key = P.Group(item.values)
     local group = byOutlet[key]
     if not group then
       group = { outlet = key, items = {}, value = 0 }
