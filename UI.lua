@@ -372,14 +372,14 @@ local WALL_TIP = "The item's real price: the lowest price level that has meaning
 -- hover text for this column's cells in entry.cellTips.
 local DATA_COLUMN = { "Data", 44, "RIGHT", "Days of data behind the normal price. Orange: fewer than the \"Days before data is reliable\" setting, so the normal price may be off.", cellTip = true }
 local WATCH_COLUMNS = {
-  { "Item", 170, nil, "Items you are tracking. Click a row for its chart and live listings." },
-  { "Wall price", 80, "RIGHT", WALL_TIP },
-  { "Lowest", 80, "RIGHT", "The single cheapest listing right now, even if it is only one unit." },
+  { "Item", 140, nil, "Items you are tracking. Click a row for its chart and live listings." },
+  { "Wall price", 85, "RIGHT", WALL_TIP },
+  { "Lowest", 85, "RIGHT", "The single cheapest listing right now, even if it is only one unit." },
   -- the watchlist has no room for a Data column, so this column's cells carry its badge
-  { "Normal range", 140, "RIGHT", "Where the wall price usually sits: the middle half of its daily history. On an item's first day, today's wall. No room for a Data column here: hover a cell for the item's days of data.", cellTip = true },
-  { "Buy below", 80, "RIGHT", "Your buy threshold. Units listed under this price count as deals. Set it on the item's page." },
-  { "Sell at", 80, "RIGHT", "Your target resale price. The row says Sell when the wall price reaches it." },
-  { "Units under", 75, "RIGHT", "How many units are listed under your buy price as of the last scan." },
+  { "Normal range", 160, "RIGHT", "Where the wall price usually sits: the middle half of its daily history. On an item's first day, today's wall. No room for a Data column here: hover a cell for the item's days of data.", cellTip = true },
+  { "Buy below", 85, "RIGHT", "Your buy threshold. Units listed under this price count as deals. Set it on the item's page." },
+  { "Sell at", 85, "RIGHT", "Your target resale price. The row says Sell when the wall price reaches it." },
+  { "Units under", 65, "RIGHT", "How many units are listed under your buy price as of the last scan." },
   { "Status", 80, "RIGHT", "Buy: units are under your buy price. Sell: the wall reached your sell price. Old: the price has not been scanned recently." },
 }
 local SNIPE_COLUMNS = {
@@ -637,9 +637,9 @@ local function CreateChart(parent)
       end
     end
 
-    self.yLabels[1]:SetText(ns.Money(hi))
-    self.yLabels[2]:SetText(ns.Money((hi + lo) / 2))
-    self.yLabels[3]:SetText(ns.Money(lo))
+    self.yLabels[1]:SetText(ns.MoneyShort(hi))
+    self.yLabels[2]:SetText(ns.MoneyShort((hi + lo) / 2))
+    self.yLabels[3]:SetText(ns.MoneyShort(lo))
     self.xFirst:SetText(date("%b %d %H:%M", t0))
     self.xLast:SetText(date("%b %d %H:%M", t1))
     local legend = "White: wall price   " .. BLUE .. "Blue: buy below|r   " .. ORANGE .. "Orange: sell at|r   " .. GOLD .. "Gold band: normal range|r   Bars: supply"
@@ -682,8 +682,8 @@ local function RefreshItem()
   page.icon:SetTexture(ns.Icon(id))
   page.title:SetText(ns.ColorName(id))
   page.watch:SetText(watched and "Stop watching" or "Add to watchlist")
-  if not page.buy:HasFocus() then page.buy:SetText(limits.buy and ns.Money(limits.buy) or "") end
-  if not page.sell:HasFocus() then page.sell:SetText(limits.sell and ns.Money(limits.sell) or "") end
+  if not page.buy:HasFocus() then page.buy:SetText(limits.buy and ns.MoneyText(limits.buy) or "") end
+  if not page.sell:HasFocus() then page.sell:SetText(limits.sell and ns.MoneyText(limits.sell) or "") end
 
   local wall, minPrice, total
   if held and held.total > 0 then
@@ -935,7 +935,7 @@ local function FormatSetting(def)
   if def.kind == "mode" then return MODE_TEXT[value] end
   if def.kind == "pct" then return ns.Round(value * 1000) / 10 .. "%" end
   if def.kind == "points" then return value .. "%" end
-  if def.kind == "money" then return ns.Money(value) end
+  if def.kind == "money" then return ns.MoneyText(value) end
   return tostring(value)
 end
 

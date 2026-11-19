@@ -2,9 +2,7 @@ local addon = require("spec.helpers.addon")
 
 local MIN_UNDER = 0.5
 
-local function Plain(text)
-  return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
-end
+local Plain = addon.Plain
 
 describe("Bait", function()
   local ns, B, W

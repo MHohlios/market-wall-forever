@@ -1,8 +1,6 @@
 local addon = require("spec.helpers.addon")
 
-local function Plain(text)
-  return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
-end
+local Plain = addon.Plain
 
 describe("Sell page bait handling", function()
   local B, pricing

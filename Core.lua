@@ -60,24 +60,53 @@ function ns.ShareText(share)
   return string.format("%d%%", ns.Round(pct))
 end
 
-function ns.Money(c)
-  if not c then return "-" end
+-- The coins shown for a copper amount, and whether it was negative. Copper-only amounts leave
+-- out gold and silver; zero silver and copper still show once there is gold.
+local function CoinParts(c)
   c = ns.Round(c)
   local neg = c < 0
   if neg then c = -c end
   local g = math.floor(c / 10000)
   local s = math.floor((c % 10000) / 100)
   local k = c % 100
-  local out
-  if g > 0 then
-    out = string.format("|cffffd100%dg|r |cffc7c7cf%ds|r |cffeda55f%dc|r", g, s, k)
-  elseif s > 0 then
-    out = string.format("|cffc7c7cf%ds|r |cffeda55f%dc|r", s, k)
-  else
-    out = string.format("|cffeda55f%dc|r", k)
+  local parts = {}
+  if g > 0 then parts[#parts + 1] = { g, "g" } end
+  if g > 0 or s > 0 then parts[#parts + 1] = { s, "s" } end
+  parts[#parts + 1] = { k, "c" }
+  return parts, neg
+end
+
+local COIN_ICON = {
+  g = "|TInterface\\MoneyFrame\\UI-GoldIcon:0:0:0:0|t",
+  s = "|TInterface\\MoneyFrame\\UI-SilverIcon:0:0:0:0|t",
+  c = "|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:0:0|t",
+}
+
+local function JoinCoins(c, mark, dropCopperOverGold)
+  if not c then return "-" end
+  if dropCopperOverGold and math.abs(c) >= 10000 then
+    c = (c < 0 and -1 or 1) * ns.Round(math.abs(c) / 100) * 100   -- to the nearest silver, either sign
   end
-  if neg then out = "-" .. out end
-  return out
+  local parts, neg = CoinParts(c)
+  if dropCopperOverGold and #parts == 3 then parts[3] = nil end
+  local out = {}
+  for i, part in ipairs(parts) do out[i] = part[1] .. mark(part[2]) end
+  return (neg and "-" or "") .. table.concat(out, " ")
+end
+
+-- For display: the number then its coin icon, in the colour of the surrounding text
+function ns.Money(c)
+  return JoinCoins(c, function(unit) return COIN_ICON[unit] end)
+end
+
+-- For chart axis labels, which have a narrow gutter: at 1g and over, copper is left out ("12g 34s")
+function ns.MoneyShort(c)
+  return JoinCoins(c, function(unit) return COIN_ICON[unit] end, true)
+end
+
+-- Letters instead of icons ("1g 41s 23c"), for edit boxes and anything ParseMoney reads back
+function ns.MoneyText(c)
+  return JoinCoins(c, function(unit) return unit end)
 end
 
 local MONEY_PART = "(%d*%.?%d+)%s*([gsc])"
