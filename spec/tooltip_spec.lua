@@ -51,7 +51,7 @@ describe("item tooltip lines", function()
     it("is absent with a single price", function()
       SeedWalls(1000)
       ns.TooltipLines.Add(tooltip, ID)
-      assert.is_true(Has("Market wall"))
+      assert.is_true(Has("Market|r"))
       assert.is_false(Has("7-day trend"))
     end)
 
@@ -149,6 +149,200 @@ describe("item tooltip lines", function()
       tooltip = NewTooltip(BagSlot({ itemID = ID, stackCount = 20 }))
       ns.TooltipLines.Add(tooltip, ID)
       assert.same({}, tooltip.lines)
+    end)
+  end)
+
+  describe("outlets and disenchant breakdown", function()
+    local ARMOR, CONSUMABLE, UNCOMMON = 4, 0, 2
+    -- Level 18 green armor: 75% for 2.5 dust, 20% for 1.5 essence, 5% for 1 shard
+    local DUST, ESSENCE, SHARD = 10940, 10939, 10978
+    local items
+
+    local function Item(id, name, fields)
+      items[id] = { name = name, quality = fields.quality, level = fields.level,
+        vendor = fields.vendor or 0, classID = fields.classID }
+    end
+
+    local function Wall(id, price)
+      ns.R().days[id] = { [ns.Today()] = { price } }
+      ns.R().supplied[id] = true
+    end
+
+    -- Index of the first line containing the text, nil without one
+    local function Find(text)
+      for i, line in ipairs(tooltip.lines) do
+        if line:find(text, 1, true) then return i end
+      end
+    end
+
+    local BEST = "best|r"
+
+    before_each(function()
+      items = {}
+      _G.C_Item = {
+        GetItemInfo = function(id)
+          local item = items[id]
+          if not item then return nil end
+          return item.name, "link", item.quality, item.level, 1, "", "", 1, "", 0, item.vendor, item.classID
+        end,
+      }
+      MarketWallDB.cfg.mobDisenchant = "always"
+      Item(ID, "Vest", { quality = UNCOMMON, level = 18, classID = ARMOR, vendor = 100 })
+      Item(DUST, "Dust", { classID = 7 })
+      Item(ESSENCE, "Essence", { classID = 7 })
+      Item(SHARD, "Shard", { classID = 7 })
+      -- disenchant value 75% × 2.5 × 100 + 20% × 1.5 × 1000 + 5% × 2000 = 587.5, 558 after the cut
+      Wall(DUST, 100)
+      Wall(ESSENCE, 1000)
+      Wall(SHARD, 2000)
+    end)
+
+    it("lists Market, Vendor and Disenchant, then the materials, then market context", function()
+      SeedWalls(500, 500, 500, 500)
+      ns.R().supplied[ID] = true
+      ns.R().watch[ID] = { buy = 400 }
+      ns.TooltipLines.Add(tooltip, ID)
+      local order = { " ", "Market|r", "Vendor|r", "Disenchant", "Dust", "Essence", "Shard", "odds: classic table",
+        " ", "Against median|r", "7-day trend|r", "Your buy / sell|r" }
+      for i, text in ipairs(order) do
+        if text == " " then
+          assert.equal(" ", tooltip.lines[i])
+        else
+          assert.truthy(tooltip.lines[i]:find(text, 1, true), text)
+        end
+      end
+      assert.equal(#order, #tooltip.lines)
+    end)
+
+    it("leaves no gap after the breakdown when there is no market context", function()
+      Wall(ID, 500)
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.equal(Find("odds:"), #tooltip.lines)
+    end)
+
+    it("notes a thin market on the Market row when a vendor is best beside a higher wall", function()
+      items[ID].vendor = 400
+      Wall(ID, 500)
+      ns.R().supplied[ID] = nil   -- no real supply behind the wall
+      MarketWallDB.cfg.mobDisenchant = "never"
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.truthy(tooltip.lines[Find("Market")]:find("(today) (thin market)|r", 1, true))
+      assert.truthy(tooltip.lines[Find("Vendor")]:find(BEST, 1, true))
+
+      tooltip = NewTooltip()
+      ns.R().supplied[ID] = true
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.is_nil(Find("thin market"))
+    end)
+
+    it("puts the stack line right after Market", function()
+      Wall(ID, 500)
+      _G.C_Container = { GetContainerItemInfo = function() return { itemID = ID, stackCount = 5 } end }
+      tooltip = NewTooltip({ GetSlotAndBagID = function() return 4, 0 end })
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.equal(Find("Market|r") + 1, Find("Stack of 5"))
+      assert.equal(Find("Stack of 5") + 1, Find("Vendor|r"))
+    end)
+
+    it("marks disenchanting best when its materials after the cut pay most", function()
+      Wall(ID, 500)   -- 475 after the cut, against 558 from disenchanting
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.truthy(tooltip.lines[Find("Disenchant")]:find(BEST, 1, true))
+      assert.is_nil(tooltip.lines[Find("Market|r")]:find(BEST, 1, true))
+      assert.is_nil(tooltip.lines[Find("Vendor|r")]:find(BEST, 1, true))
+    end)
+
+    it("marks the market best when the wall after the cut pays most", function()
+      Wall(ID, 1000)
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.truthy(tooltip.lines[Find("Market")]:find(BEST, 1, true))
+      assert.is_nil(tooltip.lines[Find("Disenchant")]:find(BEST, 1, true))
+    end)
+
+    it("marks the vendor best when it pays most", function()
+      items[ID].vendor = 700
+      Wall(ID, 500)
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.truthy(tooltip.lines[Find("Vendor")]:find(BEST, 1, true))
+      assert.is_nil(tooltip.lines[Find("Disenchant")]:find(BEST, 1, true))
+    end)
+
+    it("shows the prices before the cut", function()
+      Wall(ID, 1000)
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.truthy(tooltip.lines[Find("Market")]:find("|" .. ns.Money(1000) .. " ", 1, true))
+    end)
+
+    it("marks nothing without a wall, as the Sell page groups it with no market data", function()
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.is_nil(Find(BEST))
+      assert.is_nil(Find("Market"))
+      assert.truthy(Find("Vendor|r|" .. ns.Money(100)))
+      assert.truthy(Find("Disenchant|r|" .. ns.Money(587.5)))
+    end)
+
+    it("leaves out the vendor row without a vendor price and the disenchant rows for an item that can't be", function()
+      Item(ID, "Potion", { quality = UNCOMMON, level = 18, classID = CONSUMABLE })
+      Wall(ID, 500)
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.truthy(Find("Market"))
+      assert.is_nil(Find("Vendor"))
+      assert.is_nil(Find("Disenchant"))
+      assert.is_nil(Find("odds:"))
+    end)
+
+    it("keeps the breakdown when a material has no price yet", function()
+      ns.R().days[SHARD] = nil
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.truthy(Find("materials not scanned"))
+      assert.truthy(Find("Shard"))
+    end)
+
+    it("shows each material's quantity, chance and wall", function()
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.truthy(Find("  Dust|" .. "|cffa3acac2.5× · 75%|r " .. ns.Money(100)))
+      assert.truthy(Find("  Essence|" .. "|cffa3acac1.5× · 20%|r " .. ns.Money(1000)))
+      assert.truthy(Find("  Shard|" .. "|cffa3acac1× · 5%|r " .. ns.Money(2000)))
+    end)
+
+    it("sorts materials by chance, most likely first", function()
+      ns.DisenchantOutcomes = function()
+        return { { id = SHARD, chance = 0.05, quantity = 1 }, { id = DUST, chance = 0.75, quantity = 2.5 },
+          { id = ESSENCE, chance = 0.2, quantity = 1.5 } }, "classic table"
+      end
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.is_true(Find("  Dust|") < Find("  Essence|"))
+      assert.is_true(Find("  Essence|") < Find("  Shard|"))
+    end)
+
+    it("skips materials under 1% and names Forever's estimate", function()
+      -- Forever's new level 60 rare: 99.5% Large Brilliant Shard, 0.5% Nexus Crystal
+      local NEW_RARE, BRILLIANT, NEXUS = 200001, 14344, 20725
+      Item(NEW_RARE, "Rare", { quality = 3, level = 60, classID = ARMOR })
+      Item(BRILLIANT, "Brilliant", { classID = 7 })
+      Item(NEXUS, "Nexus", { classID = 7 })
+      Wall(BRILLIANT, 3000)
+      Wall(NEXUS, 9000)
+      ns.TooltipLines.Add(tooltip, NEW_RARE)
+      assert.truthy(Find("1× · 99.5%"))
+      assert.is_nil(Find("Nexus"))
+      assert.truthy(Find("odds: Forever estimate"))
+    end)
+
+    it("names your own disenchants as the source once there are enough", function()
+      local key = ns.DisenchantLog.SampleKey(ID, UNCOMMON, 18, ARMOR, false)
+      MarketWallDB.disenchants = { samples = { [key] = { count = 25, materials = { [DUST] = { hits = 25, total = 50 } } } } }
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.truthy(Find("odds: your 25 disenchants"))
+      assert.truthy(Find("2× · 100%"))
+    end)
+
+    it("shows no normal range or cheapest / dearest time", function()
+      SeedWalls(400, 500, 600, 500, 450, 550, 500)
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.truthy(Find("Against median"))
+      assert.is_nil(Find("Normal range"))
+      assert.is_nil(Find("Cheapest"))
     end)
   end)
 end)

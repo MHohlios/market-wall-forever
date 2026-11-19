@@ -141,6 +141,16 @@ describe("DisenchantValue", function()
     assert.same({ 300, "your 25 disenchants" }, { ns.DisenchantValue(1001) })
   end)
 
+  it("lists the outcomes with the Salvager bonus in their quantities, as the value counts it", function()
+    Item(1001, UNCOMMON, 10, ARMOR)
+    Salvager("on", 50)
+    assert.same({
+      { { id = STRANGE_DUST, chance = 0.8, quantity = 2.25 }, { id = LESSER_MAGIC_ESSENCE, chance = 0.2, quantity = 2.25 } },
+      "classic table",
+    }, { ns.DisenchantOutcomes(1001) })
+    assert.is_nil(ns.DisenchantOutcomes(11287))
+  end)
+
   it("is false while a likely material has no price", function()
     Item(1001, UNCOMMON, 10, ARMOR)
     ns.LatestWall = function(id) if id == STRANGE_DUST then return 100 end end
