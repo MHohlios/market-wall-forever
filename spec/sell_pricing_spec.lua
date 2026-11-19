@@ -89,7 +89,6 @@ describe("Sell page pricing", function()
     local onAuction = { outlet = "auction" }
 
     local function Warnings(f)
-      f.netEach = f.netEach or 1000
       f.outlet = f.outlet or onAuction
       local out = {}
       for i, line in ipairs(P.Warnings(f)) do out[i] = Plain(line) end
@@ -97,7 +96,7 @@ describe("Sell page pricing", function()
     end
 
     it("has none for a sound price", function()
-      assert.same({}, Warnings({ price = 199, stats = stats, vendor = 40, netEach = 189 }))
+      assert.same({}, Warnings({ price = 199, stats = stats, totals = P.Totals(199, 10, 100, 40, 0.05) }))
     end)
 
     it("warns below the low end of the normal range, not at it", function()
@@ -110,11 +109,19 @@ describe("Sell page pricing", function()
       assert.same({}, Warnings({ price = 1, stats = { n = 2, p25 = 199, p75 = 200 } }))
     end)
 
-    it("warns when a vendor pays more after the cut and deposit, not when it pays the same", function()
+    -- the same totals that colour "AH beats vendor by", so the two always agree
+    it("warns when a vendor pays as much or more after the cut and deposit", function()
+      -- 92 at 40c: 3,496c after the cut, minus a 276c deposit is 3,220c, 35c each
       assert.same({ "A vendor pays more: 40c each, against 35c after the cut and deposit." },
-        Warnings({ price = 60, vendor = 40, netEach = 35 }))
-      assert.same({}, Warnings({ price = 60, vendor = 40, netEach = 40 }))
-      assert.same({}, Warnings({ price = 60, vendor = 0, netEach = -5 }))
+        Warnings({ price = 40, totals = P.Totals(40, 92, 276, 40, 0.05) }))
+      assert.same({ "A vendor pays as much: 40c each, against 40c after the cut and deposit." },
+        Warnings({ price = 50, totals = P.Totals(50, 10, 75, 40, 0.05) }))   -- 475 - 75 = 400, a tie
+      assert.same({}, Warnings({ price = 50, totals = P.Totals(50, 10, 74, 40, 0.05) }))
+    end)
+
+    it("does not compare with a vendor for an item with no vendor price", function()
+      assert.same({}, Warnings({ price = 1, totals = P.Totals(1, 1, 50, nil, 0.05) }))
+      assert.same({}, Warnings({ price = 1, totals = P.Totals(1, 1, 50, 0, 0.05) }))
     end)
 
     it("warns at a bait price", function()
@@ -134,6 +141,38 @@ describe("Sell page pricing", function()
       local thin = O.Values({ vendor = 10, wall = 1000, supplied = false, cut = 0.05 })
       assert.same({ "Best outlet is a vendor: the market is too thin to trust." }, Warnings({ price = 1000, outlet = thin }))
       assert.same({}, Warnings({ price = 1000, outlet = O.Values({ vendor = 10, cut = 0.05 }) }))
+    end)
+  end)
+
+  describe("totals", function()
+    it("takes the cut, then the deposit as a cost, and compares with the vendor", function()
+      -- the mockup's 92 Silk Cloth at 2s 5c, a 27s 60c deposit and 40c at a vendor
+      local t = P.Totals(205, 92, 2760, 40, 0.05)
+      assert.same({ 18860, 17917, 2760, 15157, 3680, 11477, 40 },
+        { t.total, t.afterCut, t.deposit, t.net, t.vendor, t.beats, t.vendorEach })
+      assert.near(15157 / 92, t.netEach, 1e-9)
+    end)
+
+    it("shows posting winning in green", function()
+      local text = P.BeatsText(P.Totals(205, 92, 2760, 40, 0.05))
+      assert.truthy(text:find("^|cff4fc36b%+"))
+      assert.equal("+1g 14s 77c", Plain(text))
+    end)
+
+    it("shows a tie or a loss in red", function()
+      local tie = P.BeatsText(P.Totals(50, 10, 75, 40, 0.05))
+      assert.truthy(tie:find("^|cffe06060"))
+      assert.equal("0c", Plain(tie))
+      local loss = P.BeatsText(P.Totals(40, 92, 276, 40, 0.05))
+      assert.truthy(loss:find("^|cffe06060"))
+      assert.equal("-4s 60c", Plain(loss))
+    end)
+
+    it("leaves the vendor out for an item with no vendor price", function()
+      local t = P.Totals(205, 92, 2760, nil, 0.05)
+      assert.same({ nil, nil, nil }, { t.vendor, t.beats, t.vendorEach })
+      assert.equal("—", P.BeatsText(t))
+      assert.is_nil(P.Totals(205, 92, 2760, 0, 0.05).beats)
     end)
   end)
 
