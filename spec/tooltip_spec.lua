@@ -453,6 +453,16 @@ describe("item tooltip lines", function()
         assert.is_nil(Find("as bars"))
       end)
 
+      it("notes a thin product market and keeps it from the best tag and the stack", function()
+        Wall(IRON_BAR, 600)   -- 540 per ore, above the ore's 365, but no real supply behind it
+        ns.R().supplied[IRON_BAR] = nil
+        InStack(20)
+        ns.TooltipLines.Add(tooltip, IRON_ORE)
+        assert.truthy(Find("As Iron Bar (net)|r " .. GREY .. "· 1 ore → 1 bar (thin market)|r|" .. ns.Money(540)))
+        assert.truthy(tooltip.lines[Find("Market (net)")]:find(BEST, 1, true))
+        assert.truthy(Find("Stack of 20|r|" .. ns.Money(365 * 20)))
+      end)
+
       it("splits the product's net across the cloth it takes", function()
         local LINEN, BOLT = 2589, 2996
         Item(LINEN, "Linen Cloth", { classID = 7 })

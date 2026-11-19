@@ -38,11 +38,12 @@ local function DisenchantLines(add, id)
 end
 
 -- What one input nets as its share of the product (Outlet.CONVERSIONS), after the cut and the
--- product's deposit. False when the product has no scanned wall.
+-- product's deposit, and whether the product's market is too thin to trust. False when the
+-- product has no scanned wall.
 local function ConversionValue(conversion, prices, cut)
-  local wall = prices.wall(conversion.product)
+  local wall, supplied = prices.wall(conversion.product)
   if not wall then return false end
-  return Outlet.Net(wall, cut, prices.deposit(conversion.product)) / conversion.inputs
+  return Outlet.Net(wall, cut, prices.deposit(conversion.product)) / conversion.inputs, not supplied
 end
 
 -- What one unit nets through each outlet, after the cut and an estimated deposit, with the
@@ -54,8 +55,9 @@ local function OutletLines(add, id, count)
   local values = Outlet.Priced(prices, opts, id)
   local best, bestValue = ns.SellPricing.Group(values), values.best
   local conversion = Outlet.CONVERSIONS[id]
-  local converted = conversion and ConversionValue(conversion, prices, opts.cut)
-  if converted and converted > values.best then best, bestValue = CONVERSION, converted end
+  local converted, convertedThin
+  if conversion then converted, convertedThin = ConversionValue(conversion, prices, opts.cut) end
+  if converted and not convertedThin and converted > values.best then best, bestValue = CONVERSION, converted end
 
   if values.vendor > 0 then add(OutletLabel("Vendor", Outlet.VENDOR, best), ns.Money(values.vendor)) end
 
@@ -76,8 +78,9 @@ local function OutletLines(add, id, count)
 
   if conversion then
     local product = ns.Name(conversion.product)
-    local ratio = "· " .. conversion.inputs .. " " .. conversion.input .. " → 1 " .. conversion.output
-    add(OutletLabel("As " .. product .. " (net)", CONVERSION, best, ratio),
+    local note = "· " .. conversion.inputs .. " " .. conversion.input .. " → 1 " .. conversion.output
+      .. (convertedThin and " (thin market)" or "")
+    add(OutletLabel("As " .. product .. " (net)", CONVERSION, best, note),
       converted and ns.Money(converted) or GREY .. product .. " not scanned|r")
   end
 
