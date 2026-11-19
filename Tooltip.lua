@@ -1,42 +1,75 @@
 -- MarketWall: market, vendor and disenchant prices on item tooltips
 local _, ns = ...
 
-local GREY = "|cffa3acac"
+local GREY, GOLD, GREEN = "|cffa3acac", "|cfff5c518", "|cff4fc36b"
+local Outlet = ns.Outlet
 
-local function MarketLines(add, id, count)
+local MIN_SHOWN_CHANCE = 0.01
+
+-- The outlet that pays most for one unit after the cut, by the Sell page's bag-group rule.
+-- No deposit: the tooltip knows no auction duration or bag slot to price one.
+local function BestOutlet(id)
+  return ns.SellPricing.Group(Outlet.Game()(id, 0))
+end
+
+local function OutletLabel(name, outlet, best)
+  return GOLD .. name .. "|r" .. (outlet == best and " " .. GREEN .. "best|r" or "")
+end
+
+-- One decimal, dropped when it is zero: 1.5, 2, 99.5
+local function Decimal(x)
+  return (string.format("%.1f", x):gsub("%.0$", ""))
+end
+
+local function OutletLines(add, id, count)
+  local best = BestOutlet(id)
+  local wall, day = ns.LatestWall(id)
+  if wall then
+    local age = ns.Today() - day
+    local when = (age == 0 and "today") or (age == 1 and "yesterday") or (age .. " days ago")
+    add(OutletLabel("Market", Outlet.AUCTION, best), ns.Money(wall) .. " " .. GREY .. "(" .. when .. ")|r")
+    if count and count > 1 then add(GREY .. "Stack of " .. count .. "|r", ns.Money(wall * count)) end
+  end
+
+  local vendor = C_Item.GetItemInfo and select(11, C_Item.GetItemInfo(id))
+  if vendor and vendor > 0 then add(OutletLabel("Vendor", Outlet.VENDOR, best), ns.Money(vendor)) end
+
+  local disenchant = ns.DisenchantValue(id)
+  if disenchant then
+    add(OutletLabel("Disenchant", Outlet.DISENCHANT, best), ns.Money(disenchant))
+  elseif disenchant == false then
+    add(OutletLabel("Disenchant", Outlet.DISENCHANT, best), GREY .. "materials not scanned|r")
+  end
+end
+
+-- One indented line per likely material, most likely first, then where the odds come from
+local function DisenchantLines(add, id)
+  local outcomes, source = ns.DisenchantOutcomes(id)
+  if not outcomes then return end
+  local shown = {}
+  for _, o in ipairs(outcomes) do
+    if o.chance >= MIN_SHOWN_CHANCE then shown[#shown + 1] = o end
+  end
+  table.sort(shown, function(a, b) return a.chance > b.chance end)
+  for _, o in ipairs(shown) do
+    add("  " .. ns.ColorName(o.id),
+      GREY .. Decimal(o.quantity) .. "× · " .. Decimal(o.chance * 100) .. "%|r " .. ns.Money(ns.LatestWall(o.id)))
+  end
+  add(GREY .. "  odds: " .. source .. "|r", "")
+end
+
+local function MarketContextLines(add, id)
   local wall, day = ns.LatestWall(id)
   if not wall then return end
-  local age = ns.Today() - day
-  local when = (age == 0 and "today") or (age == 1 and "yesterday") or (age .. " days ago")
-  add("|cfff5c518Market wall|r", ns.Money(wall) .. " " .. GREY .. "(" .. when .. ")|r")
-  if count and count > 1 then add(GREY .. "Stack of " .. count .. "|r", ns.Money(wall * count)) end
-
-  local stats = ns.StatsFor(id)
-  local diff, word = ns.Versus(wall, stats)
+  local diff, word = ns.Versus(wall, ns.StatsFor(id))
   if diff then
-    add(GREY .. "Normal range|r", ns.Money(stats.p25) .. " to " .. ns.Money(stats.p75))
-    add(GREY .. (age == 0 and "Against median" or "Against median (last scan)") .. "|r", ns.VersusText(diff, word))
+    local label = ns.Today() == day and "Against median" or "Against median (last scan)"
+    add(GREY .. label .. "|r", ns.VersusText(diff, word))
   end
 
   local PV = ns.PriceView
   local week = PV.Summary(PV.InRange(ns.Series(id), 7, time()))
   if week and week.trend then add(GREY .. "7-day trend|r", PV.TrendText(week.trend)) end
-
-  local cycle = ns.Cycle(id)
-  local best, worst
-  for part = 1, 4 do
-    local g = cycle.parts[part]
-    if g and g.n >= 3 then
-      if not best or g.r < cycle.parts[best].r then best = part end
-      if not worst or g.r > cycle.parts[worst].r then worst = part end
-    end
-  end
-  if best and worst and best ~= worst and cycle.parts[worst].r - cycle.parts[best].r >= 0.03 then
-    add(GREY .. "Cheapest / dearest time|r",
-      string.format("|cff7cc0ff%s %+d%%|r / |cffffb057%s %+d%%|r",
-        ns.PART_NAMES[best], ns.Round((cycle.parts[best].r - 1) * 100),
-        ns.PART_NAMES[worst], ns.Round((cycle.parts[worst].r - 1) * 100)))
-  end
 
   local entry = ns.R().watch[id]
   if entry and entry.buy then
@@ -72,17 +105,9 @@ local function AddLines(tooltip, id)
     tooltip:AddDoubleLine(left, right)
   end
 
-  MarketLines(add, id, StackCount(tooltip, id))
-
-  local vendor = C_Item.GetItemInfo and select(11, C_Item.GetItemInfo(id))
-  if vendor and vendor > 0 then add(GREY .. "Vendor|r", ns.Money(vendor)) end
-
-  local disenchant, source = ns.DisenchantValue(id)
-  if disenchant then
-    add(GREY .. "Disenchant" .. (source and " (" .. source .. ")" or "") .. "|r", ns.Money(disenchant))
-  elseif disenchant == false then
-    add(GREY .. "Disenchant|r", GREY .. "materials not scanned|r")
-  end
+  OutletLines(add, id, StackCount(tooltip, id))
+  DisenchantLines(add, id)
+  MarketContextLines(add, id)
 end
 
 -- Mob tooltips -------------------------------------------------------------------------------
