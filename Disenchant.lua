@@ -190,6 +190,23 @@ function ns.DisenchantValue(id)
   return total, source == "estimate" and "estimate" or nil
 end
 
+local SOURCE_NAMES = { estimate = "Forever estimate", table = "classic table" }
+
+-- What disenchanting one item gives: a list of { id, chance (0-1), quantity }, the average
+-- quantity including any Salvager bonus as DisenchantValue counts it, and the source's name
+-- ("your 34 disenchants", "Forever estimate" or "classic table"). Nil when it cannot be
+-- disenchanted.
+function ns.DisenchantOutcomes(id)
+  local outcomes, source, samples = Outcomes(id)
+  if not outcomes then return nil end
+  local scale = source == "observed" and 1 or 1 + SalvagerBonus()
+  local list = {}
+  for _, o in ipairs(outcomes) do
+    list[#list + 1] = { id = o[1], chance = o[2], quantity = o[3] * scale }
+  end
+  return list, source == "observed" and ("your " .. samples .. " disenchants") or SOURCE_NAMES[source]
+end
+
 -- The Enchanting skill the classic rules ask for before an item can be disenchanted, by item
 -- level: 1 up to level 20, then 25 more for every 5 levels, capped at 225 from level 61
 function ns.DisenchantSkill(level)
