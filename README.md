@@ -7,8 +7,9 @@ A World of Warcraft (Forever) auction house addon. It adds a Market tab with:
 - **Bait Detect**: commodities that look baited, and one button to buy the cheap copies.
   See below.
 - **Sell**: your sellable bag items as an icon grid, grouped by the best outlet for each
-  (auction house, disenchant or vendor, by the same rule as mob values' Optimal), with the
-  current listings or the price history beside them. The price starts at the lowest
+  (auction house, disenchant or vendor, by the same rule as mob values' Optimal, except that
+  Optimal can also value a container at what it opens into), with the current listings or
+  the price history beside them. The price starts at the lowest
   listing, skipping flagged bait, and warns before a post that looks like a mistake.
 - **Item search**: an MW button on the minimap opens a window, anywhere in the world,
   to look up any item MarketWall has seen. See below.
@@ -60,6 +61,11 @@ Hovering a mob adds three lines to the tooltip: its worth per kill under Optimal
 its kill count; and the top drop. Values show from the first looted kill. Under **Kills
 before values are reliable**, the kill count reads an orange "< 10 kills", and the Mobs
 view shows that mob's kill count in orange.
+
+A container a mob drops, such as a clam, counts in Optimal at what it opens into on
+average, once you have opened some, when that beats selling it unopened. Hovering such a
+container shows "Opens to" with that average and how many you opened. Farm sessions keep
+counting a container at its sell value, since they count its contents when you open it.
 
 The search window's **Mobs** switch lists every recorded mob, sorted by median per kill
 under the Optimal, Market or Vendor lens, with a name filter. Click a mob for its drop

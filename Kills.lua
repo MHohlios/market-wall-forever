@@ -333,6 +333,31 @@ function Kills.NewTracker(emit, canLoot, itemOf)
   return tracker
 end
 
+-- Names the item ID of an opened container from its "Item-..." GUID. The game's answer for the
+-- GUID comes first; failing that, the bag item you used just before: only when its GUID matches,
+-- or, when its GUID could not be read, within CAST_WINDOW. A use names one container at most.
+-- itemIDByGUID(guid): the game's item ID for a GUID, nil when unknown.
+function Kills.NewContainerResolver(itemIDByGUID)
+  local resolver = {}
+  local lastUsed   -- { id =, guid =, t = }
+
+  -- You used a bag item: its item ID (nil when unreadable) and GUID (nil when unreadable)
+  function resolver.Used(id, guid, t)
+    lastUsed = id and { id = id, guid = guid, t = t } or nil
+  end
+
+  function resolver.ItemOf(guid, t)
+    local used = lastUsed
+    lastUsed = nil
+    local id = itemIDByGUID(guid)
+    if id or not used then return id end
+    if used.guid then return used.guid == guid and used.id or nil end
+    if t - used.t <= CAST_WINDOW then return used.id end
+  end
+
+  return resolver
+end
+
 -- In game -----------------------------------------------------------------------------------
 
 local function Readable(v)
@@ -366,30 +391,31 @@ local function ReadLootWindow()
   return slots
 end
 
--- The bag item you last used and when, for a container whose GUID the game cannot name
-local lastUsed
+local function ReadItemIDByGUID(guid)
+  if not (C_Item and C_Item.GetItemIDByGUID) then return nil end
+  local ok, id = pcall(C_Item.GetItemIDByGUID, guid)
+  id = ok and Readable(id)
+  return type(id) == "number" and id or nil
+end
+
+local function ReadBagItemGUID(bag, slot)
+  if not (C_Item and C_Item.GetItemGUID and ItemLocation and ItemLocation.CreateFromBagAndSlot) then return nil end
+  local ok, guid = pcall(C_Item.GetItemGUID, ItemLocation:CreateFromBagAndSlot(bag, slot))
+  guid = ok and Readable(guid)
+  return type(guid) == "string" and guid or nil
+end
+
+local resolver = Kills.NewContainerResolver(ReadItemIDByGUID)
 
 if C_Container and C_Container.UseContainerItem and hooksecurefunc then
   hooksecurefunc(C_Container, "UseContainerItem", function(bag, slot)
     local info = C_Container.GetContainerItemInfo(bag, slot)
-    lastUsed = info and info.itemID and { id = info.itemID, t = time() } or nil
+    resolver.Used(info and info.itemID, ReadBagItemGUID(bag, slot), time())
   end)
 end
 
--- The item ID of an opened container: from its GUID while the item still exists, else the bag
--- item used just before. Each use names one container.
-local function ContainerItemID(guid)
-  if C_Item and C_Item.GetItemIDByGUID then
-    local ok, id = pcall(C_Item.GetItemIDByGUID, guid)
-    id = ok and Readable(id)
-    if type(id) == "number" then return id end
-  end
-  local used = lastUsed
-  lastUsed = nil
-  if used and time() - used.t <= CAST_WINDOW then return used.id end
-end
-
-local tracker = Kills.NewTracker(function(event) ns.Recording.Emit(event) end, ReadCanLoot, ContainerItemID)
+local tracker = Kills.NewTracker(function(event) ns.Recording.Emit(event) end, ReadCanLoot,
+  function(guid) return resolver.ItemOf(guid, time()) end)
 Kills.tracker = tracker
 Kills.paths = tracker.paths   -- /dump MarketWall.Kills.paths shows which rule settled each kill
 
