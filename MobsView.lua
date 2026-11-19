@@ -65,18 +65,18 @@ function V.Rows(all, lens, filter)
   return rows
 end
 
--- Whether a row has fewer seen kills than make its values reliable
+-- Whether a row has values from fewer seen kills than make them reliable
 local function Rough(row, reliableKills)
-  return row.kills < reliableKills
+  return row.median ~= nil and row.kills < reliableKills
 end
 
 -- Display cells for a mob row. The kill count is orange while the values are rough; a mob
--- with no seen kill has no values.
+-- with no seen kill has no values and a grey count.
 function V.MobCells(row, reliableKills)
-  local kills = Rough(row, reliableKills) and (ORANGE .. row.kills .. "|r") or tostring(row.kills)
   if not row.median then
-    return { row.name, kills, GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", "" }
+    return { row.name, GREY .. row.kills .. "|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", "" }
   end
+  local kills = Rough(row, reliableKills) and (ORANGE .. row.kills .. "|r") or tostring(row.kills)
   local top = row.top and (ns.ColorName(row.top.id) .. " " .. ns.ShareText(row.top.share)) or GREY .. "-|r"
   local unpriced = row.unpriced > 0 and (ORANGE .. row.unpriced .. "|r") or (GREY .. "0|r")
   return { row.name, kills, ns.Money(row.median), ns.Money(row.average), ns.Money(row.withoutRare), top, unpriced }

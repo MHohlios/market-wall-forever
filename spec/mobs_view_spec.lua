@@ -108,8 +108,12 @@ describe("Mobs view", function()
     local rows = V.Rows(All(), "optimal", "")
     local lashtail = V.MobCells(rows[3], 10)
     assert.same({ "Lashtail Raptor", "58", ns.Money(80), ns.Money(160), ns.Money(120), "item:7 31%", ORANGE .. "1|r" }, lashtail)
-    assert.same({ "Jungle Stalker", ORANGE .. "0|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", "" },
+    assert.same({ "Jungle Stalker", GREY .. "0|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", "" },
       V.MobCells(rows[4], 10))
+  end)
+
+  it("gives no rough-values hover to a mob with no seen kill", function()
+    assert.is_nil(V.MobTip(V.Rows(All(), "optimal", "Jungle")[1], 10))
   end)
 
   describe("under the kills before values are reliable", function()

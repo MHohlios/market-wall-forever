@@ -145,8 +145,9 @@ local function MobLines(stats, skinning, reliableKills)
     { GREY .. outlets .. "|r", KillCount(stats.seen, reliableKills) },
   }
   if stats.top then
+    local pct = ns.Round(stats.top.share * 100)
     lines[3] = { GREY .. "Top drop|r",
-      ns.ColorName(stats.top.id) .. " " .. GREY .. string.format("%d%%", ns.Round(stats.top.share * 100)) .. "|r" }
+      ns.ColorName(stats.top.id) .. " " .. GREY .. (pct == 0 and "<1" or pct) .. "%|r" }
   end
   return lines
 end

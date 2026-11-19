@@ -64,6 +64,12 @@ describe("mob tooltip", function()
       assert.equal(GREY .. "Top drop|r|Raptor Hide " .. GREY .. "68%|r", Texts(Lines(stats, false, 10))[3])
     end)
 
+    it("shows a top drop share that rounds to 0% as under 1%", function()
+      local stats = FullStats()
+      stats.top.share = 0.004
+      assert.equal(GREY .. "Top drop|r|Raptor Hide " .. GREY .. "<1%|r", Texts(Lines(stats, false, 10))[3])
+    end)
+
     it("leaves out the top drop when nothing dropped", function()
       local stats = FullStats()
       stats.top = nil
