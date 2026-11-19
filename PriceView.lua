@@ -95,10 +95,11 @@ PV.CELLS = {
   trend = function(f) return "7-day trend", f.week and f.week.trend and PV.TrendText(f.week.trend) end,
   average = function(f) return "7-day average", f.week and ns.Money(f.week.average) end,
   median = function(f)
-    return "Median (" .. f.stats.n .. " days)", f.stats.n >= 3 and ns.Money(f.stats.median) or nil
+    local n = f.stats.n
+    return "Median (" .. n .. (n == 1 and " day)" or " days)"), n > 0 and ns.Money(f.stats.median) or nil
   end,
   normalRange = function(f)
-    return "Normal range", f.stats.n >= 3 and (ns.Money(f.stats.p25) .. " - " .. ns.Money(f.stats.p75)) or nil
+    return "Normal range", f.stats.n > 0 and (ns.Money(f.stats.p25) .. " - " .. ns.Money(f.stats.p75)) or nil
   end,
   versusMedian = function(f)
     local diff, word = ns.Versus(f.live or f.last, f.stats)
@@ -143,7 +144,7 @@ end
 -- Widget
 -------------------------------------------------------------------------------
 
-local GUTTER, COLUMNS, ROW_HEIGHT = 66, 4, 34
+local GUTTER, COLUMNS, ROW_HEIGHT, FLAG_HEIGHT = 66, 4, 34, 16
 
 -- layout: width, chartHeight, cellWidth, cells (names), ranges (true adds the range switch)
 function PV.CreateView(parent, layout)
@@ -175,7 +176,13 @@ function PV.CreateView(parent, layout)
   view.chart:SetPoint("TOPLEFT", GUTTER, chartTop)
   view.chart.legend:Hide()   -- too wide here; the numbers below describe the lines
 
-  local gridTop = chartTop - layout.chartHeight - 22
+  -- the low-data flag sits on its own line between the chart and the grid
+  local flagTop = chartTop - layout.chartHeight - 22
+  view.flag = w.MakeText(view, "GameFontHighlightSmall")
+  view.flag:SetPoint("TOPLEFT", 0, flagTop)
+  view.flag:SetWidth(layout.width)
+  view.flag:SetWordWrap(false)
+  local gridTop = flagTop - FLAG_HEIGHT
   view.cells = {}
   for i = 1, #layout.cells do
     local col, row = (i - 1) % COLUMNS, math.floor((i - 1) / COLUMNS)
@@ -203,6 +210,8 @@ function PV.CreateView(parent, layout)
     local facts = PV.Facts(self.id, time(), layout.ranges and self.range)
     local points = facts.chart or PV.InRange(facts.series, self.range.days, facts.now)
     self.chart:Draw(points, self.buy, self.sell, facts.stats)
+    local flag = ns.LowDataText(ns.DaysOfData(self.id))
+    self.flag:SetText(flag and ORANGE .. flag .. "|r" or "")
     for i, cell in ipairs(PV.Cells(facts, layout.cells)) do
       self.cells[i].label:SetText(cell.label)
       self.cells[i].value:SetText(cell.value)

@@ -1,7 +1,7 @@
 -- MarketWall: market, vendor and disenchant prices on item tooltips
 local _, ns = ...
 
-local GREY, GOLD, GREEN = "|cffa3acac", "|cfff5c518", "|cff4fc36b"
+local GREY, GOLD, GREEN, ORANGE = "|cffa3acac", "|cfff5c518", "|cff4fc36b", "|cffffb057"
 local Outlet = ns.Outlet
 
 local MIN_SHOWN_CHANCE = 0.01
@@ -66,15 +66,21 @@ end
 local function MarketContextLines(add, id)
   local wall, day = ns.LatestWall(id)
   if not wall then return end
+  local days = ns.DaysOfData(id)
+  local flag = ns.LowDataText(days)
+  if flag then add(ORANGE .. flag .. "|r", "") end
+  -- on an item's first day, a number that cannot be worked out yet says so rather than vanishing
+  local missing = days <= 1 and GREY .. "n/a (first scan)|r" or nil
+
+  local label = ns.Today() == day and "Against median" or "Against median (last scan)"
   local diff, word = ns.Versus(wall, ns.StatsFor(id))
-  if diff then
-    local label = ns.Today() == day and "Against median" or "Against median (last scan)"
-    add(GREY .. label .. "|r", ns.VersusText(diff, word))
-  end
+  local versus = diff and ns.VersusText(diff, word) or missing
+  if versus then add(GREY .. label .. "|r", versus) end
 
   local PV = ns.PriceView
   local week = PV.Summary(PV.InRange(ns.Series(id), 7, time()))
-  if week and week.trend then add(GREY .. "7-day trend|r", PV.TrendText(week.trend)) end
+  local trend = week and week.trend and PV.TrendText(week.trend) or missing
+  if trend then add(GREY .. "7-day trend|r", trend) end
 
   local entry = ns.R().watch[id]
   if entry and entry.buy then

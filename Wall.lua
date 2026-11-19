@@ -88,8 +88,14 @@ local function sortedCopy(values, from, to)
   return out
 end
 
--- walls: chronological array of past daily wall prices (today excluded)
-function W.Stats(walls)
+-- walls: chronological array of past daily wall prices (today excluded). With no past days,
+-- today's wall stands in so an item shows a normal price from its first scan; firstScan marks it.
+function W.Stats(walls, todayWall)
+  if #walls == 0 and todayWall then
+    local stats = W.Stats({ todayWall })
+    stats.firstScan = true
+    return stats
+  end
   local n = #walls
   if n == 0 then return { n = 0 } end
   local all = sortedCopy(walls, 1, n)
@@ -105,9 +111,10 @@ function W.Stats(walls)
   }
 end
 
--- Dip: today's wall is well under a baseline that was not already sliding
-function W.IsDip(wall, stats, dipPct, minDays, cut)
-  if not wall or not stats or stats.n < minDays then return false, "history" end
+-- Dip: today's wall is well under a baseline that was not already sliding.
+-- Needs at least one past day: on a first scan there is nothing to dip from.
+function W.IsDip(wall, stats, dipPct, cut)
+  if not wall or not stats or stats.n == 0 or stats.firstScan then return false, "history" end
   if wall > stats.median * (1 - dipPct) then return false, "normal" end
   if wall >= stats.p25 then return false, "normal" end
   if stats.recent < stats.median * 0.95 then return false, "falling" end
@@ -118,7 +125,7 @@ end
 -- Suggested thresholds for a newly watched item
 function W.Suggest(wall, stats, cut)
   local buy, sell
-  if stats and stats.n >= 3 then
+  if stats and stats.n > 0 and not stats.firstScan then
     buy, sell = math.floor(stats.p25), math.ceil(stats.p75)
   elseif wall then
     buy, sell = math.floor(wall * 0.95), math.ceil(wall * 1.10)

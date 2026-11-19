@@ -216,8 +216,8 @@ end
 
 local function EmptyText()
   if not ns.R().lastFull then return "Run a full scan to look for baited items." end
-  return string.format("Nothing looks baited right now.\nAn item shows here when its cheapest level sits at least %d%% under the wall and below its normal range in two scans in a row. Items need %d days of history.",
-    ns.Round(ns.Bait.MinUnder(ns.Cfg("baitMinUnder")) * 100), ns.Cfg("minHistoryDays"))
+  return string.format("Nothing looks baited right now.\nAn item shows here when its cheapest level sits at least %d%% under the wall and below its normal range in two scans in a row.",
+    ns.Round(ns.Bait.MinUnder(ns.Cfg("baitMinUnder")) * 100))
 end
 
 local function DrawLadder(id, held, wall)
@@ -270,11 +270,11 @@ local function DrawDetail()
   local wall
   if held and held.total > 0 then wall = W.Compute(held.ladder, held.total, ns.Cfg("wallShare"), ns.Cfg("wallMinUnits")) end
   local parts = { "Wall " .. ns.Money(wall) }
-  if stats.n >= 3 then
+  if stats.n > 0 then
     parts[#parts + 1] = "Median " .. ns.Money(stats.median)
     parts[#parts + 1] = "Normal range " .. ns.Money(stats.p25) .. " to " .. ns.Money(stats.p75)
   else
-    parts[#parts + 1] = GREY .. "Normal range needs 3 days of scans|r"
+    parts[#parts + 1] = GREY .. "No normal range yet|r"
   end
   if record then
     parts[#parts + 1] = string.format("Bait first seen %s, %d unit%s", ns.Ago(record.first), record.u, record.u == 1 and "" or "s")

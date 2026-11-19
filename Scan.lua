@@ -300,8 +300,6 @@ local function Finalize(maps, names, stamp)
   local snipes, dips = {}, {}
   local gearPrices = {}   -- cheapest buyout of each weapon and armor item, for disenchant deals
   local supplied = {}     -- items with at least minSupply units listed, for mob values
-  local hidden, bestHistory = 0, 0
-  local minDays = ns.Cfg("minHistoryDays")
   local cut = ns.Cfg("ahCut")
   local minSupply = ns.Cfg("minSupply")
   local index = 1
@@ -312,8 +310,9 @@ local function Finalize(maps, names, stamp)
     for i = index, last do
       local id = ids[i]
       local ladder, total = W.SortLadder(maps[id])
-      local stats = ns.StatsFor(id)
+      -- recorded first, so an item's first scan has today's wall to fall back on
       local wall, minPrice = ns.Record(id, ladder, total, stamp)
+      local stats = ns.StatsFor(id)
       ns.UpdateBait(id, ladder, wall, stats, stamp)
       if ns.IsGear(id) then gearPrices[id] = ladder[1].p end
       if total >= minSupply then supplied[id] = true end
@@ -321,27 +320,10 @@ local function Finalize(maps, names, stamp)
         if r.watch[id] then
           ns.ladders[id] = { ladder = ladder, total = total, t = stamp, kind = "scan" }
         end
-        -- days of data including today
-        local have = stats.n + 1
-        if have > bestHistory then bestHistory = have end
         if total >= minSupply then
-          if have >= minDays then
-            local ref = math.min(wall, stats.median)
-            local units, cost, profit, discount = W.Snipe(ladder, wall, cut, ref)
-            if units > 0 and profit >= ns.Cfg("minSnipeProfit") and discount >= ns.Cfg("minSnipeDiscount") then
-              snipes[#snipes + 1] = { id = id, wall = wall, min = minPrice, units = units, cost = cost, profit = profit, discount = discount, total = total, days = have }
-            end
-            local isDip = W.IsDip(wall, stats, ns.Cfg("dipPct"), minDays - 1, cut)
-            if isDip then
-              dips[#dips + 1] = { id = id, wall = wall, median = stats.median, under = 1 - wall / stats.median, total = total, days = have,
-                profit = stats.median * (1 - cut) - wall }
-            end
-          else
-            local units, _, profit, discount = W.Snipe(ladder, wall, cut)
-            if units > 0 and profit >= ns.Cfg("minSnipeProfit") and discount >= ns.Cfg("minSnipeDiscount") then
-              hidden = hidden + 1
-            end
-          end
+          local snipe, dip = ns.FullScanDeals(id, ladder, total, wall, minPrice, stats, cut)
+          if snipe then snipes[#snipes + 1] = snipe end
+          if dip then dips[#dips + 1] = dip end
         end
       end
     end
@@ -363,7 +345,6 @@ local function Finalize(maps, names, stamp)
       else
         scanner:UnregisterEvent("GET_ITEM_INFO_RECEIVED")
       end
-      ns.hiddenSnipes, ns.bestHistory = hidden, bestHistory
       ns.lastFullScan = stamp
       r.lastFull = stamp
       r.supplied = supplied
@@ -371,9 +352,6 @@ local function Finalize(maps, names, stamp)
       ns.fullScanRunning = false
       Status(string.format("Full scan complete: %d items, %d snipes, %d dips", #ids, #snipes, #dips))
       ns.Print(string.format("Full scan complete: %d items recorded, %d snipes, %d dips.", #ids, #snipes, #dips))
-      if hidden > 0 then
-        ns.Print(string.format("%d possible snipes hidden until those items have %d days of data.", hidden, minDays))
-      end
       if #snipes > 0 and ns.Cfg("sound") and PlaySound then
         PlaySound((SOUNDKIT and SOUNDKIT.READY_CHECK) or 8960, "Master")
       end

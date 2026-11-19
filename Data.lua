@@ -9,6 +9,7 @@ ns.dips = {}
 ns.disenchants = {}
 
 local D_WALL, D_LOW, D_HIGH, D_UNITS, D_MIN, D_PARTS = 1, 2, 3, 4, 5, 6
+local ORANGE, GREY = "|cffffb057", "|cffa3acac"
 
 ns.PART_NAMES = { "Night", "Morning", "Afternoon", "Evening" }   -- 0-6, 6-12, 12-18, 18-24 local time
 ns.WDAY_NAMES = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" }
@@ -64,8 +65,46 @@ function ns.DayWalls(id)
   return out
 end
 
+local function TodayWall(id)
+  local days = ns.R().days[id]
+  local today = days and days[ns.Today()]
+  return today and today[D_WALL]
+end
+
+-- Stats over past days; on an item's first day, over today's wall (see W.Stats)
 function ns.StatsFor(id)
-  return W.Stats(ns.DayWalls(id))
+  return W.Stats(ns.DayWalls(id), TodayWall(id))
+end
+
+-- Days of data behind an item's numbers: past days in the baseline window, plus today
+function ns.DaysOfData(id)
+  return #ns.DayWalls(id) + (TodayWall(id) and 1 or 0)
+end
+
+-- True while an item has fewer days of data than "Days before data is reliable"
+function ns.IsLowData(days)
+  return days < ns.Cfg("minHistoryDays")
+end
+
+local function DaysText(days)
+  return days .. (days == 1 and " day" or " days")
+end
+
+-- The flag shown in orange above an item's numbers while it is low on data; nil with no data or enough
+function ns.LowDataText(days)
+  if days == 0 or not ns.IsLowData(days) then return nil end
+  return "Only " .. DaysText(days) .. " of data · treat these numbers as rough"
+end
+
+-- The hover for a list's Data cell
+function ns.DataTip(days)
+  if not ns.IsLowData(days) then return DaysText(days) .. " of data." end
+  return "Only " .. DaysText(days) .. " of data; the normal price may be off."
+end
+
+-- A list's Data cell: "3 d", orange while low on data, grey after
+function ns.DataBadge(days)
+  return (ns.IsLowData(days) and ORANGE or GREY) .. days .. " d|r"
 end
 
 -- Weekly history is saved as one compact string per item: the first week's start day, then one
@@ -290,7 +329,24 @@ function ns.UpdateBait(id, ladder, wall, stats, t, isCommodity)
   end
   -- A record that no longer qualifies comes back nil, which clears its saved flag
   local minUnder = B.MinUnder(ns.Cfg("baitMinUnder"))
-  r.bait[id] = B.Update(r.bait[id], ladder, wall, stats, ns.Cfg("minHistoryDays"), minUnder, t)
+  r.bait[id] = B.Update(r.bait[id], ladder, wall, stats, minUnder, t)
+end
+
+-- One item's snipe and dip in a full scan, each nil when it is not one. Call after ns.Record, with
+-- ns.StatsFor: on an item's first scan, snipes resell at today's wall and nothing can dip yet.
+function ns.FullScanDeals(id, ladder, total, wall, minPrice, stats, cut)
+  local days = ns.DaysOfData(id)
+  local snipe, dip
+  local ref = stats.median and math.min(wall, stats.median) or wall
+  local units, cost, profit, discount = W.Snipe(ladder, wall, cut, ref)
+  if units > 0 and profit >= ns.Cfg("minSnipeProfit") and discount >= ns.Cfg("minSnipeDiscount") then
+    snipe = { id = id, wall = wall, min = minPrice, units = units, cost = cost, profit = profit, discount = discount, total = total, days = days }
+  end
+  if W.IsDip(wall, stats, ns.Cfg("dipPct"), cut) then
+    dip = { id = id, wall = wall, median = stats.median, under = 1 - wall / stats.median, total = total, days = days,
+      profit = stats.median * (1 - cut) - wall }
+  end
+  return snipe, dip
 end
 
 -- Status for a watched item: "buy", "sell", "normal" or "nodata"
@@ -362,9 +418,9 @@ function ns.LatestWall(id)
 end
 
 -- How a price compares with the item's median wall: the difference (-0.1 is 10% under)
--- and "low", "high" or "normal". Nil until there are 3 days of history.
+-- and "low", "high" or "normal". Nil when the item has no wall in the baseline window.
 function ns.Versus(price, stats)
-  if not price or stats.n < 3 then return nil end
+  if not price or stats.n == 0 then return nil end
   local diff = price / stats.median - 1
   return diff, (diff < -0.03 and "low") or (diff > 0.03 and "high") or "normal"
 end

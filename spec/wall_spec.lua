@@ -88,6 +88,13 @@ describe("Wall.Stats", function()
     assert.same({ n = 0 }, W.Stats({}))
   end)
 
+  it("stands today's wall in for an item's first scan", function()
+    local stats = W.Stats({}, 120)
+    assert.same({ 1, 120, 120, 120, true }, { stats.n, stats.median, stats.p25, stats.p75, stats.firstScan })
+    assert.is_nil(W.Stats({ 100 }, 120).firstScan)
+    assert.equal(100, W.Stats({ 100 }, 120).median)
+  end)
+
   it("uses the last three days for recent, without reordering the input", function()
     local walls = { 100, 100, 100, 100, 40, 50, 60 }
     local stats = W.Stats(walls)
@@ -100,16 +107,21 @@ describe("Wall.Stats", function()
 end)
 
 describe("Wall.IsDip", function()
-  local MIN_DAYS, DIP = 5, 0.10
+  local DIP = 0.10
   local steady = W.Stats({ 100, 100, 100, 110, 90, 100, 100 })
 
   local function Reason(wall, stats)
-    return select(2, W.IsDip(wall, stats, DIP, MIN_DAYS, CUT))
+    return select(2, W.IsDip(wall, stats, DIP, CUT))
   end
 
-  it("needs enough history", function()
-    assert.equal("history", Reason(50, W.Stats({ 100, 100 })))
+  it("needs at least one past day: a first scan has nothing to dip from", function()
+    assert.equal("history", Reason(50, W.Stats({}, 50)))
+    assert.equal("history", Reason(50, W.Stats({})))
     assert.equal("history", Reason(nil, steady))
+  end)
+
+  it("can dip from a single past day", function()
+    assert.is_true((W.IsDip(50, W.Stats({ 100 }), DIP, CUT)))
   end)
 
   it("is normal within the dip band", function()
@@ -117,7 +129,7 @@ describe("Wall.IsDip", function()
   end)
 
   it("is a dip well under a steady baseline", function()
-    assert.is_true((W.IsDip(80, steady, DIP, MIN_DAYS, CUT)))
+    assert.is_true((W.IsDip(80, steady, DIP, CUT)))
   end)
 
   it("is not a dip while the price is already falling", function()
@@ -126,20 +138,22 @@ describe("Wall.IsDip", function()
 
   it("is not a dip when the cut eats the profit", function()
     -- a 25% cut leaves 75 from a 100 median, under today's 80
-    assert.equal("noprofit", select(2, W.IsDip(80, steady, DIP, MIN_DAYS, 0.25)))
+    assert.equal("noprofit", select(2, W.IsDip(80, steady, DIP, 0.25)))
   end)
 end)
 
 describe("Wall.Suggest", function()
-  it("uses the quartiles once there are three days of history", function()
+  it("uses the quartiles once there is a past day", function()
     assert.same({ 90, 110 }, { W.Suggest(500, W.Stats({ 90, 100, 110, 90, 110 }), CUT) })
   end)
 
-  it("falls back to the wall without history", function()
-    local buy, sell = W.Suggest(100, { n = 0 }, CUT)
-    assert.equal(95, buy)
-    -- 100 * 1.10 is a hair over 110 in floating point, so ceil gives 111
-    assert.is_true(sell >= 110 and sell <= 111)
+  it("falls back to the wall without history, first scan included", function()
+    for _, stats in ipairs({ { n = 0 }, W.Stats({}, 100) }) do
+      local buy, sell = W.Suggest(100, stats, CUT)
+      assert.equal(95, buy)
+      -- 100 * 1.10 is a hair over 110 in floating point, so ceil gives 111
+      assert.is_true(sell >= 110 and sell <= 111)
+    end
   end)
 
   it("suggests nothing without a wall or history", function()

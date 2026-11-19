@@ -45,4 +45,9 @@ describe("Sell page layout", function()
     assert.equal(Top(page.bags), Top(page.listings))
     assert.is_true(page.bags.points[1][2] + page.bags.width <= page.listings.points[1][2])
   end)
+
+  it("ends the Price history view, low-data flag included, above the bottom tabs", function()
+    local TABS_HEIGHT = 2 + 22   -- the tab buttons sit 2 above the panel's bottom edge
+    assert.is_true(-page.view.points[1][3] + page.view.height <= page.listings.height - TABS_HEIGHT)
+  end)
 end)

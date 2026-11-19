@@ -86,7 +86,7 @@ function P.Warnings(f)
   local warnings = {}
   local function add(text) warnings[#warnings + 1] = text end
   local stats = f.stats
-  if stats and stats.n >= 3 and f.price < stats.p25 then
+  if stats and stats.n > 0 and f.price < stats.p25 then
     add(string.format("Below expected: %s is under this item's normal range (%s - %s).",
       ns.Money(f.price), ns.Money(stats.p25), ns.Money(stats.p75)))
   end

@@ -1,6 +1,7 @@
 local addon = require("spec.helpers.addon")
 
 local ID = 7
+local GREY_NA = "|cffa3acacn/a (first scan)|r"
 
 describe("item tooltip lines", function()
   local ns, tooltip
@@ -48,11 +49,11 @@ describe("item tooltip lines", function()
       assert.same({}, tooltip.lines)
     end)
 
-    it("is absent with a single price", function()
+    it("reads n/a on an item's first scan", function()
       SeedWalls(1000)
       ns.TooltipLines.Add(tooltip, ID)
       assert.is_true(Has("Market|r"))
-      assert.is_false(Has("7-day trend"))
+      assert.is_true(Has("7-day trend|r|" .. GREY_NA))
     end)
 
     it("is absent when the only other price is older than 7 days", function()
@@ -203,7 +204,7 @@ describe("item tooltip lines", function()
       ns.R().watch[ID] = { buy = 400 }
       ns.TooltipLines.Add(tooltip, ID)
       local order = { " ", "Market|r", "Vendor|r", "Disenchant", "Dust", "Essence", "Shard", "odds: classic table",
-        " ", "Against median|r", "7-day trend|r", "Your buy / sell|r" }
+        " ", "Only 4 days of data", "Against median|r", "7-day trend|r", "Your buy / sell|r" }
       for i, text in ipairs(order) do
         if text == " " then
           assert.equal(" ", tooltip.lines[i])
@@ -215,8 +216,7 @@ describe("item tooltip lines", function()
     end)
 
     it("leaves no gap after the breakdown when there is no market context", function()
-      Wall(ID, 500)
-      ns.TooltipLines.Add(tooltip, ID)
+      ns.TooltipLines.Add(tooltip, ID)   -- never scanned, so no wall to compare
       assert.equal(Find("odds:"), #tooltip.lines)
     end)
 
