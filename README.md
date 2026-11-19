@@ -85,8 +85,9 @@ after updating to them.
 A seller posts a unit or two far under the market so others copy that price, then buys
 the copies and relists them. The newest listing at a price sells first.
 
-An item is listed as possibly baited when its cheapest price level sits under the wall,
-below the item's own normal range, and has stayed at that price for two scans in a row
+An item is listed as possibly baited when its cheapest price level sits at least
+`baitMinUnder` under the wall (50% by default, held to 10% to 95%), below the item's own
+normal range, and has stayed at that price for two scans in a row
 (full scans or live searches). Items need the usual days of history; commodities only.
 Copies are the units posted at the bait price since it first appeared.
 

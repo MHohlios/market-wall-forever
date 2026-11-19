@@ -845,6 +845,7 @@ local SETTINGS = {
   { key = "autoScan", label = "Daily full scan on open", kind = "bool", tip = "Start a full scan when you open the auction house, if none has run today." },
   { key = "sound", label = "Sound on deals", kind = "bool", tip = "Play a sound when a scan finds units under your buy price or new snipes." },
   { key = "baitSearchGap", label = "Bait search gap (seconds)", kind = "secs", tip = "Bait Detect waits at least this long between searches. Never less than 1 second." },
+  { key = "baitMinUnder", label = "Bait: minimum % under the wall", kind = "pct", min = ns.Bait.MIN_UNDER, max = ns.Bait.MAX_UNDER, tip = "Bait Detect flags a cheapest level only when it sits at least this far under the wall. Ordinary undercutting stays close to the wall. 10% to 95%." },
   { key = "baitConfirmPress", label = "Bait confirm press", kind = "bool", tip = "Bait Detect confirms each purchase with its own press of the button. Untick to confirm straight after the price quote." },
   { key = "minimapButton", label = "Minimap button", kind = "bool", tip = "Show the MW button on the minimap, which opens the item search window. /mw minimap does the same." },
   { key = "mobDisenchant", label = "Mob value: disenchanting", kind = "mode", tip = "Include disenchanting in a mob's Optimal value. Auto: when this character has Enchanting. Always suits an enchanter alt." },
@@ -879,7 +880,8 @@ end
 local function ParseSetting(def, text)
   if def.kind == "pct" then
     local n = tonumber((text:gsub("%%", "")))
-    if n and n >= 0 and n < 100 then return n / 100 end
+    n = n and n / 100
+    if n and n >= (def.min or 0) and n <= (def.max or n) and n < 1 then return n end
   elseif def.kind == "points" then   -- stored as the percent itself, 5 for 5%
     local n = tonumber((text:gsub("%%", "")))
     if n and n >= 0 and n <= 1000 then return n end

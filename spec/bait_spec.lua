@@ -1,6 +1,7 @@
 local addon = require("spec.helpers.addon")
 
 local MIN_DAYS = 5
+local MIN_UNDER = 0.5
 
 local function Plain(text)
   return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
@@ -26,56 +27,89 @@ describe("Bait", function()
 
   describe("detection", function()
     it("flags a thin level under the wall and the normal range once it persists", function()
-      local record = B.Update(nil, Baited(), 100, History(), MIN_DAYS, 1000)
+      local record = B.Update(nil, Baited(), 100, History(), MIN_DAYS, MIN_UNDER,1000)
       assert.is_false(B.Flagged(record))
-      record = B.Update(record, Baited(), 100, History(), MIN_DAYS, 2000)
+      record = B.Update(record, Baited(), 100, History(), MIN_DAYS, MIN_UNDER,2000)
       assert.is_true(B.Flagged(record))
       assert.same({ 30, 1, 1000, 2000 }, { record.p, record.u, record.first, record.last })
     end)
 
     it("does not flag without enough history", function()
       local short = W.Stats({ 100, 100 })
-      local record = B.Update(nil, Baited(), 100, short, MIN_DAYS, 1)
-      assert.is_nil(B.Update(record, Baited(), 100, short, MIN_DAYS, 2))
-      assert.is_nil(B.Update(nil, Baited(), 100, W.Stats({}), MIN_DAYS, 1))
+      local record = B.Update(nil, Baited(), 100, short, MIN_DAYS, MIN_UNDER,1)
+      assert.is_nil(B.Update(record, Baited(), 100, short, MIN_DAYS, MIN_UNDER,2))
+      assert.is_nil(B.Update(nil, Baited(), 100, W.Stats({}), MIN_DAYS, MIN_UNDER,1))
     end)
 
     it("does not flag an item with no history even when one day is enough", function()
-      assert.is_nil(B.Update(nil, Baited(), 100, W.Stats({}), 1, 1))
+      assert.is_nil(B.Update(nil, Baited(), 100, W.Stats({}), 1, MIN_UNDER, 1))
+    end)
+
+    -- Silk Cloth as the owner saw it: 110 units at 1s 98c under a 2s 5c wall
+    local function Undercut()
+      return (W.SortLadder({ [198] = 110, [205] = 400, [210] = 900 }))
+    end
+    local function NearWall()
+      return W.Stats({ 205, 210, 210, 215 })
+    end
+
+    it("does not flag ordinary undercutting a few percent under the wall", function()
+      local record = B.Update(nil, Undercut(), 205, NearWall(), MIN_DAYS, MIN_UNDER, 1)
+      assert.is_nil(B.Update(record, Undercut(), 205, NearWall(), MIN_DAYS, MIN_UNDER, 2))
+    end)
+
+    it("flags a level far under the wall after two scans", function()
+      local ladder = W.SortLadder({ [20] = 2, [200] = 400, [205] = 900 })
+      local stats = W.Stats({ 195, 200, 200, 205 })
+      local record = B.Update(nil, ladder, 200, stats, MIN_DAYS, MIN_UNDER, 1)
+      assert.is_false(B.Flagged(record))
+      assert.is_true(B.Flagged(B.Update(record, ladder, 200, stats, MIN_DAYS, MIN_UNDER, 2)))
+    end)
+
+    it("moves the boundary with the minimum under the wall", function()
+      local half = W.SortLadder({ [50] = 1, [100] = 200 })
+      assert.is_table(B.Update(nil, half, 100, History(), MIN_DAYS, 0.5, 1))
+      assert.is_nil(B.Update(nil, half, 100, History(), MIN_DAYS, 0.75, 1))
+      local quarter = W.SortLadder({ [25] = 1, [100] = 200 })
+      assert.is_table(B.Update(nil, quarter, 100, History(), MIN_DAYS, 0.75, 1))
+    end)
+
+    it("holds the setting to 10% to 95%", function()
+      assert.same({ 0.10, 0.5, 0.95 }, { B.MinUnder(0), B.MinUnder(0.5), B.MinUnder(1) })
     end)
 
     it("does not flag a cheapest level at the wall", function()
       local ladder = W.SortLadder({ [100] = 200, [110] = 600 })
-      assert.is_nil(B.Update(nil, ladder, 100, History(), MIN_DAYS, 1))
+      assert.is_nil(B.Update(nil, ladder, 100, History(), MIN_DAYS, MIN_UNDER,1))
     end)
 
     it("does not flag a cheap level that is within the normal range", function()
       local wide = W.Stats({ 20, 60, 100, 140 })   -- normal range starts at 50
       local ladder = W.SortLadder({ [55] = 1, [100] = 200 })
-      assert.is_nil(B.Update(nil, ladder, 100, wide, MIN_DAYS, 1))
+      assert.is_nil(B.Update(nil, ladder, 100, wide, MIN_DAYS, MIN_UNDER,1))
     end)
 
     it("starts over when the cheapest price changes", function()
-      local record = B.Update(nil, Baited(), 100, History(), MIN_DAYS, 1)
-      record = B.Update(record, Baited(), 100, History(), MIN_DAYS, 2)
+      local record = B.Update(nil, Baited(), 100, History(), MIN_DAYS, MIN_UNDER,1)
+      record = B.Update(record, Baited(), 100, History(), MIN_DAYS, MIN_UNDER,2)
       local undercut = W.SortLadder({ [25] = 1, [30] = 1, [100] = 200 })
-      record = B.Update(record, undercut, 100, History(), MIN_DAYS, 3)
+      record = B.Update(record, undercut, 100, History(), MIN_DAYS, MIN_UNDER,3)
       assert.equal(25, record.p)
       assert.is_false(B.Flagged(record))
     end)
 
     it("counts copies posted at the bait price since it appeared", function()
-      local record = B.Update(nil, Baited(), 100, History(), MIN_DAYS, 1)
-      record = B.Update(record, Baited(14), 100, History(), MIN_DAYS, 2)
+      local record = B.Update(nil, Baited(), 100, History(), MIN_DAYS, MIN_UNDER,1)
+      record = B.Update(record, Baited(14), 100, History(), MIN_DAYS, MIN_UNDER,2)
       assert.equal(14, B.Copies(record))
       assert.equal(1, record.u)
     end)
 
     it("clears the record when the bait level is gone", function()
-      local record = B.Update(nil, Baited(), 100, History(), MIN_DAYS, 1)
+      local record = B.Update(nil, Baited(), 100, History(), MIN_DAYS, MIN_UNDER,1)
       local clean = W.SortLadder({ [100] = 200, [110] = 600 })
-      assert.is_nil(B.Update(record, clean, 100, History(), MIN_DAYS, 2))
-      assert.is_nil(B.Update(record, {}, nil, History(), MIN_DAYS, 2))
+      assert.is_nil(B.Update(record, clean, 100, History(), MIN_DAYS, MIN_UNDER,2))
+      assert.is_nil(B.Update(record, {}, nil, History(), MIN_DAYS, MIN_UNDER,2))
     end)
 
     it("lists piling-up items first, then the furthest under the wall", function()
@@ -103,6 +137,23 @@ describe("Bait", function()
       ns.UpdateBait(8, Baited(), 100, History(), 1)
       _G.C_Item = nil
       assert.is_nil(ns.R().bait[8])
+    end)
+
+    it("clears a saved flag whose level no longer qualifies", function()
+      local stale = { p = 198, u = 110, q = 160, w = 205, first = 1, last = 1, seen = 2 }
+      ns.R().bait[7] = stale
+      local ladder = W.SortLadder({ [198] = 160, [205] = 400 })
+      ns.UpdateBait(7, ladder, 205, W.Stats({ 205, 210, 210, 215 }), 3, true)
+      assert.is_nil(ns.R().bait[7])
+    end)
+
+    it("reads the minimum under the wall from the settings", function()
+      local ladder, stats = W.SortLadder({ [40] = 1, [100] = 200 }), History()
+      ns.UpdateBait(7, ladder, 100, stats, 1, true)
+      assert.is_table(ns.R().bait[7])
+      MarketWallDB.cfg.baitMinUnder = 0.7
+      ns.UpdateBait(7, ladder, 100, stats, 2, true)
+      assert.is_nil(ns.R().bait[7])
     end)
 
     it("leaves the record untouched while the item's commodity status is unknown", function()
@@ -288,7 +339,7 @@ describe("Bait", function()
     it("keeps the bait a search saw after a later scan changes or clears the record", function()
       local seen = B.Snapshot(ladder, record)
       record.p, record.u = 25, 3                  -- a scan found a new cheapest level
-      assert.is_nil(B.Update(record, W.SortLadder({ [100] = 200 }), 100, History(), MIN_DAYS, 2))
+      assert.is_nil(B.Update(record, W.SortLadder({ [100] = 200 }), 100, History(), MIN_DAYS, MIN_UNDER,2))
       local plan = B.Plan(seen.ladder, 35, seen.bait, true)
       assert.same({ 1, 30 }, { plan.leaving, plan.leaveAt })
     end)

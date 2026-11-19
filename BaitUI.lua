@@ -216,7 +216,8 @@ end
 
 local function EmptyText()
   if not ns.R().lastFull then return "Run a full scan to look for baited items." end
-  return string.format("Nothing looks baited right now.\nAn item shows here when its cheapest level sits under the wall and below its normal range in two scans in a row. Items need %d days of history.", ns.Cfg("minHistoryDays"))
+  return string.format("Nothing looks baited right now.\nAn item shows here when its cheapest level sits at least %d%% under the wall and below its normal range in two scans in a row. Items need %d days of history.",
+    ns.Round(ns.Bait.MinUnder(ns.Cfg("baitMinUnder")) * 100), ns.Cfg("minHistoryDays"))
 end
 
 local function DrawLadder(id, held, wall)
