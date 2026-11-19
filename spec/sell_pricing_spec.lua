@@ -206,19 +206,45 @@ describe("Sell page pricing", function()
   describe("bag groups", function()
     local function Item(id, count, values) return { id = id, count = count, values = values } end
 
-    it("groups by outlet, most valuable group and item first", function()
-      local ah = function(best) return { outlet = O.AUCTION, best = best } end
-      local groups = P.Groups({
-        Item(1, 1, ah(100)), Item(2, 10, { outlet = O.VENDOR, vendor = 50, best = 50 }), Item(3, 5, ah(100)),
-        Item(4, 3, { outlet = O.NO_DATA, vendor = 0, best = 0 }),
-      })
+    local function Summary(groups)
       local summary = {}
       for i, group in ipairs(groups) do
         local ids = {}
         for j, item in ipairs(group.items) do ids[j] = item.id end
         summary[i] = { group.outlet, group.value, ids }
       end
-      assert.same({ { O.AUCTION, 600, { 3, 1 } }, { O.VENDOR, 500, { 2 } }, { O.NO_DATA, 0, { 4 } } }, summary)
+      return summary
+    end
+
+    it("groups by outlet in a fixed order, most valuable item first", function()
+      local ah = function(best) return { outlet = O.AUCTION, best = best } end
+      local groups = P.Groups({
+        Item(1, 1, ah(100)), Item(2, 10, { outlet = O.VENDOR, vendor = 50, best = 50 }), Item(3, 5, ah(100)),
+        Item(4, 3, { outlet = O.NO_DATA, vendor = 0, best = 0 }),
+      })
+      assert.same({ { O.AUCTION, 600, { 3, 1 } }, { O.VENDOR, 500, { 2 } }, { O.NO_DATA, 0, { 4 } } }, Summary(groups))
+    end)
+
+    it("lists the auction house first even when Vendor is worth more", function()
+      local groups = P.Groups({
+        Item(1, 1, { outlet = O.AUCTION, best = 996 }), Item(2, 1, { outlet = O.VENDOR, vendor = 1038, best = 1038 }),
+      })
+      assert.same({ { O.AUCTION, 996, { 1 } }, { O.VENDOR, 1038, { 2 } } }, Summary(groups))
+    end)
+
+    it("lists Vendor before Disenchant before No reliable price whatever each is worth", function()
+      local groups = P.Groups({
+        Item(1, 1, { outlet = O.NO_DATA, vendor = 0, best = 900 }),
+        Item(2, 1, { outlet = O.DISENCHANT, best = 500 }),
+        Item(3, 1, { outlet = O.VENDOR, vendor = 10, best = 10 }),
+      })
+      assert.same({ O.AUCTION, O.VENDOR, O.DISENCHANT, O.NO_DATA }, { groups[1].outlet, groups[2].outlet, groups[3].outlet, groups[4].outlet })
+    end)
+
+    it("keeps empty auction house and Vendor groups, and leaves out the other empty groups", function()
+      assert.same({ { O.AUCTION, 0, {} }, { O.VENDOR, 0, {} } }, Summary(P.Groups({})))
+      local groups = P.Groups({ Item(1, 1, { outlet = O.VENDOR, vendor = 5, best = 5 }) })
+      assert.same({ { O.AUCTION, 0, {} }, { O.VENDOR, 5, { 1 } } }, Summary(groups))
     end)
 
     it("puts an item with no vendor price and no reliable market under No reliable price", function()
@@ -226,8 +252,8 @@ describe("Sell page pricing", function()
       local nothingNet = O.Values({ vendor = 0, wall = 10, supplied = true, deposit = 20, cut = 0.05 })
       assert.same({ O.VENDOR, O.VENDOR }, { thin.outlet, nothingNet.outlet })   -- Outlet's own values are unchanged
       local groups = P.Groups({ Item(1, 1, thin), Item(2, 1, nothingNet) })
-      assert.same({ O.NO_DATA, 2 }, { groups[1].outlet, #groups[1].items })
-      assert.equal(1, #groups)
+      assert.same({ O.NO_DATA, 2 }, { groups[3].outlet, #groups[3].items })
+      assert.same({ 0, 0 }, { #groups[1].items, #groups[2].items })
     end)
   end)
 end)
