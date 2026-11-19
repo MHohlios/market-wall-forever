@@ -7,6 +7,8 @@ local B = {}
 ns.Bait = B
 
 local SCANS_TO_FLAG = 2
+-- Keeps exact edges inside their limits: 1000 * 0.03 and 1 - 80/100 both land just under in floating point
+local EDGE = 1e-9
 B.STALE_PURCHASE = 10   -- seconds a quote or purchase may stay unanswered before a press resets it
 
 local function UnitsAt(ladder, price)
@@ -29,7 +31,7 @@ end
 -- minDays counts today, as Snipes and Dips do; stats cover past days only.
 local function Candidate(ladder, wall, stats, minDays, minUnder)
   local cheapest = ladder and ladder[1]
-  if not cheapest or not wall or 1 - cheapest.p / wall < minUnder then return nil end
+  if not cheapest or not wall or 1 - cheapest.p / wall + EDGE < minUnder then return nil end
   if not stats or stats.n == 0 or stats.n + 1 < minDays or cheapest.p >= stats.p25 then return nil end
   return cheapest
 end
@@ -71,7 +73,6 @@ end
 
 -- A warning when posting at price would match the bait: at its price or within band of it.
 -- Returns nil when there is no bait record or the price is away from it.
-local EDGE = 1e-9   -- 1000 * 0.03 is just under 30 in floating point; keep the exact edge in the band
 function B.PostWarning(record, price, band)
   if not record or math.abs(price - record.p) > record.p * band + EDGE then return nil end
   return string.format("%d unit%s at %s sits %d%% under the %s wall. Likely bait; don't match it.",
