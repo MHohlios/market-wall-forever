@@ -131,7 +131,8 @@ With direnv, `direnv allow` once and then run `make check` directly. `make lint`
   load every file in `MarketWall.toc`, in order, and returns the addon's namespace.
 - The tests cover logic only. The in-game check is still the real test for each change.
 
-## Credits
+## License and credits
 
-The disenchant outcome tables in `Disenchant.lua` are adapted from
-[Disenchantry](LICENSES/Disenchantry.txt) (MIT).
+MarketWall is released under the [MIT License](LICENSE). The disenchant outcome tables
+in `Disenchant.lua` are adapted from Disenchantry and keep its own MIT notice in
+[LICENSES/Disenchantry.txt](LICENSES/Disenchantry.txt).
