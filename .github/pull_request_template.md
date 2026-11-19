@@ -2,8 +2,8 @@
 
 <!-- What changes and why. -->
 
-- [ ] If a player would notice this change, CHANGELOG.md has a line for it under
-      `## Unreleased` (add the heading if it is missing).
+- [ ] CHANGELOG.md has a line for this change under `## Unreleased` (add the heading if
+      it is missing). Every pull request needs one, bug fixes included; CI checks it.
 
 ## How tested
 

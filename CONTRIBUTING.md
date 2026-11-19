@@ -38,9 +38,10 @@ A change that breaks one of these will not be merged.
 ## Releasing
 
 Release notes are written by hand in [CHANGELOG.md](CHANGELOG.md), one pull request at a
-time. Every pull request that changes something a player would notice adds a line under
-`## Unreleased` at the top of the file, creating that heading if it is missing. Write the
-line for players: what changed for them, not how the code changed.
+time. Every pull request, bug fixes included, adds a line under `## Unreleased` at the top
+of the file, creating that heading if it is missing. CI fails a pull request that does not
+change CHANGELOG.md; only Dependabot's pull requests are exempt. Write the line for
+players: what changed for them, not how the code changed.
 
 A release takes two steps, because `main` is protected:
 
@@ -63,5 +64,5 @@ CHANGELOG.md at the tagged commit as the file's changelog, newest release first.
 ## Pull requests
 
 Open pull requests into `main`, one topic per pull request. Fill in the template's
-summary and how you tested it, and add a line to CHANGELOG.md under `## Unreleased` for
-any change a player would notice.
+summary and how you tested it, and add a line to CHANGELOG.md under `## Unreleased`, as
+[Releasing](#releasing) describes.

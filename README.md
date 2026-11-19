@@ -162,9 +162,9 @@ With direnv, `direnv allow` once and then run `make check` directly. `make lint`
 
 ## Releasing
 
-Releases go to CurseForge from version tags only, never from pushes to `main`. Each pull
-request a player would notice adds a line under `## Unreleased` in
-[CHANGELOG.md](CHANGELOG.md). To release, `make release-notes VERSION=v0.7.0` turns that
+Releases go to CurseForge from version tags only, never from pushes to `main`. Every pull
+request, bug fixes included, adds a line under `## Unreleased` in
+[CHANGELOG.md](CHANGELOG.md); CI enforces this for all but Dependabot's pull requests. To release, `make release-notes VERSION=v0.7.0` turns that
 section into `## v0.7.0` with today's date in a pull request; once it merges,
 `make release VERSION=v0.7.0` checks `main` and pushes the tag, and the release workflow
 packages it. CurseForge shows the whole CHANGELOG.md at the tagged commit, newest release
