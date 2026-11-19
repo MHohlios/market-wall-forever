@@ -163,8 +163,9 @@ local function Merge(into, drops)
 end
 
 -- The tracker's state lives in memory only; settled kills reach saved data through Mobs.lua.
--- emit: Recording.Emit. canLoot(guid): "empty", "theirs", "mine" or nil.
-function Kills.NewTracker(emit, canLoot)
+-- emit: Recording.Emit. canLoot(guid): "empty", "theirs", "mine" or nil. itemOf(guid): the item ID
+-- of an opened container's "Item-..." GUID, or nil when it cannot be known.
+function Kills.NewTracker(emit, canLoot, itemOf)
   local tracker = {
     pending = {},   -- [guid] = { guid, npc, t, looted, check, coin, drops, gather }
     corpses = {},   -- [guid] = { t =, loot = nil, "partial", "emptied" or "gathered" }
@@ -253,7 +254,7 @@ function Kills.NewTracker(emit, canLoot)
       return
     end
     local shares = Kills.SplitLoot(slots)
-    local container
+    local container, containerGuids = nil, {}
     for guid, share in pairs(shares) do
       if Kills.IsItemSource(guid) then   -- never a mob's loot
         shares[guid] = nil
@@ -265,13 +266,17 @@ function Kills.NewTracker(emit, canLoot)
             container = container or { coin = 0, drops = {} }
             container.coin = container.coin + share.coin
             Merge(container.drops, share.drops)
+            containerGuids[#containerGuids + 1] = guid
           end
         end
       end
     end
-    -- a container opened from your bags; disenchant materials belong to DisenchantLog.lua
+    -- a container opened from your bags; disenchant materials belong to DisenchantLog.lua. Its
+    -- item ID is named only when the window holds one container's loot.
     if container then
-      emit({ t = t, kind = "loot", source = "item", window = window, coin = container.coin, drops = container.drops })
+      local id = #containerGuids == 1 and itemOf and itemOf(containerGuids[1]) or nil
+      emit({ t = t, kind = "loot", source = "item", container = id, window = window, coin = container.coin,
+        drops = container.drops })
     end
     if pickPocket and not self:FromCorpse(shares) then
       return   -- a living mob's pockets, not its drops
@@ -328,6 +333,28 @@ function Kills.NewTracker(emit, canLoot)
   return tracker
 end
 
+-- Names the item ID of an opened container from its "Item-..." GUID. The game's answer for the
+-- GUID comes first; failing that, the bag item you used just before, only when its GUID matches.
+-- A use whose GUID could not be read names nothing, and a use names one container at most.
+-- itemIDByGUID(guid): the game's item ID for a GUID, nil when unknown.
+function Kills.NewContainerResolver(itemIDByGUID)
+  local resolver = {}
+  local lastUsed   -- { id =, guid = }
+
+  -- You used a bag item: its item ID and GUID, each nil when unreadable
+  function resolver.Used(id, guid)
+    lastUsed = id and guid and { id = id, guid = guid } or nil
+  end
+
+  function resolver.ItemOf(guid)
+    local used = lastUsed
+    lastUsed = nil
+    return itemIDByGUID(guid) or (used and used.guid == guid and used.id) or nil
+  end
+
+  return resolver
+end
+
 -- In game -----------------------------------------------------------------------------------
 
 local function Readable(v)
@@ -361,7 +388,30 @@ local function ReadLootWindow()
   return slots
 end
 
-local tracker = Kills.NewTracker(function(event) ns.Recording.Emit(event) end, ReadCanLoot)
+local function ReadItemIDByGUID(guid)
+  if not (C_Item and C_Item.GetItemIDByGUID) then return nil end
+  local ok, id = pcall(C_Item.GetItemIDByGUID, guid)
+  id = ok and Readable(id)
+  return type(id) == "number" and id or nil
+end
+
+local function ReadBagItemGUID(bag, slot)
+  if not (C_Item and C_Item.GetItemGUID and ItemLocation and ItemLocation.CreateFromBagAndSlot) then return nil end
+  local ok, guid = pcall(C_Item.GetItemGUID, ItemLocation:CreateFromBagAndSlot(bag, slot))
+  guid = ok and Readable(guid)
+  return type(guid) == "string" and guid or nil
+end
+
+local resolver = Kills.NewContainerResolver(ReadItemIDByGUID)
+
+if C_Container and C_Container.UseContainerItem and hooksecurefunc then
+  hooksecurefunc(C_Container, "UseContainerItem", function(bag, slot)
+    local info = C_Container.GetContainerItemInfo(bag, slot)
+    resolver.Used(info and info.itemID, ReadBagItemGUID(bag, slot))
+  end)
+end
+
+local tracker = Kills.NewTracker(function(event) ns.Recording.Emit(event) end, ReadCanLoot, resolver.ItemOf)
 Kills.tracker = tracker
 Kills.paths = tracker.paths   -- /dump MarketWall.Kills.paths shows which rule settled each kill
 

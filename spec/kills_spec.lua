@@ -326,6 +326,95 @@ describe("Kills", function()
     assert.equal(0, #Of("kill"))
   end)
 
+  describe("naming the container opened", function()
+    local CLAM, CLAM_GUID = 5523, "Item-5250-0-40000000ABCDEF"
+    local asked
+
+    before_each(function()
+      asked = {}
+      tracker = K.NewTracker(function(e) events[#events + 1] = e end, function() end, function(guid)
+        asked[#asked + 1] = guid
+        if guid == CLAM_GUID then return CLAM end
+      end)
+    end)
+
+    it("puts the container's item ID on its loot event", function()
+      tracker:Loot({ Slot(LINEN, 2, CLAM_GUID, 2), Coin("15 Copper", CLAM_GUID, 15) }, false, 100)
+      local loot = Of("loot")[1]
+      assert.same({ "item", CLAM, 15, { [LINEN] = 2 } }, { loot.source, loot.container, loot.coin, loot.drops })
+    end)
+
+    it("leaves the container unnamed when its item ID can't be known", function()
+      tracker:Loot({ Slot(LINEN, 2, "Item-5250-0-40000000FFFFFF", 2) }, false, 100)
+      assert.same({ "item" }, { Of("loot")[1].source, Of("loot")[1].container })
+    end)
+
+    it("never names a disenchanted item as a container", function()
+      tracker:Loot({ Slot(10940, 2, CLAM_GUID, 2) }, false, 100, nil, true)
+      assert.same({ 0, {} }, { #Of("loot"), asked })
+    end)
+  end)
+
+  describe("container resolver", function()
+    local CLAM, OYSTER = 5523, 7973
+    local CLAM_GUID, OTHER_GUID = "Item-5250-0-40000000ABCDEF", "Item-5250-0-40000000FFFFFF"
+    local known, resolver
+
+    before_each(function()
+      known = {}
+      resolver = K.NewContainerResolver(function(guid) return known[guid] end)
+    end)
+
+    after_each(function()
+      _G.C_Container, _G.C_Item, _G.ItemLocation, _G.hooksecurefunc = nil, nil, nil, nil
+    end)
+
+    it("takes the game's answer for the GUID over the bag item used, and forgets the use", function()
+      known[CLAM_GUID] = OYSTER
+      resolver.Used(CLAM, CLAM_GUID)
+      assert.equal(OYSTER, resolver.ItemOf(CLAM_GUID))
+      known[CLAM_GUID] = nil
+      assert.is_nil(resolver.ItemOf(CLAM_GUID))
+    end)
+
+    it("names the used bag item only for its own GUID, and only once", function()
+      resolver.Used(CLAM, CLAM_GUID)
+      assert.is_nil(resolver.ItemOf(OTHER_GUID))
+      resolver.Used(CLAM, CLAM_GUID)
+      assert.equal(CLAM, resolver.ItemOf(CLAM_GUID))
+      assert.is_nil(resolver.ItemOf(CLAM_GUID))
+    end)
+
+    it("names nothing from a used bag item whose GUID could not be read", function()
+      resolver.Used(CLAM, nil)
+      assert.is_nil(resolver.ItemOf(CLAM_GUID))
+    end)
+
+    it("names the container you open from your bags in game", function()
+      local hooked = {
+        C_Container = { UseContainerItem = function() end,
+          GetContainerItemInfo = function() return { itemID = CLAM } end },
+        C_Item = { GetItemGUID = function(location) return location.guid end },
+        ItemLocation = { CreateFromBagAndSlot = function(_, bag, slot)
+          return { guid = (bag == 0 and slot == 1) and CLAM_GUID or OTHER_GUID }
+        end },
+        hooksecurefunc = function(t, name, fn)
+          local original = t[name]
+          t[name] = function(...) original(...) fn(...) end
+        end,
+      }
+      for k, v in pairs(hooked) do _G[k] = v end
+      local ns, fire = addon.Load()
+      fire("ADDON_LOADED", addon.ADDON)
+
+      _G.C_Container.UseContainerItem(0, 1)
+      ns.Kills.tracker:Loot({ Slot(LINEN, 1, CLAM_GUID, 1) }, false, os.time())
+      ns.Kills.tracker:Closed(true, os.time())
+      ns.Kills.tracker:Loot({ Slot(LINEN, 1, OTHER_GUID, 1) }, false, os.time())   -- opened some other way
+      assert.same({ [CLAM] = { opens = 1, coin = 0, drops = { [LINEN] = 1 } } }, MarketWallDB.containers)
+    end)
+  end)
+
   it("records no container loot for disenchanting results, which DisenchantLog.lua owns, even reopened", function()
     local item = "Item-5250-0-40000000ABCDEF"
     tracker:Loot({ Slot(10940, 2, item, 2) }, false, 101, nil, true)

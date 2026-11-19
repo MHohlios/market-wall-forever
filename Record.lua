@@ -2,7 +2,8 @@
 -- disenchant log, money ledger and farm sessions write to and read from.
 -- An event is { t, kind, source, ... }:
 --   kill    a settled kill: guid, npc, name, outcome, coin, drops, gather, via (see Kills.lua)
---   loot    a corpse, chest or container you looted: window, guid, npc, name, coin, drops
+--   loot    a corpse, chest or container you looted: window, guid, npc, name, coin, drops, and for
+--           a bag container, container: its item ID when known (see Containers.lua)
 --   gather  skinning, herbalism or mining: guid, npc (nil for a node), skill, drops
 --   fish    a fishing catch: window, coin, drops
 --   window  a loot window opened, or closed when closed is true: window

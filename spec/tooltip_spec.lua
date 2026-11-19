@@ -35,7 +35,7 @@ describe("item tooltip lines", function()
 
   before_each(function()
     ns = addon.Load()
-    _G.MarketWallDB = { version = 1, cfg = {}, realms = {}, depositRate = {} }
+    _G.MarketWallDB = { version = 1, cfg = {}, realms = {}, depositRate = {}, containers = {} }
     _G.C_Item = {}
     tooltip = NewTooltip()
   end)
@@ -321,6 +321,19 @@ describe("item tooltip lines", function()
       assert.truthy(tooltip.lines[Find("Vendor")]:find(BEST, 1, true))
       assert.truthy(Find("|" .. ns.Money(2090 - 615.6) .. " " .. GREY .. "· " .. ns.Money(2200) .. " listed"))
       assert.truthy(Find("|" .. ns.Money(2071 - 107.25) .. " " .. GREY .. "· " .. ns.Money(2180) .. " in mats"))
+    end)
+
+    it("shows what a container you have opened gives on average, after the outlets", function()
+      local CLAM = 5523
+      Item(CLAM, "Clam", { classID = 15, vendor = 5 })
+      -- dust lists at 100, 95 after the cut: (30 + 4 × 95) / 2
+      MarketWallDB.containers[CLAM] = { opens = 2, coin = 30, drops = { [DUST] = 4 } }
+      ns.TooltipLines.Add(tooltip, CLAM)
+      assert.equal(Find("Vendor|r") + 1, Find("Opens to|r|" .. ns.Money(205) .. " " .. GREY .. "avg (2 opened)|r"))
+
+      tooltip = NewTooltip()
+      ns.TooltipLines.Add(tooltip, ID)   -- never opened
+      assert.is_nil(Find("Opens to"))
     end)
 
     it("leaves out the vendor row without a vendor price and the disenchant rows for an item that can't be", function()

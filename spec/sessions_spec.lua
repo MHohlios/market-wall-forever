@@ -410,6 +410,30 @@ describe("Sessions", function()
   end)
 end)
 
+describe("Sessions and opened containers", function()
+  local CLAM, PEARL = 5523, 5498
+
+  after_each(function()
+    _G.C_Item = nil
+  end)
+
+  -- A session counts a container's contents when it is opened, so it never also counts the
+  -- container at its opened value: its lens prices the container as sold unopened
+  it("price a container at its sell value, while mob Optimal opens it", function()
+    local ns, fire = addon.Load()
+    _G.C_Item = { GetItemInfo = function(id)
+      if id == CLAM then return "Clam", "link", 1, 1, 1, "", "", 1, "", 0, 5, 15 end
+    end }
+    fire("ADDON_LOADED", addon.ADDON)
+    ns.R().days[PEARL] = { [ns.Today()] = { 1000 } }
+    ns.R().supplied[PEARL] = true
+    MarketWallDB.containers[CLAM] = { opens = 1, coin = 0, drops = { [PEARL] = 1 } }
+
+    assert.equal(5, ns.Sessions.GameLenses().optimal(CLAM))
+    assert.equal(950, ns.Mobs.Lenses(ns.Mobs.MobPrices(), ns.Mobs.GameOptions(), {}).optimal(CLAM))
+  end)
+end)
+
 describe("Quests", function()
   it("reads the item and quantity from a received-item message", function()
     local Q = addon.Load().Quests

@@ -92,7 +92,8 @@ local function Worth(drops, price, skip)
 end
 
 -- Per-item prices under each lens, each worked out once per call. Farm sessions price with it
--- too, and the Sell page groups bags by the same rule (Outlet.lua).
+-- too, and the Sell page groups bags by the same rule (Outlet.lua). With prices.opened(id), a
+-- container's history (Containers.lua), Optimal opens a container when that beats selling it.
 local function Lenses(prices, opts, unpriced)
   local cache = {}
   local function Of(id)
@@ -100,7 +101,8 @@ local function Lenses(prices, opts, unpriced)
     if p then return p end
     local v = ns.Outlet.Priced(prices, opts, id)
     if not v.auction then unpriced[id] = true end
-    p = { vendor = v.vendor, market = v.market, gathered = v.gathered, optimal = v.best }
+    local opened = prices.opened and ns.Containers.OpenedValue(prices.opened(id), prices, opts)
+    p = { vendor = v.vendor, market = v.market, gathered = v.gathered, optimal = math.max(v.best, opened or 0) }
     cache[id] = p
     return p
   end
@@ -126,7 +128,8 @@ end
 -- left out; 0c kills count. With no seen kill only the counts are returned.
 -- vendorNoRare, marketNoRare and optimalNoRare leave out drops seen in under opts.rareShare of kills.
 -- prices: vendor(id), wall(id) -> wall and whether it has real supply, deposit(id) -> one unit's
--- auction deposit, disenchant(id) -> its materials' walls and their deposits, or nil when not allowed
+-- auction deposit, disenchant(id) -> its materials' walls and their deposits, or nil when not allowed,
+-- and optionally opened(id) -> a container's opened history (see Lenses)
 -- opts: cut, disenchant, skinning (include in Optimal), rareShare
 local function SeenKills(mob)
   local seen = {}
@@ -269,6 +272,14 @@ function Mobs.GamePrices()
   }
 end
 
+-- GamePrices with what each container opens into, for mob values only. Farm sessions leave it
+-- out, as they count a container's contents when it is opened, and so does the Sell page.
+function Mobs.MobPrices()
+  local prices = Mobs.GamePrices()
+  prices.opened = function(id) return MarketWallDB.containers[id] end
+  return prices
+end
+
 local cache = {}   -- [npcID] = stats, or false for a mob never killed
 
 -- Stats for one mob at current prices, nil when it has never been killed. Cached until the mob
@@ -277,7 +288,7 @@ function Mobs.For(npc)
   local stats = cache[npc]
   if stats == nil then
     local mob = MarketWallDB.mobs[npc]
-    stats = mob and Mobs.Stats(mob, Mobs.GamePrices(), Mobs.GameOptions()) or false
+    stats = mob and Mobs.Stats(mob, Mobs.MobPrices(), Mobs.GameOptions()) or false
     cache[npc] = stats
   end
   return stats or nil
@@ -299,7 +310,7 @@ function Mobs.All()
 end
 
 function Mobs.GameDropTable(npc)
-  return Mobs.DropTable(MarketWallDB.mobs[npc], Mobs.GamePrices(), Mobs.GameOptions())
+  return Mobs.DropTable(MarketWallDB.mobs[npc], Mobs.MobPrices(), Mobs.GameOptions())
 end
 
 local recent = {}   -- [guid] = { mob, record } for kills stored this session, so later gathers attach

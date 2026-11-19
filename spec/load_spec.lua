@@ -21,6 +21,7 @@ describe("loading the addon", function()
     assert.is_function(ns.InitMinimapButton) -- from Minimap.lua
     assert.is_function(ns.Recording.Emit)   -- the recording core, Record.lua
     assert.is_table(ns.Kills.tracker)       -- Kills.lua
+    assert.is_function(ns.Containers.OpenedValue) -- Containers.lua
     assert.is_function(ns.Mobs.For)         -- Mobs.lua
     assert.is_table(ns.DisenchantLog.tracker) -- DisenchantLog.lua
     assert.is_function(ns.MobsView.Build)   -- MobsView.lua, before Search.lua builds it
@@ -34,7 +35,7 @@ describe("loading the addon", function()
   it("creates its SavedVariables on ADDON_LOADED", function()
     local _, fire = addon.Load()
     fire("ADDON_LOADED", addon.ADDON)
-    assert.same({ version = 1, cfg = {}, realms = {}, mobs = {}, disenchants = {}, ledger = {}, sessions = {},
+    assert.same({ version = 1, cfg = {}, realms = {}, mobs = {}, disenchants = {}, containers = {}, ledger = {}, sessions = {},
       sessionGroups = {}, creatures = {}, depositRate = {} }, MarketWallDB)
   end)
 end)

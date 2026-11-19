@@ -18,6 +18,7 @@ Record.lua
 Kills.lua
 DisenchantLog.lua
 Outlet.lua
+Containers.lua
 Mobs.lua
 Ledger.lua
 Quests.lua

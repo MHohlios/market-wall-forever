@@ -32,6 +32,13 @@ local function OutletLines(add, id, count)
 
   if values.vendor > 0 then add(OutletLabel("Vendor", Outlet.VENDOR, best), ns.Money(values.vendor)) end
 
+  -- a container you have opened: what one opening gave on average, at each content's best outlet
+  local history = MarketWallDB.containers[id]
+  local opened = ns.Containers.OpenedValue(history, prices, opts)
+  if opened then
+    add(GOLD .. "Opens to|r", ns.Money(opened) .. " " .. GREY .. "avg (" .. history.opens .. " opened)|r")
+  end
+
   -- shown whether or not disenchanting counts toward the best outlet
   local disenchant, _, deposits = ns.DisenchantValue(id, prices.deposit)
   if disenchant then

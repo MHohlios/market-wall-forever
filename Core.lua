@@ -294,6 +294,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
     MarketWallDB.realms = MarketWallDB.realms or {}
     MarketWallDB.mobs = MarketWallDB.mobs or {}   -- kill records per mob, see Mobs.lua
     MarketWallDB.disenchants = MarketWallDB.disenchants or {}   -- your disenchant results, see DisenchantLog.lua
+    MarketWallDB.containers = MarketWallDB.containers or {}   -- what containers opened into, see Containers.lua
     MarketWallDB.ledger = MarketWallDB.ledger or {}   -- cash ledger per character, see Ledger.lua
     MarketWallDB.sessions = MarketWallDB.sessions or {}   -- farm sessions, see Sessions.lua
     MarketWallDB.sessionGroups = MarketWallDB.sessionGroups or {}
