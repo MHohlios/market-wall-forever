@@ -61,7 +61,7 @@ describe("FindDisenchantDeals", function()
     assert.equal(1, #ns.FindDisenchantDeals({ [1001] = 380 }, CUT, NO_DEPOSITS, 0, 0))
     assert.same({}, ns.FindDisenchantDeals({ [1001] = 380 }, CUT, function(id) return deposits[id] end, 0, 0))
     local d = ns.FindDisenchantDeals({ [1001] = 200 }, CUT, function(id) return deposits[id] end, 0, 0)[1]
-    assert.near(273, d.value, 1e-6)   -- as the item tooltip's Net disenchant shows it
+    assert.near(273, d.value, 1e-6)   -- as the item tooltip's Disenchant (net) shows it
     assert.near(73, d.profit, 1e-6)
   end)
 

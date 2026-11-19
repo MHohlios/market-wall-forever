@@ -14,10 +14,12 @@ A World of Warcraft (Forever) auction house addon. It adds a Market tab with:
   listing, skipping flagged bait, and warns before a post that looks like a mistake.
 - **Item search**: an MW button on the minimap opens a window, anywhere in the world,
   to look up any item MarketWall has seen. See below.
-- **Tooltips**: what one unit nets through the market, a vendor and disenchanting, after
-  the auction house cut and deposit, beside the listed price, with the one that pays most
-  marked best; the disenchant materials with their odds and prices; then high/low against
-  the median and the 7-day trend. Hovering a mob shows its value per kill. See below.
+- **Tooltips**: what one unit nets through a vendor, the market and disenchanting, after
+  the auction house cut and deposit, with the one that pays most marked best; the
+  disenchant materials with their odds and prices; for ore and cloth, what one unit nets
+  smelted into bars or woven into bolts and sold (Dark Iron takes 8 ore a bar, cloth 2 to 5
+  a bolt); a stack's worth at the best of these; then high/low against the median and the
+  7-day trend. Hovering a mob shows its value per kill. See below.
 
 Every recommendation, from the tooltip's best outlet to the Sell page's groups, mob values
 and farm sessions, counts the cut and a one-unit deposit at your Sell page duration. Away

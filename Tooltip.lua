@@ -5,48 +5,18 @@ local GREY, GOLD, GREEN, ORANGE = "|cffa3acac", "|cfff5c518", "|cff4fc36b", "|cf
 local Outlet = ns.Outlet
 
 local MIN_SHOWN_CHANCE = 0.01
+local CONVERSION = "conversion"   -- the best-tag key for a conversion line
 
-local function OutletLabel(name, outlet, best)
+-- An outlet line's left side: the name, the best tag, then any note in grey. The right side
+-- holds only the price, so prices line up.
+local function OutletLabel(name, outlet, best, note)
   return GOLD .. name .. "|r" .. (outlet == best and " " .. GREEN .. "best|r" or "")
+    .. (note and " " .. GREY .. note .. "|r" or "")
 end
 
 -- One decimal, dropped when it is zero: 1.5, 2, 99.5
 local function Decimal(x)
   return (string.format("%.1f", x):gsub("%.0$", ""))
-end
-
--- What one unit nets through each outlet, after the cut and an estimated deposit, with the
--- listed price beside it. The best outlet follows the Sell page's bag-group rule.
-local function OutletLines(add, id, count)
-  local prices, opts = ns.Mobs.GamePrices(), ns.Mobs.GameOptions()
-  local values = Outlet.Priced(prices, opts, id)
-  local best = ns.SellPricing.Group(values)
-  local wall, day = ns.LatestWall(id)
-  if wall then
-    local age = ns.Today() - day
-    local when = (age == 0 and "today") or (age == 1 and "yesterday") or (age .. " days ago")
-    add(OutletLabel("Net market", Outlet.AUCTION, best), ns.Money(values.auction) .. " " .. GREY .. "· "
-      .. ns.Money(wall) .. " listed (" .. when .. ")" .. (values.thin and " (thin market)" or "") .. "|r")
-    if count and count > 1 then add(GREY .. "Stack of " .. count .. "|r", ns.Money(wall * count)) end
-  end
-
-  if values.vendor > 0 then add(OutletLabel("Vendor", Outlet.VENDOR, best), ns.Money(values.vendor)) end
-
-  -- a container you have opened: what one opening gave on average, at each content's best outlet
-  local history = MarketWallDB.containers[id]
-  local opened = ns.Containers.OpenedValue(history, prices, opts)
-  if opened then
-    add(GOLD .. "Opens to|r", ns.Money(opened) .. " " .. GREY .. "avg (" .. history.opens .. " opened)|r")
-  end
-
-  -- shown whether or not disenchanting counts toward the best outlet
-  local disenchant, _, deposits = ns.DisenchantValue(id, prices.deposit)
-  if disenchant then
-    add(OutletLabel("Net disenchant", Outlet.DISENCHANT, best), ns.Money(Outlet.Net(disenchant, opts.cut, deposits))
-      .. " " .. GREY .. "· " .. ns.Money(disenchant) .. " in mats|r")
-  elseif disenchant == false then
-    add(OutletLabel("Net disenchant", Outlet.DISENCHANT, best), GREY .. "materials not scanned|r")
-  end
 end
 
 -- One indented line per likely material, most likely first, then where the odds come from.
@@ -65,6 +35,67 @@ local function DisenchantLines(add, id)
   end
   add(GREY .. "  odds: " .. source .. " · net after the cut and each material's deposit|r", "")
   return true
+end
+
+-- What one input nets as its share of the product (Outlet.CONVERSIONS), after the cut and the
+-- product's deposit, and whether the product's market is too thin to trust. False when the
+-- product has no scanned wall.
+local function ConversionValue(conversion, prices, cut)
+  local wall, supplied = prices.wall(conversion.product)
+  if not wall then return false end
+  return Outlet.Net(wall, cut, prices.deposit(conversion.product)) / conversion.inputs, not supplied
+end
+
+-- What one unit nets through each outlet, after the cut and an estimated deposit, with the
+-- disenchant breakdown under its line. The best of vendor, market and disenchanting follows the
+-- Sell page's bag-group rule; a conversion is best when it pays more than all three.
+-- True when it added the disenchant breakdown.
+local function OutletLines(add, id, count)
+  local prices, opts = ns.Mobs.GamePrices(), ns.Mobs.GameOptions()
+  local values = Outlet.Priced(prices, opts, id)
+  local best, bestValue = ns.SellPricing.Group(values), values.best
+  local conversion = Outlet.CONVERSIONS[id]
+  local converted, convertedThin
+  if conversion then converted, convertedThin = ConversionValue(conversion, prices, opts.cut) end
+  if converted and not convertedThin and converted > values.best then best, bestValue = CONVERSION, converted end
+
+  if values.vendor > 0 then add(OutletLabel("Vendor", Outlet.VENDOR, best), ns.Money(values.vendor)) end
+
+  if values.auction then
+    add(OutletLabel("Market (net)", Outlet.AUCTION, best, values.thin and "(thin market)" or nil),
+      ns.Money(values.auction))
+  end
+
+  -- shown whether or not disenchanting counts toward the best outlet
+  local disenchant, _, deposits = ns.DisenchantValue(id, prices.deposit)
+  if disenchant then
+    add(OutletLabel("Disenchant (net)", Outlet.DISENCHANT, best, "(" .. ns.Money(disenchant) .. " in mats)"),
+      ns.Money(Outlet.Net(disenchant, opts.cut, deposits)))
+  elseif disenchant == false then
+    add(OutletLabel("Disenchant (net)", Outlet.DISENCHANT, best), GREY .. "materials not scanned|r")
+  end
+  local breakdown = DisenchantLines(add, id)
+
+  if conversion then
+    local product = ns.Name(conversion.product)
+    local note = "· " .. conversion.inputs .. " " .. conversion.input .. " → 1 " .. conversion.output
+      .. (convertedThin and " (thin market)" or "")
+    add(OutletLabel("As " .. product .. " (net)", CONVERSION, best, note),
+      converted and ns.Money(converted) or GREY .. product .. " not scanned|r")
+  end
+
+  if count and count > 1 and best ~= Outlet.NO_DATA then
+    local suffix = best == CONVERSION and " (as " .. conversion.output .. "s)" or ""
+    add(GREY .. "Stack of " .. count .. suffix .. "|r", ns.Money(bestValue * count))
+  end
+
+  -- a container you have opened: what one opening gave on average, at each content's best outlet
+  local history = MarketWallDB.containers[id]
+  local opened = ns.Containers.OpenedValue(history, prices, opts)
+  if opened then
+    add(GOLD .. "Opens to|r " .. GREY .. "avg (" .. history.opens .. " opened)|r", ns.Money(opened))
+  end
+  return breakdown
 end
 
 local function MarketContextLines(add, id)
@@ -119,8 +150,7 @@ local function AddLines(tooltip, id)
     tooltip:AddDoubleLine(left, right)
   end
 
-  OutletLines(add, id, StackCount(tooltip, id))
-  if DisenchantLines(add, id) then gap = true end
+  if OutletLines(add, id, StackCount(tooltip, id)) then gap = true end
   MarketContextLines(add, id)
 end
 

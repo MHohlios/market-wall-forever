@@ -1,7 +1,8 @@
 -- MarketWall: the best outlet for one unit of an item: the auction house, a vendor or
 -- disenchanting, after the auction house's fees. Mob values' lenses (Mobs.lua), farm sessions,
--- the item tooltip and the Sell page's bag groups share this rule, so they never disagree. Only
--- mob values add one more option: opening a container (Containers.lua).
+-- the item tooltip and the Sell page's bag groups share this rule, so they never disagree. Two
+-- options sit outside it: conversions (Outlet.CONVERSIONS), which only the item tooltip weighs,
+-- and opening a container (Containers.lua), which only mob values count.
 local _, ns = ...
 
 local Outlet = {}
@@ -68,6 +69,32 @@ function Outlet.Game()
     return Outlet.Priced(prices, opts, id, deposit)
   end
 end
+
+-- Conversions -------------------------------------------------------------------------------
+
+-- Raw materials one single-input recipe turns into a product that sells: [input ID] = the
+-- product, how many inputs make one, and what to call each. Two-input recipes (Bronze, Steel)
+-- are left out. Classic Era recipe data, from wowhead.com/classic/spell=<id>: smelting 2657,
+-- 3304, 2658, 3307, 3308, 10097, 10098, 16153, 14891; tailoring 2963, 2964, 3839, 3865, 18401.
+local function Smelt(bar, ores) return { product = bar, inputs = ores or 1, input = "ore", output = "bar" } end
+local function Weave(bolt, cloth) return { product = bolt, inputs = cloth, input = "cloth", output = "bolt" } end
+
+Outlet.CONVERSIONS = {
+  [2770] = Smelt(2840),        -- Copper Ore → Copper Bar
+  [2771] = Smelt(3576),        -- Tin Ore → Tin Bar
+  [2775] = Smelt(2842),        -- Silver Ore → Silver Bar
+  [2772] = Smelt(3575),        -- Iron Ore → Iron Bar
+  [2776] = Smelt(3577),        -- Gold Ore → Gold Bar
+  [3858] = Smelt(3860),        -- Mithril Ore → Mithril Bar
+  [7911] = Smelt(6037),        -- Truesilver Ore → Truesilver Bar
+  [10620] = Smelt(12359),      -- Thorium Ore → Thorium Bar
+  [11370] = Smelt(11371, 8),   -- Dark Iron Ore → Dark Iron Bar
+  [2589] = Weave(2996, 2),     -- Linen Cloth → Bolt of Linen Cloth
+  [2592] = Weave(2997, 3),     -- Wool Cloth → Bolt of Woolen Cloth
+  [4306] = Weave(4305, 4),     -- Silk Cloth → Bolt of Silk Cloth
+  [4338] = Weave(4339, 5),     -- Mageweave Cloth → Bolt of Mageweave
+  [14047] = Weave(14048, 5),   -- Runecloth → Bolt of Runecloth
+}
 
 -- Deposits ----------------------------------------------------------------------------------
 
