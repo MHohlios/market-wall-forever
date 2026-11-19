@@ -290,7 +290,7 @@ local function Build()
   f.title:SetWordWrap(false)
 
   local mainWidth = WIDTH - MAIN_X - 14
-  f.view = PV.CreateView(f.item, { width = mainWidth, chartHeight = 140, cellWidth = mainWidth / 4, cells = CELLS, ranges = true })
+  f.view = PV.CreateView(f.item, { width = mainWidth, chartHeight = 124, cellWidth = mainWidth / 4, cells = CELLS, ranges = true })
   f.view:SetPoint("TOPLEFT")
 
   f.watch = w.MakeButton(f.item, "Add to watchlist", 130)

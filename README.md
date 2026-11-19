@@ -92,7 +92,15 @@ the copies and relists them. The newest listing at a price sells first.
 An item is listed as possibly baited when its cheapest price level sits at least
 `baitMinUnder` under the wall (50% by default, held to 10% to 95%), below the item's own
 normal range, and has stayed at that price for two scans in a row
-(full scans or live searches). Items need the usual days of history; commodities only.
+(full scans or live searches). Commodities only. On an item's first day its normal range
+is today's wall.
+
+Every number shows from an item's first scan. Until an item has `minHistoryDays` days of
+data (5 by default, "Days before data is reliable"), tooltips, the item window, the Sell page
+and the Snipes and Dips Data column flag it in orange; the setting hides nothing. The Watchlist
+and Bait Detect lists have no room for that column, so a low-data item's name ends with an
+orange " · N d" there instead, and hovering their Normal range and Wall cells shows the badge.
+The setting is held to 1 through 15, the most days of data an item can have. Dips need at least one earlier day to compare against.
 Copies are the units posted at the bait price since it first appeared.
 
 Click an item to search it. Set **Buy at or below** (it starts at the bait price) and

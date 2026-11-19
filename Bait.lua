@@ -28,18 +28,18 @@ end
 
 -- The cheapest level when it sits at least minUnder under the wall (0.5 is half the wall's
 -- price) and below the item's normal range. Ordinary undercutting stays close to the wall.
--- minDays counts today, as Snipes and Dips do; stats cover past days only.
-local function Candidate(ladder, wall, stats, minDays, minUnder)
+-- stats come from ns.StatsFor, which falls back to today's wall on an item's first day.
+local function Candidate(ladder, wall, stats, minUnder)
   local cheapest = ladder and ladder[1]
   if not cheapest or not wall or 1 - cheapest.p / wall + EDGE < minUnder then return nil end
-  if not stats or stats.n == 0 or stats.n + 1 < minDays or cheapest.p >= stats.p25 then return nil end
+  if not stats or stats.n == 0 or cheapest.p >= stats.p25 then return nil end
   return cheapest
 end
 
 -- One scan of an item: returns the new bait record, or nil when its cheapest level is not bait.
 -- record: { p = bait price, u = units first seen, q = units now, w = wall, first =, last =, seen = scans }
-function B.Update(record, ladder, wall, stats, minDays, minUnder, now)
-  local level = Candidate(ladder, wall, stats, minDays, minUnder)
+function B.Update(record, ladder, wall, stats, minUnder, now)
+  local level = Candidate(ladder, wall, stats, minUnder)
   if not level then return nil end
   if not record or record.p ~= level.p then
     return { p = level.p, u = level.q, q = level.q, w = wall, first = now, last = now, seen = 1 }

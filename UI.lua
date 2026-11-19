@@ -160,6 +160,22 @@ end
 -------------------------------------------------------------------------------
 -- Generic list: sortable headers with hover help, icon per row
 -------------------------------------------------------------------------------
+
+-- Text, then a suffix that always stays visible: the text loses characters from its end, behind
+-- an ellipsis, until both fit the cell. Keeps a colour code wrapped around the text.
+local function FitText(cell, text, suffix)
+  local color, plain = text:match("^(|c%x%x%x%x%x%x%x%x)(.*)|r$")
+  plain = plain or text
+  local function Show(shown)
+    cell:SetText((color and color .. shown .. "|r" or shown) .. suffix)
+  end
+  Show(plain)
+  local limit = cell:GetWidth()
+  while plain ~= "" and cell:GetStringWidth() > limit do
+    plain = plain:gsub("[\1-\127\192-\255][\128-\191]*$", "")   -- one whole UTF-8 character
+    Show(plain .. "…")
+  end
+end
 local function CreateList(parent, rows)
   local size = rows or ROWS
   local list = CreateFrame("Frame", nil, parent)
@@ -187,7 +203,7 @@ local function CreateList(parent, rows)
     row.icon = row:CreateTexture(nil, "ARTWORK")
     row.icon:SetSize(16, 16)
     row.icon:SetPoint("LEFT", 8, 0)
-    row.cells = {}
+    row.cells, row.hits = {}, {}
     row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     row:SetScript("OnClick", function(self, button)
       local handler = button == "RightButton" and list.onRightClick or list.onClick
@@ -197,6 +213,7 @@ local function CreateList(parent, rows)
       if self.entry and self.entry.id and GameTooltip and GameTooltip.SetItemByID then
         GameTooltip:SetOwner(self, "ANCHOR_CURSOR_RIGHT")
         GameTooltip:SetItemByID(self.entry.id)
+        if self.entry.itemTip then GameTooltip:AddLine(self.entry.itemTip, 1, 0.69, 0.34, true) end
         GameTooltip:Show()
       end
     end)
@@ -229,7 +246,23 @@ local function CreateList(parent, rows)
     return header
   end
 
-  -- columns: { {title, width, justify, tip}, ... }   sortCol/sortDesc mark the active sort
+  -- A hover area over one row's cell, for columns marked cellTip. Clicks pass through to the row.
+  local function CellHit(row, c)
+    local hit = row.hits[c]
+    if hit then return hit end
+    hit = CreateFrame("Frame", nil, row)
+    hit:SetMouseMotionEnabled(true)
+    hit:SetMouseClickEnabled(false)
+    hit:SetScript("OnEnter", function(self)
+      local tip = row.entry and row.entry.cellTips and row.entry.cellTips[c]
+      if tip then ShowTip(self, self.title, tip) end
+    end)
+    hit:SetScript("OnLeave", HideTip)
+    row.hits[c] = hit
+    return hit
+  end
+
+  -- columns: { {title, width, justify, tip, cellTip = true?}, ... }   sortCol/sortDesc mark the active sort
   function list:SetColumns(columns, sortCol, sortDesc)
     self.columns = columns
     local x = 8
@@ -250,6 +283,16 @@ local function CreateList(parent, rows)
           cell:Show()
         else
           cell:Hide()
+        end
+        if col and col.cellTip then
+          local hit = CellHit(row, c)
+          hit:ClearAllPoints()
+          hit:SetPoint("TOPLEFT", row, "TOPLEFT", x, 0)
+          hit:SetSize(col[2], ROW_H)
+          hit.title = col[1]
+          hit:Show()
+        elseif row.hits[c] then
+          row.hits[c]:Hide()
         end
       end
       if col then
@@ -284,7 +327,10 @@ local function CreateList(parent, rows)
       local entry = data[i + self.offset]
       row.entry = entry
       if entry then
-        for c = 1, #self.columns do row.cells[c]:SetText(entry.cells[c] or "") end
+        for c = 1, #self.columns do
+          local suffix = entry.suffixes and entry.suffixes[c]
+          if suffix then FitText(row.cells[c], entry.cells[c] or "", suffix) else row.cells[c]:SetText(entry.cells[c] or "") end
+        end
         row.icon:SetTexture(entry.id and ns.Icon(entry.id) or nil)
         row:SetAlpha(entry.dim and 0.45 or 1)
         row.bar:SetShown(entry.bar ~= nil)
@@ -320,24 +366,29 @@ end
 -- Columns and view data. Each entry carries raw values in entry.sort for header sorting.
 -------------------------------------------------------------------------------
 local WALL_TIP = "The item's real price: the lowest price level that has meaningful supply behind it. A few stray cheap units do not move it."
+-- Days of data behind each row; hovering a cell explains an orange one. cellTip: rows carry a
+-- hover text for this column's cells in entry.cellTips.
+local DATA_COLUMN = { "Data", 44, "RIGHT", "Days of data behind the normal price. Orange: fewer than the \"Days before data is reliable\" setting, so the normal price may be off.", cellTip = true }
 local WATCH_COLUMNS = {
   { "Item", 170, nil, "Items you are tracking. Click a row for its chart and live listings." },
   { "Wall price", 80, "RIGHT", WALL_TIP },
   { "Lowest", 80, "RIGHT", "The single cheapest listing right now, even if it is only one unit." },
-  { "Normal range", 140, "RIGHT", "Where the wall price usually sits: the middle half of its daily history. Shows 'building' until there are 3 days of data." },
+  -- the watchlist has no room for a Data column, so this column's cells carry its badge
+  { "Normal range", 140, "RIGHT", "Where the wall price usually sits: the middle half of its daily history. On an item's first day, today's wall. No room for a Data column here: hover a cell for the item's days of data.", cellTip = true },
   { "Buy below", 80, "RIGHT", "Your buy threshold. Units listed under this price count as deals. Set it on the item's page." },
   { "Sell at", 80, "RIGHT", "Your target resale price. The row says Sell when the wall price reaches it." },
   { "Units under", 75, "RIGHT", "How many units are listed under your buy price as of the last scan." },
   { "Status", 80, "RIGHT", "Buy: units are under your buy price. Sell: the wall reached your sell price. Old: the price has not been scanned recently." },
 }
 local SNIPE_COLUMNS = {
-  { "Item", 200, nil, "Items with listings priced under their wall. Click a row to load live listings before buying." },
+  { "Item", 170, nil, "Items with listings priced under their wall. Click a row to load live listings before buying." },
   { "Wall price", 90, "RIGHT", WALL_TIP },
   { "Cheapest", 90, "RIGHT", "The lowest listing found in the scan." },
   { "Units", 70, "RIGHT", "Units listed under the wall that would still profit after the auction house cut." },
   { "Cost", 100, "RIGHT", "What it costs to buy all of those units." },
   { "Profit after cut", 120, "RIGHT", "Expected profit if you resell at the normal price, after the auction house cut. Uses the lower of today's wall and the historical median." },
   { "Under normal", 90, "RIGHT", "How far the average cost of those units is below the normal price." },
+  DATA_COLUMN,
 }
 local DIP_COLUMNS = {
   { "Item", 200, nil, "Items whose wall price dropped suddenly compared with their own history." },
@@ -346,7 +397,7 @@ local DIP_COLUMNS = {
   { "Under by", 80, "RIGHT", "How far today's wall is below the normal price." },
   { "Supply", 90, "RIGHT", "Total units listed. More supply means the dip is real, not one seller." },
   { "Profit each", 110, "RIGHT", "Expected profit per unit if the price returns to normal, after the auction house cut." },
-  { "History", 90, "RIGHT", "Days of data behind the normal price." },
+  DATA_COLUMN,
 }
 local DISENCHANT_COLUMNS = {
   { "Item", 220, nil, "Weapons and armor, uncommon or better, listed under what disenchanting them is worth. Click a row to load live listings before buying." },
@@ -378,8 +429,9 @@ local function WatchData()
       statusText = GREY .. "Old, " .. ns.Ago(cur.t) .. "|r"
     end
     local range = GREY .. "building|r"
-    if stats.n >= 3 then range = ns.Money(stats.p25) .. " to " .. ns.Money(stats.p75) end
+    if stats.n > 0 then range = ns.Money(stats.p25) .. " to " .. ns.Money(stats.p75) end
     local name = ns.Name(id)
+    local days = ns.DaysOfData(id)
     data[#data + 1] = {
       id = id, status = status, name = name, highlight = (status == "buy"), dim = stale,
       cells = {
@@ -387,7 +439,9 @@ local function WatchData()
         entry.buy and ns.Money(entry.buy) or "-", entry.sell and ns.Money(entry.sell) or "-",
         cur.under and tostring(cur.under) or "-", statusText,
       },
-      sort = { name, cur.w, cur.m, stats.n >= 3 and stats.p25 or nil, entry.buy, entry.sell, cur.under, -STATUS_ORDER[status] },
+      sort = { name, cur.w, cur.m, stats.n > 0 and stats.p25 or nil, entry.buy, entry.sell, cur.under, -STATUS_ORDER[status] },
+      suffixes = { ns.DataSuffix(days) }, itemTip = ns.LowDataTip(days),
+      cellTips = { [4] = ns.DataBadgeTip(days) },
     }
   end
   table.sort(data, function(a, b)
@@ -396,14 +450,16 @@ local function WatchData()
   end)
   return data
 end
+ui.WatchData = WatchData   -- for specs
 
 local function SnipeData()
   local data = {}
   for i = 1, #ns.snipes do
     local s = ns.snipes[i]
     data[i] = { id = s.id,
-      cells = { ns.ColorName(s.id), ns.Money(s.wall), ns.Money(s.min), tostring(s.units), ns.Money(s.cost), ns.Money(s.profit), Pct(s.discount) },
-      sort = { ns.Name(s.id), s.wall, s.min, s.units, s.cost, s.profit, s.discount },
+      cells = { ns.ColorName(s.id), ns.Money(s.wall), ns.Money(s.min), tostring(s.units), ns.Money(s.cost), ns.Money(s.profit), Pct(s.discount), ns.DataBadge(s.days) },
+      sort = { ns.Name(s.id), s.wall, s.min, s.units, s.cost, s.profit, s.discount, s.days },
+      cellTips = { [8] = ns.DataTip(s.days) },
     }
   end
   return data
@@ -414,8 +470,9 @@ local function DipData()
   for i = 1, #ns.dips do
     local d = ns.dips[i]
     data[i] = { id = d.id,
-      cells = { ns.ColorName(d.id), ns.Money(d.wall), ns.Money(d.median), Pct(d.under), tostring(d.total), ns.Money(d.profit), d.days .. " days" },
+      cells = { ns.ColorName(d.id), ns.Money(d.wall), ns.Money(d.median), Pct(d.under), tostring(d.total), ns.Money(d.profit), ns.DataBadge(d.days) },
       sort = { ns.Name(d.id), d.wall, d.median, d.under, d.total, d.profit, d.days },
+      cellTips = { [7] = ns.DataTip(d.days) },
     }
   end
   return data
@@ -529,7 +586,7 @@ local function CreateChart(parent)
       if series[i].q and series[i].q > maxQ then maxQ = series[i].q end
     end
     span(buy) span(sell)
-    if stats and stats.n >= 3 then span(stats.p25) span(stats.p75) end
+    if stats and stats.n > 0 then span(stats.p25) span(stats.p75) end
     local pad = math.max((hi - lo) * 0.12, hi * 0.03, 1)
     lo, hi = math.max(0, lo - pad), hi + pad
     local function Y(v) return math.max(0, math.min(height, (v - lo) / (hi - lo) * height)) end
@@ -559,7 +616,7 @@ local function CreateChart(parent)
       end
     end
 
-    if stats and stats.n >= 3 then
+    if stats and stats.n > 0 then
       self.band:ClearAllPoints()
       self.band:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", 0, Y(stats.p25))
       self.band:SetPoint("TOPRIGHT", self, "BOTTOMRIGHT", 0, Y(stats.p75))
@@ -590,7 +647,7 @@ local function CreateChart(parent)
 end
 ns.widgets = {
   MakeButton = MakeButton, MakeText = MakeText, MakeEdit = MakeEdit, ShowTip = ShowTip, HideTip = HideTip,
-  OnLinkInsert = OnLinkInsert, CreateList = CreateList, CreateChart = CreateChart, ShowMenu = ShowMenu, Prompt = Prompt, ListHeight = function(rows) return 22 + rows * ROW_H end,
+  OnLinkInsert = OnLinkInsert, CreateList = CreateList, FitText = FitText, CreateChart = CreateChart, ShowMenu = ShowMenu, Prompt = Prompt, ListHeight = function(rows) return 22 + rows * ROW_H end,
 }
 
 -------------------------------------------------------------------------------
@@ -665,10 +722,12 @@ local function RefreshItem()
   else
     lines[#lines + 1] = GREY .. "No current listings loaded. Press Refresh with the auction house open.|r"
   end
-  if stats.n >= 3 then
-    lines[#lines + 1] = string.format("Normal: median %s, range %s to %s, from %d days", ns.Money(stats.median), ns.Money(stats.p25), ns.Money(stats.p75), stats.n)
+  local lowData = ns.LowDataText(ns.DaysOfData(id))
+  if lowData then lines[#lines + 1] = ORANGE .. lowData .. "|r" end
+  if stats.n > 0 then
+    lines[#lines + 1] = string.format("Normal: median %s, range %s to %s, from %d %s", ns.Money(stats.median), ns.Money(stats.p25), ns.Money(stats.p75), stats.n, stats.n == 1 and "day" or "days")
   else
-    lines[#lines + 1] = GREY .. string.format("Normal range needs 3 days of scans (%d so far).", stats.n) .. "|r"
+    lines[#lines + 1] = GREY .. "No normal range yet: no scans in the history window.|r"
   end
   if held and limits.buy and held.kind ~= "scan" then
     local units, cost = W.UnitsUnder(held.ladder, limits.buy)
@@ -834,7 +893,8 @@ end
 local SETTINGS = {
   { key = "ahCut", label = "Auction house cut", kind = "pct", tip = "The share of each sale the auction house keeps. Used for every profit and break-even number." },
   { key = "wallShare", label = "Wall share", kind = "pct", tip = "How much of an item's total supply a price level must reach, counting up from the cheapest, to be the wall. Higher ignores bigger cheap batches." },
-  { key = "minHistoryDays", label = "Days of data required", kind = "int", tip = "Items need this many days of full scans before they can appear in Snipes or Dips." },
+  { key = "minHistoryDays", label = "Days before data is reliable", kind = "int", min = 1, max = ns.cfgDefaults.baselineDays + 1,
+    tip = "Items with fewer days of scans than this get an orange low-data flag. It only sets the flag; nothing is hidden. 1 to " .. (ns.cfgDefaults.baselineDays + 1) .. "." },
   { key = "minSnipeProfit", label = "Minimum snipe profit", kind = "money", tip = "Snipes with less total profit than this, after the cut, are left out." },
   { key = "minSnipeDiscount", label = "Minimum snipe discount", kind = "pct", tip = "Snipe units must cost at least this much less than the normal price." },
   { key = "minDisenchantProfit", label = "Minimum disenchant profit", kind = "money", tip = "Disenchant deals with less profit per item than this, after the cut on the materials, are left out." },
@@ -893,7 +953,8 @@ local function ParseSetting(def, text)
     if n and n >= 1 then return n end
   else
     local n = tonumber(text)
-    if n and n >= 0 then return math.floor(n) end
+    n = n and math.floor(n)
+    if n and n >= (def.min or 0) and n <= (def.max or n) then return n end
   end
   return nil
 end
@@ -1015,20 +1076,12 @@ function ui.Show(view)
   ns.RefreshUI()
 end
 
--- Empty-list text that says how far along the history is
+-- Empty-list text: noneText after a full scan this session, else when to run one
 function ui.WaitingText(noneText, neverText)
   if not ns.lastFullScan then
     local r = ns.R()
     if r.lastFull then return "Results are from this session only. Run a full scan to refresh the list.\nLast full scan: " .. ns.Ago(r.lastFull) .. "." end
     return neverText
-  end
-  local need, have = ns.Cfg("minHistoryDays"), ns.bestHistory or 0
-  if have < need then
-    local text = string.format("Collecting history: day %d of %d.\nItems appear here once they have %d days of data. Run a full scan each day.", have, need, need)
-    if (ns.hiddenSnipes or 0) > 0 then
-      text = text .. string.format("\n%d possible snipes are hidden until then.", ns.hiddenSnipes)
-    end
-    return text
   end
   return noneText
 end
@@ -1075,11 +1128,11 @@ function ns.RefreshUI()
   elseif view == "snipes" then
     ListView("snipes", SnipeData(),
       ui.WaitingText("No snipes in the last full scan.", "Run a full scan to look for listings priced under the wall."),
-      string.format("Only items with %d days of data. Click a row to load live listings before buying.", ns.Cfg("minHistoryDays")))
+      "Click a row to load live listings before buying. An orange Data cell: few days of data, so the normal price may be off.")
   elseif view == "dips" then
     ListView("dips", DipData(),
       ui.WaitingText("No dips in the last full scan.", "Run a full scan. Dips compare today's wall price with each item's own history."),
-      string.format("Only items with %d days of data. Items sliding for days are left out.", ns.Cfg("minHistoryDays")))
+      "Items need a day of history before they can dip. Items sliding for days are left out.")
   elseif view == "disenchant" then
     RefreshDisenchant()
   end

@@ -21,7 +21,8 @@ BINDING_NAME_MARKETWALL_BAIT_ACTION = "Bait Detect: search or buy"
 local COLUMNS = {
   { "Item", 110, nil, "Commodities whose cheapest price level looks like bait: thin supply under the wall, below the item's normal range, seen in two scans in a row." },
   { "Bait", 92, "RIGHT", "Units first seen at the bait price, and that price." },
-  { "Wall", 70, "RIGHT", "The item's real price: the lowest price level with meaningful supply behind it." },
+  -- the list is full, so this column's cells carry the Data badge other lists show in a column
+  { "Wall", 70, "RIGHT", "The item's real price: the lowest price level with meaningful supply behind it. No room for a Data column here: hover a cell for the item's days of data.", cellTip = true },
   { "Under", 38, "RIGHT", "How far the bait price is under the wall." },
   { "Copies", 40, "RIGHT", "Units posted at the bait price since it first appeared. Green rows: copies are piling up; those are the cheap units worth buying." },
   { "Seen", 30, "RIGHT", "How long ago the bait price first appeared." },
@@ -203,21 +204,25 @@ local function ListData()
   local data = {}
   for i, item in ipairs(items) do
     local r, copies = item.record, B.Copies(item.record)
+    local days = ns.DaysOfData(item.id)
     data[i] = {
       id = item.id, highlight = (item.id == selectedID), tint = copies > 0 and PILING_TINT or nil,
       cells = {
         ns.ColorName(item.id), r.u .. " @ " .. ns.Money(r.p), ns.Money(r.w), string.format("%d%%", ns.Round(B.Under(r) * 100)),
         (copies > 0 and GREEN or GREY) .. copies .. "|r", Short(r.first),
       },
+      suffixes = { ns.DataSuffix(days) }, itemTip = ns.LowDataTip(days),
+      cellTips = { [3] = ns.DataBadgeTip(days) },
     }
   end
   return data
 end
+ns.BaitListData = ListData   -- for specs
 
 local function EmptyText()
   if not ns.R().lastFull then return "Run a full scan to look for baited items." end
-  return string.format("Nothing looks baited right now.\nAn item shows here when its cheapest level sits at least %d%% under the wall and below its normal range in two scans in a row. Items need %d days of history.",
-    ns.Round(ns.Bait.MinUnder(ns.Cfg("baitMinUnder")) * 100), ns.Cfg("minHistoryDays"))
+  return string.format("Nothing looks baited right now.\nAn item shows here when its cheapest level sits at least %d%% under the wall and below its normal range in two scans in a row.",
+    ns.Round(ns.Bait.MinUnder(ns.Cfg("baitMinUnder")) * 100))
 end
 
 local function DrawLadder(id, held, wall)
@@ -270,11 +275,11 @@ local function DrawDetail()
   local wall
   if held and held.total > 0 then wall = W.Compute(held.ladder, held.total, ns.Cfg("wallShare"), ns.Cfg("wallMinUnits")) end
   local parts = { "Wall " .. ns.Money(wall) }
-  if stats.n >= 3 then
+  if stats.n > 0 then
     parts[#parts + 1] = "Median " .. ns.Money(stats.median)
     parts[#parts + 1] = "Normal range " .. ns.Money(stats.p25) .. " to " .. ns.Money(stats.p75)
   else
-    parts[#parts + 1] = GREY .. "Normal range needs 3 days of scans|r"
+    parts[#parts + 1] = GREY .. "No normal range yet|r"
   end
   if record then
     parts[#parts + 1] = string.format("Bait first seen %s, %d unit%s", ns.Ago(record.first), record.u, record.u == 1 and "" or "s")

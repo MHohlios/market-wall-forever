@@ -167,6 +167,9 @@ local function UpdateTotals()
   if page.notes ~= "" then info = (info ~= "" and info .. "  " or "") .. GREY .. page.notes .. "|r" end
   page.info:SetText(BLUE .. info .. "|r")
   local warnings = Warnings(page.item, price, quantity, totals)
+  -- shown with the warnings, but not one: posting a young item needs no confirmation
+  local lowData = ns.LowDataText(ns.DaysOfData(page.item.id))
+  if lowData then table.insert(warnings, 1, lowData) end
   page.warning:SetText(ORANGE .. "· " .. table.concat(warnings, "\n· ") .. "|r")
   page.warnings:SetShown(#warnings > 0)
 end
@@ -567,7 +570,7 @@ local function BuildListings(w)
   page.rowHint:SetText("Click a row to set Price each to that level.")
 
   local width = RIGHT_WIDTH - 8
-  page.view = PV.CreateView(r, { width = width, chartHeight = 70, cellWidth = width / 4, cells = HISTORY_CELLS, ranges = true })
+  page.view = PV.CreateView(r, { width = width, chartHeight = 54, cellWidth = width / 4, cells = HISTORY_CELLS, ranges = true })
   page.view:SetPoint("TOPLEFT", 4, -2)
 
   page.tabs = {}

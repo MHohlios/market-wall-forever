@@ -110,8 +110,14 @@ describe("Sell page pricing", function()
       assert.same({}, Warnings({ price = 199, stats = stats }))
     end)
 
-    it("needs 3 days of history for the normal range", function()
-      assert.same({}, Warnings({ price = 1, stats = { n = 2, p25 = 199, p75 = 200 } }))
+    it("warns from an item's first scan, against today's wall", function()
+      local firstScan = W.Stats({}, 200)
+      assert.same({ "Below expected: 1s 99c is under this item's normal range (2s 0c - 2s 0c)." },
+        Warnings({ price = 199, stats = firstScan }))
+    end)
+
+    it("does not warn with no normal range at all", function()
+      assert.same({}, Warnings({ price = 1, stats = { n = 0 } }))
     end)
 
     -- the same totals that colour "AH beats vendor by", so the two always agree
