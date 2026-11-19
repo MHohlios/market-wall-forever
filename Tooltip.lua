@@ -7,8 +7,11 @@ local Outlet = ns.Outlet
 local MIN_SHOWN_CHANCE = 0.01
 local CONVERSION = "conversion"   -- the best-tag key for a conversion line
 
-local function OutletLabel(name, outlet, best)
+-- An outlet line's left side: the name, the best tag, then any note in grey. The right side
+-- holds only the price, so prices line up.
+local function OutletLabel(name, outlet, best, note)
   return GOLD .. name .. "|r" .. (outlet == best and " " .. GREEN .. "best|r" or "")
+    .. (note and " " .. GREY .. note .. "|r" or "")
 end
 
 -- One decimal, dropped when it is zero: 1.5, 2, 99.5
@@ -57,15 +60,15 @@ local function OutletLines(add, id, count)
   if values.vendor > 0 then add(OutletLabel("Vendor", Outlet.VENDOR, best), ns.Money(values.vendor)) end
 
   if values.auction then
-    add(OutletLabel("Market (net)", Outlet.AUCTION, best),
-      ns.Money(values.auction) .. (values.thin and " " .. GREY .. "(thin market)|r" or ""))
+    add(OutletLabel("Market (net)", Outlet.AUCTION, best, values.thin and "(thin market)" or nil),
+      ns.Money(values.auction))
   end
 
   -- shown whether or not disenchanting counts toward the best outlet
   local disenchant, _, deposits = ns.DisenchantValue(id, prices.deposit)
   if disenchant then
-    add(OutletLabel("Disenchant (net)", Outlet.DISENCHANT, best), ns.Money(Outlet.Net(disenchant, opts.cut, deposits))
-      .. " " .. GREY .. "· " .. ns.Money(disenchant) .. " in mats|r")
+    add(OutletLabel("Disenchant (net)", Outlet.DISENCHANT, best, "(" .. ns.Money(disenchant) .. " in mats)"),
+      ns.Money(Outlet.Net(disenchant, opts.cut, deposits)))
   elseif disenchant == false then
     add(OutletLabel("Disenchant (net)", Outlet.DISENCHANT, best), GREY .. "materials not scanned|r")
   end
@@ -73,25 +76,21 @@ local function OutletLines(add, id, count)
 
   if conversion then
     local product = ns.Name(conversion.product)
-    local label = OutletLabel("As " .. product .. " (net)", CONVERSION, best)
-    if converted then
-      add(label, ns.Money(converted) .. " " .. GREY .. "· " .. conversion.inputs .. " " .. conversion.input
-        .. " → 1 " .. conversion.output .. "|r")
-    else
-      add(label, GREY .. product .. " not scanned|r")
-    end
+    local ratio = "· " .. conversion.inputs .. " " .. conversion.input .. " → 1 " .. conversion.output
+    add(OutletLabel("As " .. product .. " (net)", CONVERSION, best, ratio),
+      converted and ns.Money(converted) or GREY .. product .. " not scanned|r")
   end
 
   if count and count > 1 and best ~= Outlet.NO_DATA then
-    local suffix = best == CONVERSION and " " .. GREY .. "as " .. conversion.output .. "s|r" or ""
-    add(GREY .. "Stack of " .. count .. "|r", ns.Money(bestValue * count) .. suffix)
+    local suffix = best == CONVERSION and " (as " .. conversion.output .. "s)" or ""
+    add(GREY .. "Stack of " .. count .. suffix .. "|r", ns.Money(bestValue * count))
   end
 
   -- a container you have opened: what one opening gave on average, at each content's best outlet
   local history = MarketWallDB.containers[id]
   local opened = ns.Containers.OpenedValue(history, prices, opts)
   if opened then
-    add(GOLD .. "Opens to|r", ns.Money(opened) .. " " .. GREY .. "avg (" .. history.opens .. " opened)|r")
+    add(GOLD .. "Opens to|r " .. GREY .. "avg (" .. history.opens .. " opened)|r", ns.Money(opened))
   end
   return breakdown
 end

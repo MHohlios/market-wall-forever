@@ -7,14 +7,18 @@ local GREY_NA = GREY .. "n/a (first scan)|r"
 describe("item tooltip lines", function()
   local ns, tooltip
 
-  -- A tooltip that records its lines as "left|right" strings
+  -- A tooltip that records its lines as "left|right" strings, and its double lines' sides apart
   local function NewTooltip(owner)
-    local lines = {}
+    local lines, doubles = {}, {}
     return {
       lines = lines,
+      doubles = doubles,
       GetOwner = function() return owner end,
       AddLine = function(_, text) lines[#lines + 1] = text end,
-      AddDoubleLine = function(_, left, right) lines[#lines + 1] = left .. "|" .. right end,
+      AddDoubleLine = function(_, left, right)
+        lines[#lines + 1] = left .. "|" .. right
+        doubles[#doubles + 1] = { left = left, right = right }
+      end,
     }
   end
 
@@ -245,7 +249,7 @@ describe("item tooltip lines", function()
       ns.R().supplied[ID] = nil   -- no real supply behind the wall
       MarketWallDB.cfg.mobDisenchant = "never"
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(tooltip.lines[Find("Market (net)")]:find(GREY .. "(thin market)|r", 1, true))
+      assert.truthy(Find("Market (net)|r " .. GREY .. "(thin market)|r|"))
       assert.truthy(tooltip.lines[Find("Vendor")]:find(BEST, 1, true))
 
       tooltip = NewTooltip()
@@ -298,14 +302,14 @@ describe("item tooltip lines", function()
       assert.is_nil(Find(BEST))
       assert.is_nil(Find("Market (net)"))
       assert.truthy(Find("Vendor|r|" .. ns.Money(100)))
-      assert.truthy(Find("Disenchant (net)|r|" .. ns.Money(558.125) .. " " .. GREY .. "· " .. ns.Money(588) .. " in mats|r"))
+      assert.truthy(Find("Disenchant (net)|r " .. GREY .. "(" .. ns.Money(588) .. " in mats)|r|" .. ns.Money(558.125)))
     end)
 
     it("takes each material's deposit off the disenchant net and says so under the breakdown", function()
       items[DUST].vendor, items[ESSENCE].vendor, items[SHARD].vendor = 10, 100, 200
       -- 75% × 2.5 × 3 + 20% × 1.5 × 30 + 5% × 60 = 17.625 in deposits at 30%
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(Find("Disenchant (net)|r|" .. ns.Money(558.125 - 17.625) .. " "))
+      assert.truthy(Find("in mats)|r|" .. ns.Money(558.125 - 17.625)))
       assert.truthy(Find("odds: classic table · net after the cut and each material's deposit|r"))
       assert.truthy(Find("  Dust|" .. GREY .. "2.5× · 75%|r " .. ns.Money(100)))   -- materials keep their wall
     end)
@@ -331,7 +335,7 @@ describe("item tooltip lines", function()
       ns.TooltipLines.Add(tooltip, ID)
       assert.truthy(tooltip.lines[Find("Vendor")]:find(BEST, 1, true))
       assert.truthy(Find("Market (net)|r|" .. ns.Money(2090 - 615.6)))
-      assert.truthy(Find("|" .. ns.Money(2071 - 107.25) .. " " .. GREY .. "· " .. ns.Money(2180) .. " in mats"))
+      assert.truthy(Find("(" .. ns.Money(2180) .. " in mats)|r|" .. ns.Money(2071 - 107.25)))
     end)
 
     it("shows what a container you have opened gives on average, after the outlets", function()
@@ -340,7 +344,7 @@ describe("item tooltip lines", function()
       -- dust lists at 100, 95 after the cut: (30 + 4 × 95) / 2
       MarketWallDB.containers[CLAM] = { opens = 2, coin = 30, drops = { [DUST] = 4 } }
       ns.TooltipLines.Add(tooltip, CLAM)
-      assert.equal(Find("Vendor|r") + 1, Find("Opens to|r|" .. ns.Money(205) .. " " .. GREY .. "avg (2 opened)|r"))
+      assert.equal(Find("Vendor|r") + 1, Find("Opens to|r " .. GREY .. "avg (2 opened)|r|" .. ns.Money(205)))
 
       tooltip = NewTooltip()
       ns.TooltipLines.Add(tooltip, ID)   -- never opened
@@ -431,8 +435,8 @@ describe("item tooltip lines", function()
         InStack(20)
         ns.TooltipLines.Add(tooltip, IRON_ORE)
         local order = { " ", "Vendor|r", "Market (net)|r",
-          "As Iron Bar (net)|r" .. TAGGED .. "|" .. ns.Money(540) .. " " .. GREY .. "· 1 ore → 1 bar|r",
-          "Stack of 20|r|" .. ns.Money(540 * 20) .. " " .. GREY .. "as bars|r" }
+          "As Iron Bar (net)|r" .. TAGGED .. " " .. GREY .. "· 1 ore → 1 bar|r|" .. ns.Money(540),
+          "Stack of 20 (as bars)|r|" .. ns.Money(540 * 20) }
         for i, text in ipairs(order) do
           assert.truthy(tooltip.lines[i]:find(text, 1, true), text)
         end
@@ -444,7 +448,7 @@ describe("item tooltip lines", function()
         InStack(20)
         ns.TooltipLines.Add(tooltip, IRON_ORE)
         assert.truthy(tooltip.lines[Find("Market (net)")]:find(BEST, 1, true))
-        assert.truthy(Find("As Iron Bar (net)|r|" .. ns.Money(255) .. " "))
+        assert.truthy(Find("As Iron Bar (net)|r " .. GREY .. "· 1 ore → 1 bar|r|" .. ns.Money(255)))
         assert.truthy(Find("Stack of 20|r|" .. ns.Money(365 * 20)))
         assert.is_nil(Find("as bars"))
       end)
@@ -456,7 +460,7 @@ describe("item tooltip lines", function()
         Wall(LINEN, 10)
         Wall(BOLT, 100)   -- 95 after the cut, for 2 cloth
         ns.TooltipLines.Add(tooltip, LINEN)
-        assert.truthy(Find("As Bolt of Linen Cloth (net)|r" .. TAGGED .. "|" .. ns.Money(47.5) .. " " .. GREY .. "· 2 cloth → 1 bolt|r"))
+        assert.truthy(Find("As Bolt of Linen Cloth (net)|r" .. TAGGED .. " " .. GREY .. "· 2 cloth → 1 bolt|r|" .. ns.Money(47.5)))
       end)
 
       it("takes 8 Dark Iron Ore for a bar", function()
@@ -466,12 +470,45 @@ describe("item tooltip lines", function()
         Wall(DARK_ORE, 900)
         Wall(DARK_BAR, 8000)   -- 7600 after the cut, for 8 ore
         ns.TooltipLines.Add(tooltip, DARK_ORE)
-        assert.truthy(Find("As Dark Iron Bar (net)|r" .. TAGGED .. "|" .. ns.Money(950) .. " " .. GREY .. "· 8 ore → 1 bar|r"))
+        assert.truthy(Find("As Dark Iron Bar (net)|r" .. TAGGED .. " " .. GREY .. "· 8 ore → 1 bar|r|" .. ns.Money(950)))
+      end)
+
+      it("keeps only a price in the right column of every outlet line, notes going on the left", function()
+        local function AssertMoneyOnly()
+          local checked = 0
+          for _, line in ipairs(tooltip.doubles) do
+            if line.left:find("^|cfff5c518") or line.left:find("Stack of", 1, true) then
+              local leftover = line.right:gsub("%-?%d+|T[^|]+|t", ""):gsub(" ", "")
+              assert.equal("", leftover, line.left)
+              checked = checked + 1
+            end
+          end
+          return checked
+        end
+
+        Wall(IRON_BAR, 600)
+        InStack(20)
+        ns.TooltipLines.Add(tooltip, IRON_ORE)   -- Vendor, Market, As Iron Bar, Stack
+        assert.equal(4, AssertMoneyOnly())
+
+        Wall(ID, 500)
+        ns.R().supplied[ID] = nil   -- thin market
+        _G.C_Container = { GetContainerItemInfo = function() return { itemID = ID, stackCount = 5 } end }
+        tooltip = NewTooltip({ GetSlotAndBagID = function() return 4, 0 end })
+        ns.TooltipLines.Add(tooltip, ID)   -- Vendor, Market, Disenchant, Stack
+        assert.equal(4, AssertMoneyOnly())
+
+        local CLAM = 5523
+        Item(CLAM, "Clam", { classID = 15, vendor = 5 })
+        MarketWallDB.containers[CLAM] = { opens = 2, coin = 30, drops = { [DUST] = 4 } }
+        tooltip = NewTooltip()
+        ns.TooltipLines.Add(tooltip, CLAM)   -- Vendor, Opens to
+        assert.equal(2, AssertMoneyOnly())
       end)
 
       it("says the product is not scanned without a wall for it, and leaves the best tag where it was", function()
         ns.TooltipLines.Add(tooltip, IRON_ORE)
-        assert.truthy(Find("As Iron Bar (net)|r|" .. GREY .. "Iron Bar not scanned|r"))
+        assert.truthy(Find("As Iron Bar (net)|r " .. GREY .. "· 1 ore → 1 bar|r|" .. GREY .. "Iron Bar not scanned|r"))
         assert.truthy(tooltip.lines[Find("Market (net)")]:find(BEST, 1, true))
       end)
     end)
