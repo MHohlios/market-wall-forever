@@ -204,17 +204,20 @@ local function ListData()
   local data = {}
   for i, item in ipairs(items) do
     local r, copies = item.record, B.Copies(item.record)
+    local days = ns.DaysOfData(item.id)
     data[i] = {
       id = item.id, highlight = (item.id == selectedID), tint = copies > 0 and PILING_TINT or nil,
       cells = {
         ns.ColorName(item.id), r.u .. " @ " .. ns.Money(r.p), ns.Money(r.w), string.format("%d%%", ns.Round(B.Under(r) * 100)),
         (copies > 0 and GREEN or GREY) .. copies .. "|r", Short(r.first),
       },
-      cellTips = { [3] = ns.DataBadgeTip(ns.DaysOfData(item.id)) },
+      suffixes = { ns.DataSuffix(days) }, itemTip = ns.LowDataTip(days),
+      cellTips = { [3] = ns.DataBadgeTip(days) },
     }
   end
   return data
 end
+ns.BaitListData = ListData   -- for specs
 
 local function EmptyText()
   if not ns.R().lastFull then return "Run a full scan to look for baited items." end

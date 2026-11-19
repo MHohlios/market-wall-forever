@@ -66,21 +66,19 @@ end
 local function MarketContextLines(add, id)
   local wall, day = ns.LatestWall(id)
   if not wall then return end
-  local days = ns.DaysOfData(id)
-  local flag = ns.LowDataText(days)
+  local flag = ns.LowDataText(ns.DaysOfData(id))
   if flag then add(ORANGE .. flag .. "|r", "") end
-  -- on an item's first day, a number that cannot be worked out yet says so rather than vanishing
-  local missing = days <= 1 and GREY .. "n/a (first scan)|r" or nil
+  -- a number that cannot be worked out says n/a rather than vanishing, and why on a first scan
+  local stats = ns.StatsFor(id)
+  local missing = GREY .. (stats.firstScan and "n/a (first scan)" or "n/a") .. "|r"
 
   local label = ns.Today() == day and "Against median" or "Against median (last scan)"
-  local diff, word = ns.Versus(wall, ns.StatsFor(id))
-  local versus = diff and ns.VersusText(diff, word) or missing
-  if versus then add(GREY .. label .. "|r", versus) end
+  local diff, word = ns.Versus(wall, stats)
+  add(GREY .. label .. "|r", diff and ns.VersusText(diff, word) or missing)
 
   local PV = ns.PriceView
   local week = PV.Summary(PV.InRange(ns.Series(id), 7, time()))
-  local trend = week and week.trend and PV.TrendText(week.trend) or missing
-  if trend then add(GREY .. "7-day trend|r", trend) end
+  add(GREY .. "7-day trend|r", week and week.trend and PV.TrendText(week.trend) or missing)
 
   local entry = ns.R().watch[id]
   if entry and entry.buy then

@@ -1,7 +1,8 @@
 local addon = require("spec.helpers.addon")
 
 local ID = 7
-local GREY_NA = "|cffa3acacn/a (first scan)|r"
+local GREY = "|cffa3acac"
+local GREY_NA = GREY .. "n/a (first scan)|r"
 
 describe("item tooltip lines", function()
   local ns, tooltip
@@ -56,10 +57,18 @@ describe("item tooltip lines", function()
       assert.is_true(Has("7-day trend|r|" .. GREY_NA))
     end)
 
-    it("is absent when the only other price is older than 7 days", function()
+    it("reads a plain n/a when the only other price is older than 7 days", function()
       ns.R().days[ID] = { [ns.Today() - 10] = { 900 }, [ns.Today()] = { 1000 } }
       ns.TooltipLines.Add(tooltip, ID)
-      assert.is_false(Has("7-day trend"))
+      assert.is_true(Has("7-day trend|r|" .. GREY .. "n/a|r"))
+      assert.is_false(Has("first scan"))
+    end)
+
+    it("reads a plain n/a for both when the last scan is older than the baseline window", function()
+      ns.R().days[ID] = { [ns.Today() - 20] = { 1000 } }
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.is_true(Has("Against median (last scan)|r|" .. GREY .. "n/a|r"))
+      assert.is_true(Has("7-day trend|r|" .. GREY .. "n/a|r"))
     end)
 
     it("names a rise past 3% up and a fall past 3% down", function()

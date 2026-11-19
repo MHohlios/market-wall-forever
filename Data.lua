@@ -81,9 +81,19 @@ function ns.DaysOfData(id)
   return #ns.DayWalls(id) + (TodayWall(id) and 1 or 0)
 end
 
+-- "Days before data is reliable", held to 1 through one day past the baseline window, the most
+-- days of data an item can have
+function ns.ReliableDaysMax()
+  return ns.Cfg("baselineDays") + 1
+end
+
+function ns.ReliableDays()
+  return math.max(1, math.min(ns.ReliableDaysMax(), ns.Cfg("minHistoryDays")))
+end
+
 -- True while an item has fewer days of data than "Days before data is reliable"
 function ns.IsLowData(days)
-  return days < ns.Cfg("minHistoryDays")
+  return days < ns.ReliableDays()
 end
 
 local function DaysText(days)
@@ -110,6 +120,17 @@ end
 -- The badge and its hover in one cell tip, for lists with no room for a Data column
 function ns.DataBadgeTip(days)
   return "Data: " .. ns.DataBadge(days) .. "\n" .. ns.DataTip(days)
+end
+
+-- For lists with no room for a Data column: the orange " · N d" an Item cell ends with, and the
+-- line its hover adds, while the item is low on data; nil for both otherwise
+function ns.DataSuffix(days)
+  if not ns.LowDataText(days) then return nil end
+  return ORANGE .. " · " .. days .. " d|r"
+end
+
+function ns.LowDataTip(days)
+  return ns.LowDataText(days) and ns.DataTip(days)
 end
 
 -- Weekly history is saved as one compact string per item: the first week's start day, then one

@@ -160,6 +160,22 @@ end
 -------------------------------------------------------------------------------
 -- Generic list: sortable headers with hover help, icon per row
 -------------------------------------------------------------------------------
+
+-- Text, then a suffix that always stays visible: the text loses characters from its end, behind
+-- an ellipsis, until both fit the cell. Keeps a colour code wrapped around the text.
+local function FitText(cell, text, suffix)
+  local color, plain = text:match("^(|c%x%x%x%x%x%x%x%x)(.*)|r$")
+  plain = plain or text
+  local function Show(shown)
+    cell:SetText((color and color .. shown .. "|r" or shown) .. suffix)
+  end
+  Show(plain)
+  local limit = cell:GetWidth()
+  while plain ~= "" and cell:GetStringWidth() > limit do
+    plain = plain:gsub("[\1-\127\192-\255][\128-\191]*$", "")   -- one whole UTF-8 character
+    Show(plain .. "…")
+  end
+end
 local function CreateList(parent, rows)
   local size = rows or ROWS
   local list = CreateFrame("Frame", nil, parent)
@@ -197,6 +213,7 @@ local function CreateList(parent, rows)
       if self.entry and self.entry.id and GameTooltip and GameTooltip.SetItemByID then
         GameTooltip:SetOwner(self, "ANCHOR_CURSOR_RIGHT")
         GameTooltip:SetItemByID(self.entry.id)
+        if self.entry.itemTip then GameTooltip:AddLine(self.entry.itemTip, 1, 0.69, 0.34, true) end
         GameTooltip:Show()
       end
     end)
@@ -310,7 +327,10 @@ local function CreateList(parent, rows)
       local entry = data[i + self.offset]
       row.entry = entry
       if entry then
-        for c = 1, #self.columns do row.cells[c]:SetText(entry.cells[c] or "") end
+        for c = 1, #self.columns do
+          local suffix = entry.suffixes and entry.suffixes[c]
+          if suffix then FitText(row.cells[c], entry.cells[c] or "", suffix) else row.cells[c]:SetText(entry.cells[c] or "") end
+        end
         row.icon:SetTexture(entry.id and ns.Icon(entry.id) or nil)
         row:SetAlpha(entry.dim and 0.45 or 1)
         row.bar:SetShown(entry.bar ~= nil)
@@ -411,6 +431,7 @@ local function WatchData()
     local range = GREY .. "building|r"
     if stats.n > 0 then range = ns.Money(stats.p25) .. " to " .. ns.Money(stats.p75) end
     local name = ns.Name(id)
+    local days = ns.DaysOfData(id)
     data[#data + 1] = {
       id = id, status = status, name = name, highlight = (status == "buy"), dim = stale,
       cells = {
@@ -419,7 +440,8 @@ local function WatchData()
         cur.under and tostring(cur.under) or "-", statusText,
       },
       sort = { name, cur.w, cur.m, stats.n > 0 and stats.p25 or nil, entry.buy, entry.sell, cur.under, -STATUS_ORDER[status] },
-      cellTips = { [4] = ns.DataBadgeTip(ns.DaysOfData(id)) },
+      suffixes = { ns.DataSuffix(days) }, itemTip = ns.LowDataTip(days),
+      cellTips = { [4] = ns.DataBadgeTip(days) },
     }
   end
   table.sort(data, function(a, b)
@@ -428,6 +450,7 @@ local function WatchData()
   end)
   return data
 end
+ui.WatchData = WatchData   -- for specs
 
 local function SnipeData()
   local data = {}
@@ -624,7 +647,7 @@ local function CreateChart(parent)
 end
 ns.widgets = {
   MakeButton = MakeButton, MakeText = MakeText, MakeEdit = MakeEdit, ShowTip = ShowTip, HideTip = HideTip,
-  OnLinkInsert = OnLinkInsert, CreateList = CreateList, CreateChart = CreateChart, ShowMenu = ShowMenu, Prompt = Prompt, ListHeight = function(rows) return 22 + rows * ROW_H end,
+  OnLinkInsert = OnLinkInsert, CreateList = CreateList, FitText = FitText, CreateChart = CreateChart, ShowMenu = ShowMenu, Prompt = Prompt, ListHeight = function(rows) return 22 + rows * ROW_H end,
 }
 
 -------------------------------------------------------------------------------
@@ -870,7 +893,8 @@ end
 local SETTINGS = {
   { key = "ahCut", label = "Auction house cut", kind = "pct", tip = "The share of each sale the auction house keeps. Used for every profit and break-even number." },
   { key = "wallShare", label = "Wall share", kind = "pct", tip = "How much of an item's total supply a price level must reach, counting up from the cheapest, to be the wall. Higher ignores bigger cheap batches." },
-  { key = "minHistoryDays", label = "Days before data is reliable", kind = "int", tip = "Items with fewer days of scans than this get an orange low-data flag. It only sets the flag; nothing is hidden." },
+  { key = "minHistoryDays", label = "Days before data is reliable", kind = "int", min = 1, max = ns.cfgDefaults.baselineDays + 1,
+    tip = "Items with fewer days of scans than this get an orange low-data flag. It only sets the flag; nothing is hidden. 1 to " .. (ns.cfgDefaults.baselineDays + 1) .. "." },
   { key = "minSnipeProfit", label = "Minimum snipe profit", kind = "money", tip = "Snipes with less total profit than this, after the cut, are left out." },
   { key = "minSnipeDiscount", label = "Minimum snipe discount", kind = "pct", tip = "Snipe units must cost at least this much less than the normal price." },
   { key = "minDisenchantProfit", label = "Minimum disenchant profit", kind = "money", tip = "Disenchant deals with less profit per item than this, after the cut on the materials, are left out." },
@@ -929,7 +953,8 @@ local function ParseSetting(def, text)
     if n and n >= 1 then return n end
   else
     local n = tonumber(text)
-    if n and n >= 0 then return math.floor(n) end
+    n = n and math.floor(n)
+    if n and n >= (def.min or 0) and n <= (def.max or n) then return n end
   end
   return nil
 end

@@ -87,8 +87,65 @@ describe("data from an item's first scan", function()
     assert.equal("|cffa3acac5 d|r", ns.DataBadge(5))
   end)
 
-  it("gives lists with no Data column the badge and its hover in one cell tip", function()
-    assert.equal("Data: 1 d\nOnly 1 day of data; the normal price may be off.", Plain(ns.DataBadgeTip(1)))
+  describe("lists with no room for a Data column", function()
+    local YOUNG, SEASONED = 7, 8
+    local SUFFIX = "|cffffb057 · 1 d|r"
+    local TIP = "Only 1 day of data; the normal price may be off."
+
+    before_each(function()
+      SeedWalls(1000)
+      local days = {}
+      for ago = 0, 4 do days[ns.Today() - ago] = { 1000 } end
+      ns.R().days[SEASONED] = days
+    end)
+
+    local function ByID(rows)
+      local out = {}
+      for _, row in ipairs(rows) do out[row.id] = row end
+      return out
+    end
+
+    it("ends a low-data Watchlist row's Item cell with an orange badge, and adds its hover", function()
+      ns.R().watch[YOUNG], ns.R().watch[SEASONED] = {}, {}
+      local rows = ByID(ns.ui.WatchData())
+      assert.same({ SUFFIX }, rows[YOUNG].suffixes)
+      assert.equal(TIP, rows[YOUNG].itemTip)
+      assert.equal("Data: 1 d\n" .. TIP, Plain(rows[YOUNG].cellTips[4]))
+      assert.same({}, rows[SEASONED].suffixes)
+      assert.is_nil(rows[SEASONED].itemTip)
+    end)
+
+    it("does the same for Bait Detect rows", function()
+      local flagged = { p = 30, u = 1, q = 1, w = 1000, first = 1, last = 2, seen = 2 }
+      ns.R().bait[YOUNG], ns.R().bait[SEASONED] = flagged, flagged
+      local rows = ByID(ns.BaitListData())
+      assert.same({ SUFFIX }, rows[YOUNG].suffixes)
+      assert.equal(TIP, rows[YOUNG].itemTip)
+      assert.equal("Data: 1 d\n" .. TIP, Plain(rows[YOUNG].cellTips[3]))
+      assert.same({}, rows[SEASONED].suffixes)
+      assert.is_nil(rows[SEASONED].itemTip)
+    end)
+
+    -- A cell 90 wide, with every character 6 wide and colour codes taking no room
+    local function Cell()
+      local cell = {}
+      function cell.SetText(_, text) cell.text = text end
+      function cell.GetWidth() return 90 end
+      function cell.GetStringWidth() return 6 * #Plain(cell.text):gsub("…", ".") end
+      return cell
+    end
+
+    it("shortens the name, never the badge, to fit the cell", function()
+      local cell = Cell()
+      ns.widgets.FitText(cell, "|cff1eff00Mageweave Cloth|r", SUFFIX)
+      assert.equal("|cff1eff00Magewea…|r" .. SUFFIX, cell.text)
+    end)
+
+    it("leaves a name that fits whole", function()
+      local cell = Cell()
+      ns.widgets.FitText(cell, "Silk", SUFFIX)
+      assert.equal("Silk" .. SUFFIX, cell.text)
+    end)
   end)
 
   it("counts past days without a scan today", function()
@@ -105,6 +162,15 @@ describe("data from an item's first scan", function()
     assert.equal("|cffffb0573 d|r", ns.DataBadge(3))
   end)
 
+  it("holds the setting to 1 through one day past the baseline window", function()
+    MarketWallDB.cfg.minHistoryDays = 0
+    assert.equal(1, ns.ReliableDays())
+    assert.is_nil(ns.LowDataText(1))
+    MarketWallDB.cfg.minHistoryDays = 99
+    assert.equal(15, ns.ReliableDays())   -- the most days an item can have: 14 past and today
+    assert.is_nil(ns.LowDataText(15))
+  end)
+
   describe("full scan deals", function()
     local CUT = 0.05
     -- 10 units at 50 under a 100 wall
@@ -116,9 +182,23 @@ describe("data from an item's first scan", function()
 
     it("includes a snipe on an item's first day, resold at today's wall", function()
       SeedWalls(100)
-      local snipe, dip = Deals()
+      local snipe = Deals()
       assert.same({ 10, 500, 1 }, { snipe.units, snipe.cost, snipe.days })
+    end)
+
+    it("excludes a day-1 dip only because the item has no past day", function()
+      -- a 200 normal price that today's 100 wall falls well under, once as a past day...
+      local pastDay = ns.Wall.Stats({ 200 })
+      assert.is_true((ns.Wall.IsDip(100, pastDay, ns.Cfg("dipPct"), CUT)))
+      -- ...and once with the same numbers marked as a first scan
+      local firstDay = ns.Wall.Stats({ 200 })
+      firstDay.firstScan = true
+      assert.same({ false, "history" }, { ns.Wall.IsDip(100, firstDay, ns.Cfg("dipPct"), CUT) })
+
+      SeedWalls(100)
+      local _, dip = ns.FullScanDeals(ID, LADDER, 210, 100, 50, ns.StatsFor(ID), CUT)
       assert.is_nil(dip)
+      assert.equal("history", select(2, ns.Wall.IsDip(100, ns.StatsFor(ID), ns.Cfg("dipPct"), CUT)))
     end)
 
     it("includes a dip from the second day", function()
