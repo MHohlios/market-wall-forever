@@ -131,6 +131,11 @@ With direnv, `direnv allow` once and then run `make check` directly. `make lint`
   load every file in `MarketWall.toc`, in order, and returns the addon's namespace.
 - The tests cover logic only. The in-game check is still the real test for each change.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and the rules a change must keep, and
+[SECURITY.md](SECURITY.md) to report a vulnerability privately.
+
 ## License and credits
 
 MarketWall is released under the [MIT License](LICENSE). The disenchant outcome tables
