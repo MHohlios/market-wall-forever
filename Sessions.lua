@@ -37,7 +37,7 @@ end
 -- An open session started under a character's legacy "Name-Realm" key moves to its GUID key,
 -- as its ledger book does (Ledger.Adopt). Returns whether it moved.
 function Sessions.Adopt(s, key, legacy, name)
-  if not s or s.stop or s.char ~= legacy then return false end
+  if not (s and key) or s.stop or s.char ~= legacy then return false end
   s.char, s.name = key, name
   return true
 end
@@ -446,10 +446,10 @@ local HANDLERS = {
   end,
   -- the first one after loading; isReloadingUi is nil on a client that does not pass it
   PLAYER_ENTERING_WORLD = function(_, isReloadingUi)
+    local Recording = ns.Recording   -- adopts on every entry, in case the GUID was not known yet
+    Sessions.Adopt(Sessions.Current(), Recording.CharacterKey(), Recording.LegacyKey(), Recording.CharacterName())
     if entered then return end   -- zoning
     entered = true
-    local Recording = ns.Recording
-    Sessions.Adopt(Sessions.Current(), Recording.CharacterKey(), Recording.LegacyKey(), Recording.CharacterName())
     local s = Running()
     if not s then return end
     local reloading = nil

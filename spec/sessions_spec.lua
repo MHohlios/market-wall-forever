@@ -43,6 +43,7 @@ describe("Sessions", function()
       assert.is_false(S.Adopt(stopped, "Player-1-A", "Fikus-Forever", "Fikus"))
       assert.is_false(S.Adopt(S.New("x", "Other-Forever", T0), "Player-1-A", "Fikus-Forever", "Fikus"))
       assert.is_false(S.Adopt(nil, "Player-1-A", "Fikus-Forever", "Fikus"))
+      assert.is_false(S.Adopt(S.New("x", "Fikus-Forever", T0), nil, "Fikus-Forever", "Fikus"))   -- GUID unknown
     end)
   end)
 
@@ -283,6 +284,20 @@ describe("Sessions", function()
       fire("PLAYER_ENTERING_WORLD", false, true)
       assert.same({ playerGUID, "Farmer" }, { s.char, s.name })
       assert.is_nil(s.pausedAt)
+    end)
+
+    it("keeps a legacy session's owner until the GUID is known, then adopts it on a later entry", function()
+      local s = S.New("Tanaris turtles", "Farmer-Forever", T0)
+      S.PauseAt(s, T0)
+      MarketWallDB.sessions = { s }
+      local known = playerGUID
+      playerGUID = nil
+      fire("PLAYER_ENTERING_WORLD", true, false)
+      assert.equal("Farmer-Forever", s.char)
+      playerGUID = known
+      fire("PLAYER_ENTERING_WORLD", false, false)   -- zoning
+      assert.same({ known, "Farmer" }, { s.char, s.name })
+      assert.equal(T0, s.pausedAt)
     end)
 
     it("keeps running through a UI reload, leaving the reload's time out", function()
