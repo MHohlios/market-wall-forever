@@ -6,7 +6,7 @@ local B, Outlet = ns.Bait, ns.Outlet
 local P = {}
 ns.SellPricing = P
 
-local ORANGE, GOLD = "|cffffb057", "|cfff5c518"
+local ORANGE, GOLD, GREEN, RED = "|cffffb057", "|cfff5c518", "|cff4fc36b", "|cffe06060"
 local NONE = "—"
 
 -- The wall to compare a price with: live when listings are loaded, else the last recorded one
@@ -52,9 +52,33 @@ function P.InfoLine(price, start, wall)
   return table.concat(parts, " ")
 end
 
--- The warnings that apply to posting at a price, each one line. f: price; netEach, one unit's
--- worth after the cut and deposit; vendor; stats (ns.StatsFor); bait (the Bait Detect record);
--- outlet (Outlet.Values for the item).
+-- What a post earns against selling the same units to a vendor. The deposit counts as a cost:
+-- the worst case, since the game refunds it when the auction sells. vendorEach is nil or 0 for an
+-- item with no vendor price, which leaves vendor, beats and the vendor side of the per-unit line out.
+function P.Totals(price, quantity, deposit, vendorEach, cut)
+  local total = price * quantity
+  local afterCut = total * (1 - cut)
+  local net = afterCut - deposit
+  local t = { total = total, afterCut = afterCut, deposit = deposit, net = net, netEach = net / quantity }
+  if vendorEach and vendorEach > 0 then
+    t.vendorEach = vendorEach
+    t.vendor = vendorEach * quantity
+    t.beats = net - t.vendor
+  end
+  return t
+end
+
+-- "AH beats vendor by": green with a plus when posting wins, red when the vendor pays as much
+-- or more, a dash for an item with no vendor price
+function P.BeatsText(t)
+  if not t.beats then return "—" end
+  local plain = ns.Money(t.beats):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+  if t.beats > 0 then return GREEN .. "+" .. plain .. "|r" end
+  return RED .. plain .. "|r"
+end
+
+-- The warnings that apply to posting at a price, each one line. f: price; totals (P.Totals);
+-- stats (ns.StatsFor); bait (the Bait Detect record); outlet (Outlet.Values for the item).
 function P.Warnings(f)
   local warnings = {}
   local function add(text) warnings[#warnings + 1] = text end
@@ -63,9 +87,10 @@ function P.Warnings(f)
     add(string.format("Below expected: %s is under this item's normal range (%s - %s).",
       ns.Money(f.price), ns.Money(stats.p25), ns.Money(stats.p75)))
   end
-  if f.vendor and f.vendor > 0 and f.netEach < f.vendor then
-    add(string.format("A vendor pays more: %s each, against %s after the cut and deposit.",
-      ns.Money(f.vendor), ns.Money(f.netEach)))
+  local totals = f.totals
+  if totals and totals.beats and totals.beats <= 0 then   -- the same test that turns the totals red
+    add(string.format("A vendor pays %s: %s each, against %s after the cut and deposit.",
+      totals.beats < 0 and "more" or "as much", ns.Money(totals.vendorEach), ns.Money(totals.netEach)))
   end
   local bait = B.PostWarning(f.bait, f.price, ns.PriceView.FLAT)
   if bait then add("Matches a bait price: " .. bait) end

@@ -12,13 +12,15 @@ local DURATIONS = { { 1, "12h" }, { 2, "24h" }, { 3, "48h" } }
 
 -- The Market tab's page is about 782 x 480 below the navigation row
 local WIDTH = 782
-local STRIP_TOP, STRIP_HEIGHT = -50, 76
-local INFO_Y, WARNINGS_Y, WARNINGS_HEIGHT = -130, -146, 56
-local BODY_TOP, BODY_HEIGHT = -206, 274
+local STRIP_TOP, STRIP_HEIGHT = -50, 96
+local INFO_Y, WARNINGS_Y, WARNINGS_HEIGHT = -150, -166, 56
+local BODY_TOP, BODY_HEIGHT = -226, 254
 local LEFT_WIDTH, RIGHT_X = 300, 312
-local POST_X, TOTALS_X = 384, 574   -- the strip's Duration and Post column, and its totals
+local POST_X, TOTALS_X, TOTALS_WIDTH = 384, 556, 192   -- the strip's Duration and Post column, and its totals
+local TOTAL_ROW = 13
+local TOTAL_VALUES = { "total", "afterCut", "deposit", "net", "vendor", "beats", "perUnit" }
 local RIGHT_WIDTH = WIDTH - RIGHT_X
-local LIST_ROWS = 9
+local LIST_ROWS = 8
 
 local AUCTION_COLUMNS = {
   { "Price each", 120, nil, "Each price level listed right now, cheapest first. Click a row to set Price each to it." },
@@ -115,15 +117,36 @@ local function ReadInputs()
   return price, quantity
 end
 
-local function Warnings(item, price, quantity)
+local function Totals(item, price, quantity)
+  return P.Totals(price, quantity, Deposit(item, quantity), Vendor(item.id), ns.Cfg("ahCut"))
+end
+
+local function Warnings(item, price, quantity, totals)
   return P.Warnings({
     price = price,
-    netEach = price * (1 - ns.Cfg("ahCut")) - Deposit(item, quantity) / quantity,
-    vendor = Vendor(item.id),
+    totals = totals or Totals(item, price, quantity),
     stats = ns.StatsFor(item.id),
     bait = ns.R().bait[item.id],
     outlet = item.values,
   })
+end
+
+local function ShowTotals(t, quantity)
+  local rows = page.totals
+  rows.total:SetText(ns.Money(t.total))
+  rows.afterCutLabel:SetText("After " .. ns.Round(ns.Cfg("ahCut") * 100) .. "% cut")
+  rows.afterCut:SetText(ns.Money(t.afterCut))
+  rows.deposit:SetText(ORANGE .. "- |r" .. ns.Money(t.deposit))
+  rows.net:SetText(ns.Money(t.net))
+  if t.vendor then
+    rows.vendorLabel:SetText("Vendor (" .. quantity .. " x " .. ns.Money(t.vendorEach) .. ")")
+    rows.vendor:SetText(ns.Money(t.vendor))
+  else
+    rows.vendorLabel:SetText("Vendor")
+    rows.vendor:SetText("—")
+  end
+  rows.beats:SetText(P.BeatsText(t))
+  rows.perUnit:SetText(GREY .. "per unit: AH " .. ns.Money(t.netEach) .. GREY .. " · vendor " .. (t.vendorEach and ns.Money(t.vendorEach) or "—") .. "|r")
 end
 
 local function UpdateTotals()
@@ -131,24 +154,19 @@ local function UpdateTotals()
   page.post:SetEnabled(price ~= nil and ns.ahOpen)
   page.post:SetText(quantity and ("Post " .. quantity) or "Post")
   if not price then
-    page.deposit:SetText("-")
-    page.total:SetText("-")
-    page.net:SetText("-")
+    for _, key in ipairs(TOTAL_VALUES) do page.totals[key]:SetText("") end
     page.info:SetText(GREY .. "Enter a price and a quantity from 1 to " .. (page.maxQuantity or 0) .. ".|r")
     page.warning:SetText("")
     page.warnings:Hide()
     return
   end
-  local cut = ns.Cfg("ahCut")
-  page.deposit:SetText(ns.Money(Deposit(page.item, quantity)))
-  page.total:SetText(ns.Money(price * quantity))
-  page.net:SetText(ns.Money(price * quantity * (1 - cut)))
-  page.cut:SetText(GREY .. "after the " .. ns.Round(cut * 100) .. "% cut|r")
+  local totals = Totals(page.item, price, quantity)
+  ShowTotals(totals, quantity)
 
   local info = P.InfoLine(price, page.start, P.Wall(page.item.id))
   if page.notes ~= "" then info = (info ~= "" and info .. "  " or "") .. GREY .. page.notes .. "|r" end
   page.info:SetText(BLUE .. info .. "|r")
-  local warnings = Warnings(page.item, price, quantity)
+  local warnings = Warnings(page.item, price, quantity, totals)
   page.warning:SetText(ORANGE .. "· " .. table.concat(warnings, "\n· ") .. "|r")
   page.warnings:SetShown(#warnings > 0)
 end
@@ -423,26 +441,45 @@ local function BuildPostControls(w, s)
     page.durations[duration] = radio
   end
 
-  page.post = w.MakeButton(s, "Post", 170)
+  page.post = w.MakeButton(s, "Post", 160)
   page.post:SetHeight(26)
   page.post:SetPoint("TOPLEFT", POST_X, -44)
   page.post:SetScript("OnClick", function() Post(false) end)
 end
 
--- Right of the strip: Deposit, Total and what you get, and the refresh button
+-- Right of the strip: what a post earns against a vendor, and the refresh button
 local function BuildTotals(w, s)
-  local function Line(text, y)
-    Label(s, text, TOTALS_X, y)
+  local rows = {}
+  page.totals = rows
+  local function Line(key, text, row)
+    local y = -4 - (row - 1) * TOTAL_ROW
+    rows[key .. "Label"] = Label(s, text, TOTALS_X, y)
     local value = w.MakeText(s, "GameFontHighlightSmall", "RIGHT")
-    value:SetPoint("TOPRIGHT", s, "TOPLEFT", TOTALS_X + 170, y)
-    value:SetWidth(110)
+    value:SetPoint("TOPRIGHT", s, "TOPLEFT", TOTALS_X + TOTALS_WIDTH, y)
+    value:SetWidth(100)
+    rows[key] = value
     return value
   end
-  page.deposit = Line("Deposit", -6)
-  page.total = Line("Total", -22)
-  page.net = Line("You get", -38)
-  page.cut = w.MakeText(s, "GameFontHighlightSmall")
-  page.cut:SetPoint("TOPLEFT", TOTALS_X, -54)
+  Line("total", "Total", 1)
+  Line("afterCut", "After cut", 2)
+  Line("deposit", "Deposit", 3)
+  Line("net", "AH net", 4)
+  Line("vendor", "Vendor", 5)
+  Line("beats", "AH beats vendor by", 6)
+  rows.perUnit = w.MakeText(s, "GameFontHighlightSmall")
+  rows.perUnit:SetPoint("TOPLEFT", TOTALS_X, -4 - 6 * TOTAL_ROW)
+  rows.perUnit:SetWidth(TOTALS_WIDTH)
+  rows.perUnit:SetWordWrap(false)
+
+  -- font strings take no mouse, so a frame over the Deposit row carries its tooltip
+  local depositTip = CreateFrame("Frame", nil, s)
+  depositTip:SetPoint("TOPLEFT", TOTALS_X, -4 - 2 * TOTAL_ROW)
+  depositTip:SetSize(TOTALS_WIDTH, TOTAL_ROW)
+  depositTip:EnableMouse(true)
+  depositTip:SetScript("OnEnter", function(self)
+    w.ShowTip(self, "Deposit", "Counted here as a cost, the worst case. The game refunds the deposit when the auction sells, and keeps it if the auction expires or you cancel it.")
+  end)
+  depositTip:SetScript("OnLeave", w.HideTip)
 
   local refresh = w.MakeButton(s, "", 26)
   refresh:SetPoint("TOPRIGHT", -4, -2)
@@ -528,7 +565,7 @@ local function BuildListings(w)
   page.rowHint:SetText("Click a row to set Price each to that level.")
 
   local width = RIGHT_WIDTH - 8
-  page.view = PV.CreateView(r, { width = width, chartHeight = 84, cellWidth = width / 4, cells = HISTORY_CELLS, ranges = true })
+  page.view = PV.CreateView(r, { width = width, chartHeight = 70, cellWidth = width / 4, cells = HISTORY_CELLS, ranges = true })
   page.view:SetPoint("TOPLEFT", 4, -2)
 
   page.tabs = {}
