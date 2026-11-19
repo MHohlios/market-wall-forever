@@ -126,18 +126,23 @@ local function KillCount(seen, reliableKills)
   return GREY .. seen .. " kills|r"
 end
 
+-- Money without its coin colours, so it takes the colour of the text around it
+local function PlainMoney(copper)
+  return (ns.Money(copper):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
+end
+
 -- The lines a mob adds to its tooltip, from Mobs.Stats, as { left, right } pairs: worth per
 -- kill under Optimal, each single outlet's median beside the kill count, and the top drop.
 -- Empty for a mob with no record or no seen kill. skinning: whether Optimal includes it.
 local function MobLines(stats, skinning, reliableKills)
   if not (stats and stats.optimal) then return {} end
   local optimal = stats.optimal
-  local outlets = GREY .. "Vendor|r " .. ns.Money(stats.vendor.median) .. GREY .. " · Market|r " .. ns.Money(stats.market.median)
-  if skinning and stats.skinning then outlets = outlets .. GREY .. " · Skin|r " .. ns.Money(stats.skinning.median) end
+  local outlets = "Vendor " .. PlainMoney(stats.vendor.median) .. " · Market " .. PlainMoney(stats.market.median)
+  if skinning and stats.skinning then outlets = outlets .. " · Skin " .. PlainMoney(stats.skinning.median) end
   local lines = {
     { GOLD .. "Worth per kill|r",
       ns.Money(optimal.median) .. " " .. GREY .. "typical|r · " .. ns.Money(optimal.average) .. " " .. GREY .. "avg|r" },
-    { outlets, KillCount(stats.seen, reliableKills) },
+    { GREY .. outlets .. "|r", KillCount(stats.seen, reliableKills) },
   }
   if stats.top then
     lines[3] = { GREY .. "Top drop|r",

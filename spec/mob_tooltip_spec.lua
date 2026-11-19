@@ -41,14 +41,15 @@ describe("mob tooltip", function()
     local function Worth()
       return GOLD .. "Worth per kill|r|" .. ns.Money(95) .. " " .. GREY .. "typical|r · " .. ns.Money(320) .. " " .. GREY .. "avg|r"
     end
-    local function Outlets()
-      return GREY .. "Vendor|r " .. ns.Money(45) .. GREY .. " · Market|r " .. ns.Money(62)
+    -- All grey, the amounts without their coin colours
+    local function Outlets(skin)
+      return GREY .. "Vendor 45c · Market 62c" .. (skin or "") .. "|r"
     end
 
     it("shows Optimal worth per kill, each outlet's median beside the kills, and the top drop", function()
       assert.same({
         Worth(),
-        Outlets() .. GREY .. " · Skin|r " .. ns.Money(30) .. "|" .. GREY .. "140 kills|r",
+        Outlets(" · Skin 30c") .. "|" .. GREY .. "140 kills|r",
         GREY .. "Top drop|r|Raptor Hide " .. GREY .. "4%|r",
       }, Texts(Lines(FullStats(), true, 10)))
     end)
