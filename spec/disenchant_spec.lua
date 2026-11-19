@@ -151,6 +151,29 @@ describe("DisenchantValue", function()
     assert.is_nil(ns.DisenchantOutcomes(11287))
   end)
 
+  it("adds up the deposits to list the materials, at their expected quantities", function()
+    Item(1001, UNCOMMON, 10, ARMOR)
+    local deposits = { [STRANGE_DUST] = 10, [LESSER_MAGIC_ESSENCE] = 50 }
+    local depositOf = function(id) return deposits[id] end
+    -- 80% for 1.5 dust at 10 each, 20% for 1.5 essence at 50 each
+    local value, _, materialDeposits = ns.DisenchantValue(1001, depositOf)
+    assert.near(420, value, 1e-6)
+    assert.near(12 + 15, materialDeposits, 1e-6)
+    Salvager("on", 50)
+    assert.near(27 * 1.5, select(3, ns.DisenchantValue(1001, depositOf)), 1e-6)
+  end)
+
+  it("counts no deposit for a rare material with no price, as it counts no value", function()
+    -- Forever's new level 60 rare: 99.5% Large Brilliant Shard, 0.5% Nexus Crystal with no price
+    local BRILLIANT, NEXUS = 14344, 20725
+    Item(200001, RARE, 60, ARMOR)
+    ns.LatestWall = function(id) if id == BRILLIANT then return 1000 end end
+    local deposits = { [BRILLIANT] = 100, [NEXUS] = 10000 }
+    local value, _, materialDeposits = ns.DisenchantValue(200001, function(id) return deposits[id] end)
+    assert.near(995, value, 1e-6)
+    assert.near(99.5, materialDeposits, 1e-6)
+  end)
+
   it("is false while a likely material has no price", function()
     Item(1001, UNCOMMON, 10, ARMOR)
     ns.LatestWall = function(id) if id == STRANGE_DUST then return 100 end end

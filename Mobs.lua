@@ -98,10 +98,8 @@ local function Lenses(prices, opts, unpriced)
   local function Of(id)
     local p = cache[id]
     if p then return p end
-    local wall, supplied = prices.wall(id)
-    if not wall then unpriced[id] = true end
-    local v = ns.Outlet.Values({ vendor = prices.vendor(id), wall = wall, supplied = supplied,
-      disenchant = opts.disenchant and prices.disenchant(id) or nil, cut = opts.cut })
+    local v = ns.Outlet.Priced(prices, opts, id)
+    if not v.auction then unpriced[id] = true end
     p = { vendor = v.vendor, market = v.market, gathered = v.gathered, optimal = v.best }
     cache[id] = p
     return p
@@ -127,8 +125,8 @@ end
 -- Value per kill under every lens, from the stored kills at current prices. Unseen kills are
 -- left out; 0c kills count. With no seen kill only the counts are returned.
 -- vendorNoRare, marketNoRare and optimalNoRare leave out drops seen in under opts.rareShare of kills.
--- prices: vendor(id), wall(id) -> wall and whether it has real supply,
--- disenchant(id) -> copper or nil when not allowed
+-- prices: vendor(id), wall(id) -> wall and whether it has real supply, deposit(id) -> one unit's
+-- auction deposit, disenchant(id) -> its materials' walls and their deposits, or nil when not allowed
 -- opts: cut, disenchant, skinning (include in Optimal), rareShare
 local function SeenKills(mob)
   local seen = {}
@@ -241,19 +239,32 @@ function Mobs.GameOptions()
   }
 end
 
--- Disenchanting counts only for items this character has the skill for, unless set to "always"
+-- Disenchanting counts only for items this character has the skill for, unless set to "always".
+-- Deposits are estimated at the Sell page's duration, once per item for these prices' lifetime.
 function Mobs.GamePrices()
   local always = ns.Cfg("mobDisenchant") == "always"
   local skill = ns.EnchantingSkill() or 0
+  local duration = ns.Cfg("sellDuration")
+  local deposits = {}
+  local function Deposit(id)
+    local deposit = deposits[id]
+    if not deposit then
+      deposit = ns.EstimateDeposit(id, duration)
+      deposits[id] = deposit
+    end
+    return deposit
+  end
   return {
     vendor = function(id) return ItemInfo(id, 11) end,
     wall = function(id)
       return ns.LatestWall(id), ns.R().supplied[id] == true
     end,
+    deposit = Deposit,
     disenchant = function(id)
       local level = ItemInfo(id, 4)
       if not (always or (level and skill >= ns.DisenchantSkill(level))) then return nil end
-      return ns.DisenchantValue(id) or nil
+      local value, _, materialDeposits = ns.DisenchantValue(id, Deposit)
+      if value then return value, materialDeposits end
     end,
   }
 end

@@ -138,13 +138,43 @@ local function AddLoadedGear(id)
   if not price then return end
   loadingGear[id] = nil
   if not next(loadingGear) then scanner:UnregisterEvent("GET_ITEM_INFO_RECEIVED") end
-  local deal = ns.FindDisenchantDeals({ [id] = price }, ns.Cfg("ahCut"), ns.Cfg("minDisenchantProfit"), ns.Cfg("minDisenchantPct"))[1]
+  local deal = ns.FindDisenchantDeals({ [id] = price }, ns.Cfg("ahCut"), ns.Mobs.GamePrices().deposit,
+    ns.Cfg("minDisenchantProfit"), ns.Cfg("minDisenchantPct"))[1]
   if not deal then return end
   local at = #ns.disenchants + 1
   for i, d in ipairs(ns.disenchants) do
     if deal.profit > d.profit then at = i break end
   end
   table.insert(ns.disenchants, at, deal)
+end
+
+-- The last full scan's gear buyouts, kept to reprice its deals when the deposits change
+local scannedGear, dealsStale = {}, false
+
+-- Sets the Disenchant list from gear buyouts at today's walls and fees, and waits for the data
+-- of any gear still loading
+local function FindDeals(gearPrices)
+  ns.disenchants, loadingGear = ns.FindDisenchantDeals(gearPrices, ns.Cfg("ahCut"), ns.Mobs.GamePrices().deposit,
+    ns.Cfg("minDisenchantProfit"), ns.Cfg("minDisenchantPct"))
+  if next(loadingGear) then
+    scanner:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+  else
+    scanner:UnregisterEvent("GET_ITEM_INFO_RECEIVED")
+  end
+end
+
+-- The Sell duration or a learned deposit rate changed: the deals are repriced when next shown
+function ns.DisenchantDepositsChanged()
+  dealsStale = true
+end
+
+-- The Disenchant list, repriced first if the deposits changed since
+function ns.DisenchantDeals()
+  if dealsStale then
+    dealsStale = false
+    FindDeals(scannedGear)
+  end
+  return ns.disenchants
 end
 
 scanner:SetScript("OnEvent", function(_, event, arg1)
@@ -339,12 +369,8 @@ local function Finalize(maps, names, stamp)
       end
       ns.snipes, ns.dips = snipes, dips
       -- after the loop, so materials are priced at today's walls
-      ns.disenchants, loadingGear = ns.FindDisenchantDeals(gearPrices, cut, ns.Cfg("minDisenchantProfit"), ns.Cfg("minDisenchantPct"))
-      if next(loadingGear) then
-        scanner:RegisterEvent("GET_ITEM_INFO_RECEIVED")
-      else
-        scanner:UnregisterEvent("GET_ITEM_INFO_RECEIVED")
-      end
+      scannedGear, dealsStale = gearPrices, false
+      FindDeals(gearPrices)
       ns.lastFullScan = stamp
       r.lastFull = stamp
       r.supplied = supplied

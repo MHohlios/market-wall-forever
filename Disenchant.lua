@@ -171,23 +171,26 @@ end
 -- Expected copper from disenchanting one item, at each material's latest wall price, and a
 -- short note on the source ("your 34 disenchants", "estimate", or nil for the classic table).
 -- Nil when the item cannot be disenchanted; false when a likely material has no price yet.
-function ns.DisenchantValue(id)
+-- With depositOf(materialID), the one-unit deposit to list a material, it also returns the
+-- expected deposits to list the materials; a material with no price counts neither.
+function ns.DisenchantValue(id, depositOf)
   local outcomes, source, samples = Outcomes(id)
   if not outcomes then return nil end
-  local total = 0
+  local total, deposits = 0, depositOf and 0
   for _, o in ipairs(outcomes) do
     local price = ns.LatestWall(o[1])
     if price then
       total = total + o[2] * o[3] * price
+      if deposits then deposits = deposits + o[2] * o[3] * depositOf(o[1]) end
     elseif o[2] >= 0.01 then
       return false
     end
   end
   if source == "observed" then
-    return total, "your " .. samples .. " disenchants"   -- already includes any Salvager bonus
+    return total, "your " .. samples .. " disenchants", deposits   -- already includes any Salvager bonus
   end
-  total = total * (1 + SalvagerBonus())
-  return total, source == "estimate" and "estimate" or nil
+  local scale = 1 + SalvagerBonus()
+  return total * scale, source == "estimate" and "estimate" or nil, deposits and deposits * scale
 end
 
 local SOURCE_NAMES = { estimate = "Forever estimate", table = "classic table" }
@@ -222,16 +225,17 @@ function ns.IsGear(id)
   return classID == WEAPON or classID == ARMOR
 end
 
--- One disenchant deal: uncommon or better weapons and armor whose disenchant value, after the
--- cut on reselling the materials, beats the price by both thresholds. Nil otherwise, and true
--- as well while the item's data is still loading.
-local function Deal(id, price, cut, minProfit, minPct)
+-- One disenchant deal: uncommon or better weapons and armor whose net disenchant value, after
+-- the cut and the deposits on reselling the materials (Outlet.Net, as the tooltip shows it),
+-- beats the price by both thresholds. Nil otherwise, and true as well while the item's data is
+-- still loading.
+local function Deal(id, price, cut, depositOf, minProfit, minPct)
   local _, _, quality, level, _, _, _, _, _, _, _, classID = C_Item.GetItemInfo(id)
   if not quality then return nil, true end
   if not (quality >= UNCOMMON and (classID == WEAPON or classID == ARMOR)) then return nil end
-  local value, note = ns.DisenchantValue(id)
+  local value, note, deposits = ns.DisenchantValue(id, depositOf)
   if not value then return nil end
-  value = value * (1 - cut)
+  value = ns.Outlet.Net(value, cut, deposits)
   local profit = value - price
   local pct = profit / price
   if profit <= 0 or profit < minProfit or pct < minPct then return nil end
@@ -239,12 +243,13 @@ local function Deal(id, price, cut, minProfit, minPct)
     odds = ODDS_FROM[note] or note or "classic table", skill = ns.DisenchantSkill(level) }
 end
 
--- prices: { [itemID] = cheapest buyout }. Returns the deals, most profit first, and the
--- prices of items whose data is still loading, to try again once it arrives.
-function ns.FindDisenchantDeals(prices, cut, minProfit, minPct)
+-- prices: { [itemID] = cheapest buyout }; depositOf(materialID): the one-unit deposit to list a
+-- material. Returns the deals, most profit first, and the prices of items whose data is still
+-- loading, to try again once it arrives.
+function ns.FindDisenchantDeals(prices, cut, depositOf, minProfit, minPct)
   local deals, loading = {}, {}
   for id, price in pairs(prices) do
-    local deal, isLoading = Deal(id, price, cut, minProfit, minPct)
+    local deal, isLoading = Deal(id, price, cut, depositOf, minProfit, minPct)
     if deal then
       deals[#deals + 1] = deal
     elseif isLoading then

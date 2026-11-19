@@ -10,7 +10,7 @@ ns.cfgDefaults = {
   minSnipeProfit = 100,    -- copper, total profit after cut
   minSnipeDiscount = 0.10, -- snipe units must average this far under the wall
   dipPct = 0.10,           -- wall must be this far under its median to be a dip
-  minDisenchantProfit = 5000, -- copper per item, disenchant value after cut minus price
+  minDisenchantProfit = 5000, -- copper per item, net disenchant value (after cut and deposits) minus price
   minDisenchantPct = 0.20,    -- that profit as a share of the price
   disenchantShowAll = false,  -- Disenchant list also shows items above your Enchanting skill
   salvagerMode = "auto",      -- Salvager's disenchant bonus: "auto" (while the buff is up), "on", "off"
@@ -269,6 +269,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
     MarketWallDB.sessions = MarketWallDB.sessions or {}   -- farm sessions, see Sessions.lua
     MarketWallDB.sessionGroups = MarketWallDB.sessionGroups or {}
     MarketWallDB.creatures = MarketWallDB.creatures or {}
+    MarketWallDB.depositRate = MarketWallDB.depositRate or {}   -- learned auction deposit rates, see Outlet.lua
   elseif event == "PLAYER_LOGIN" then
     ns.realmData = nil
     ns.R()

@@ -11,6 +11,7 @@ local PRICES = {
     if id == SCALE then return 100, true end
     if id == ORE then return 300, false end
   end,
+  deposit = function() return 0 end,
   disenchant = function() return nil end,
 }
 
@@ -171,7 +172,7 @@ describe("Sessions", function()
       local s = Farm()
       s.ended = S.Values(s, lenses)
       local cheaper = ns.Mobs.Lenses({ vendor = PRICES.vendor, wall = function() return nil end,
-        disenchant = PRICES.disenchant }, { cut = 0.05 }, {})
+        deposit = PRICES.deposit, disenchant = PRICES.disenchant }, { cut = 0.05 }, {})
       local report = S.Report(s, cheaper.optimal, tostring, T0 + 9999)
       assert.equal(650, report.value)
       assert.equal(905, report.ended.optimal)
