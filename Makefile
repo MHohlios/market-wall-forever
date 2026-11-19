@@ -1,4 +1,4 @@
-.PHONY: check lint test package-check release-notes release
+.PHONY: check lint test package-check
 
 check: lint test
 
@@ -15,12 +15,3 @@ package-check:
 		sed -n 's/^  - //p' .pkgmeta | grep -qxF "$${f%%/*}" || echo "$$f"; \
 	done
 
-# Release steps, as CONTRIBUTING.md#releasing describes. CHANGELOG lets
-# release-notes edit another file, such as a scratch copy.
-CHANGELOG ?= CHANGELOG.md
-
-release-notes:
-	@scripts/release.sh notes "$(VERSION)" "$(CHANGELOG)"
-
-release:
-	@scripts/release.sh tag "$(VERSION)"

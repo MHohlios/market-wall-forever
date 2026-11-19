@@ -37,32 +37,25 @@ A change that breaks one of these will not be merged.
 
 ## Releasing
 
-Release notes are written by hand in [CHANGELOG.md](CHANGELOG.md), one pull request at a
-time. Every pull request, bug fixes included, adds a line under `## Unreleased` at the top
-of the file, creating that heading if it is missing. CI fails a pull request that does not
-change CHANGELOG.md; only Dependabot's pull requests are exempt. Write the line for
-players: what changed for them, not how the code changed.
+Releases are made entirely in the GitHub UI; nothing is run locally. On the repository's
+Releases page, draft a new release and type a new tag, such as `v0.7.1`, targeting `main`.
+Click "Generate release notes", edit the result into notes for players (what changed for
+them, not how the code changed) and publish.
 
-A release takes two steps, because `main` is protected:
+Publishing starts the [release workflow](.github/workflows/release.yml). It writes the
+release's text to CHANGELOG.md, packages the tagged commit with [.pkgmeta](.pkgmeta) and
+uploads one file to CurseForge, whose changelog is exactly that text. A release with no
+text uploads nothing. Pushing a tag by itself releases nothing, and neither does a push to
+`main`. The tag name becomes the addon version. A tag containing `alpha` or `beta`, such
+as `v0.7.1-beta1`, is published as that file type; any other tag is a release.
 
-1. On a branch, run `make release-notes VERSION=v0.7.0`. It renames `## Unreleased` to
-   `## v0.7.0 (YYYY-MM-DD)` with today's date, and stops with an error if there is no
-   Unreleased section or it is empty. Open a pull request with that change and merge it.
-2. On an up-to-date `main`, run `make release VERSION=v0.7.0`. It fetches from origin and
-   stops unless `main` matches `origin/main`, the working tree is clean, the tag does not
-   exist yet and CHANGELOG.md has a `## v0.7.0` heading. Then it creates an annotated tag
-   and pushes it.
-
-The pushed tag starts the [release workflow](.github/workflows/release.yml), which checks
-the heading again and packages the addon with [.pkgmeta](.pkgmeta) for CurseForge and a
-GitHub release. Only tags are released; pushes to `main` are not. The tag name becomes
-the addon version. A tag containing `alpha` or `beta`, such as `v0.7.0-beta1`, is
-published as that file type; any other tag is a release. CurseForge shows the whole
-CHANGELOG.md at the tagged commit as the file's changelog, newest release first.
+The generated notes list the pull requests merged since the last release by title, leaving
+out Dependabot's (see [.github/release.yml](.github/release.yml)). Good pull request
+titles therefore make good release notes, and less editing.
 `make package-check` lists the files a package would contain.
 
 ## Pull requests
 
 Open pull requests into `main`, one topic per pull request. Fill in the template's
-summary and how you tested it, and add a line to CHANGELOG.md under `## Unreleased`, as
-[Releasing](#releasing) describes.
+summary and how you tested it. Title it for players, since titles become the release
+notes, as [Releasing](#releasing) describes.

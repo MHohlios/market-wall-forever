@@ -4,8 +4,10 @@ manual-changelog:
   filename: CHANGELOG.md
   markup-type: markdown
 
+# Ignoring the generated CHANGELOG.md keeps it out of the zip, so the packager reads it
+# from the checkout unprocessed instead of replacing @keywords@ and line endings in it.
 ignore:
-  - scripts
+  - CHANGELOG.md
   - spec
   - flake.nix
   - flake.lock
