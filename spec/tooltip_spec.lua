@@ -202,10 +202,37 @@ describe("item tooltip lines", function()
       ns.R().supplied[ID] = true
       ns.R().watch[ID] = { buy = 400 }
       ns.TooltipLines.Add(tooltip, ID)
-      local order = { "Market|r", "Vendor|r", "Disenchant", "Dust", "Essence", "Shard", "odds: classic table",
-        "Against median|r", "7-day trend|r", "Your buy / sell|r" }
-      for i, text in ipairs(order) do assert.equal(i + 1, Find(text), text) end
-      assert.equal(#order + 1, #tooltip.lines)
+      local order = { " ", "Market|r", "Vendor|r", "Disenchant", "Dust", "Essence", "Shard", "odds: classic table",
+        " ", "Against median|r", "7-day trend|r", "Your buy / sell|r" }
+      for i, text in ipairs(order) do
+        if text == " " then
+          assert.equal(" ", tooltip.lines[i])
+        else
+          assert.truthy(tooltip.lines[i]:find(text, 1, true), text)
+        end
+      end
+      assert.equal(#order, #tooltip.lines)
+    end)
+
+    it("leaves no gap after the breakdown when there is no market context", function()
+      Wall(ID, 500)
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.equal(Find("odds:"), #tooltip.lines)
+    end)
+
+    it("notes a thin market on the Market row when a vendor is best beside a higher wall", function()
+      items[ID].vendor = 400
+      Wall(ID, 500)
+      ns.R().supplied[ID] = nil   -- no real supply behind the wall
+      MarketWallDB.cfg.mobDisenchant = "never"
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.truthy(tooltip.lines[Find("Market")]:find("(today) (thin market)|r", 1, true))
+      assert.truthy(tooltip.lines[Find("Vendor")]:find(BEST, 1, true))
+
+      tooltip = NewTooltip()
+      ns.R().supplied[ID] = true
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.is_nil(Find("thin market"))
     end)
 
     it("puts the stack line right after Market", function()
