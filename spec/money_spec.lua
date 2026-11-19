@@ -29,8 +29,8 @@ describe("money", function()
     end)
 
     it("shows each amount with its coin icon after the number", function()
-      assert.equal("1|TInterface\\MoneyFrame\\UI-GoldIcon:0:0:2:0|t 41|TInterface\\MoneyFrame\\UI-SilverIcon:0:0:2:0|t "
-        .. "23|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:2:0|t", ns.Money(14123))
+      assert.equal("1|TInterface\\MoneyFrame\\UI-GoldIcon:0:0:0:0|t 41|TInterface\\MoneyFrame\\UI-SilverIcon:0:0:0:0|t "
+        .. "23|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:0:0|t", ns.Money(14123))
     end)
 
     it("leaves the colour to the surrounding text", function()

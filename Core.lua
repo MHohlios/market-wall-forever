@@ -77,9 +77,9 @@ local function CoinParts(c)
 end
 
 local COIN_ICON = {
-  g = "|TInterface\\MoneyFrame\\UI-GoldIcon:0:0:2:0|t",
-  s = "|TInterface\\MoneyFrame\\UI-SilverIcon:0:0:2:0|t",
-  c = "|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:2:0|t",
+  g = "|TInterface\\MoneyFrame\\UI-GoldIcon:0:0:0:0|t",
+  s = "|TInterface\\MoneyFrame\\UI-SilverIcon:0:0:0:0|t",
+  c = "|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:0:0|t",
 }
 
 local function JoinCoins(c, mark)

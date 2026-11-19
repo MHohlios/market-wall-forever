@@ -7,7 +7,7 @@ local widgets = ns.widgets
 local MakeButton, MakeText, MakeEdit = widgets.MakeButton, widgets.MakeText, widgets.MakeEdit
 
 local GREEN, ORANGE, GREY = "|cff4fc36b", "|cfff0a040", "|cffa3acac"
-local LIST_WIDTH, RIGHT_X, RIGHT_WIDTH = 380, 392, 390
+local LIST_WIDTH, RIGHT_X, RIGHT_WIDTH = 420, 432, 350
 local LIST_ROWS, LADDER_ROWS = 15, 8
 local SEARCHES_SHOWN_LIMIT = 100
 local BINDING = "MARKETWALL_BAIT_ACTION"
@@ -19,10 +19,10 @@ BINDING_HEADER_MARKETWALL = "MarketWall"
 BINDING_NAME_MARKETWALL_BAIT_ACTION = "Bait Detect: search or buy"
 
 local COLUMNS = {
-  { "Item", 110, nil, "Commodities whose cheapest price level looks like bait: thin supply under the wall, below the item's normal range, seen in two scans in a row." },
-  { "Bait", 92, "RIGHT", "Units first seen at the bait price, and that price." },
+  { "Item", 112, nil, "Commodities whose cheapest price level looks like bait: thin supply under the wall, below the item's normal range, seen in two scans in a row." },
+  { "Bait", 110, "RIGHT", "Units first seen at the bait price, and that price." },
   -- the list is full, so this column's cells carry the Data badge other lists show in a column
-  { "Wall", 70, "RIGHT", "The item's real price: the lowest price level with meaningful supply behind it. No room for a Data column here: hover a cell for the item's days of data.", cellTip = true },
+  { "Wall", 90, "RIGHT", "The item's real price: the lowest price level with meaningful supply behind it. No room for a Data column here: hover a cell for the item's days of data.", cellTip = true },
   { "Under", 38, "RIGHT", "How far the bait price is under the wall." },
   { "Copies", 40, "RIGHT", "Units posted at the bait price since it first appeared. Green rows: copies are piling up; those are the cheap units worth buying." },
   { "Seen", 30, "RIGHT", "How long ago the bait price first appeared." },
