@@ -334,25 +334,22 @@ function Kills.NewTracker(emit, canLoot, itemOf)
 end
 
 -- Names the item ID of an opened container from its "Item-..." GUID. The game's answer for the
--- GUID comes first; failing that, the bag item you used just before: only when its GUID matches,
--- or, when its GUID could not be read, within CAST_WINDOW. A use names one container at most.
+-- GUID comes first; failing that, the bag item you used just before, only when its GUID matches.
+-- A use whose GUID could not be read names nothing, and a use names one container at most.
 -- itemIDByGUID(guid): the game's item ID for a GUID, nil when unknown.
 function Kills.NewContainerResolver(itemIDByGUID)
   local resolver = {}
-  local lastUsed   -- { id =, guid =, t = }
+  local lastUsed   -- { id =, guid = }
 
-  -- You used a bag item: its item ID (nil when unreadable) and GUID (nil when unreadable)
-  function resolver.Used(id, guid, t)
-    lastUsed = id and { id = id, guid = guid, t = t } or nil
+  -- You used a bag item: its item ID and GUID, each nil when unreadable
+  function resolver.Used(id, guid)
+    lastUsed = id and guid and { id = id, guid = guid } or nil
   end
 
-  function resolver.ItemOf(guid, t)
+  function resolver.ItemOf(guid)
     local used = lastUsed
     lastUsed = nil
-    local id = itemIDByGUID(guid)
-    if id or not used then return id end
-    if used.guid then return used.guid == guid and used.id or nil end
-    if t - used.t <= CAST_WINDOW then return used.id end
+    return itemIDByGUID(guid) or (used and used.guid == guid and used.id) or nil
   end
 
   return resolver
@@ -410,12 +407,11 @@ local resolver = Kills.NewContainerResolver(ReadItemIDByGUID)
 if C_Container and C_Container.UseContainerItem and hooksecurefunc then
   hooksecurefunc(C_Container, "UseContainerItem", function(bag, slot)
     local info = C_Container.GetContainerItemInfo(bag, slot)
-    resolver.Used(info and info.itemID, ReadBagItemGUID(bag, slot), time())
+    resolver.Used(info and info.itemID, ReadBagItemGUID(bag, slot))
   end)
 end
 
-local tracker = Kills.NewTracker(function(event) ns.Recording.Emit(event) end, ReadCanLoot,
-  function(guid) return resolver.ItemOf(guid, time()) end)
+local tracker = Kills.NewTracker(function(event) ns.Recording.Emit(event) end, ReadCanLoot, resolver.ItemOf)
 Kills.tracker = tracker
 Kills.paths = tracker.paths   -- /dump MarketWall.Kills.paths shows which rule settled each kill
 
