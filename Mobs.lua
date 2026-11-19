@@ -91,27 +91,18 @@ local function Worth(drops, price, skip)
   return total
 end
 
--- Per-item prices under each lens, each worked out once per call. Farm sessions price with it too.
+-- Per-item prices under each lens, each worked out once per call. Farm sessions price with it
+-- too, and the Sell page groups bags by the same rule (Outlet.lua).
 local function Lenses(prices, opts, unpriced)
   local cache = {}
   local function Of(id)
     local p = cache[id]
     if p then return p end
-    local vendor = prices.vendor(id) or 0
     local wall, supplied = prices.wall(id)
-    local market
-    if wall and supplied then
-      market = wall * (1 - opts.cut)
-    elseif wall then
-      market = vendor                       -- thin market
-    else
-      market = 0
-      unpriced[id] = true
-    end
-    local best = math.max(vendor, market)
-    local de = opts.disenchant and prices.disenchant(id)
-    p = { vendor = vendor, market = market, gathered = best,
-      optimal = de and math.max(best, de * (1 - opts.cut)) or best }
+    if not wall then unpriced[id] = true end
+    local v = ns.Outlet.Values({ vendor = prices.vendor(id), wall = wall, supplied = supplied,
+      disenchant = opts.disenchant and prices.disenchant(id) or nil, cut = opts.cut })
+    p = { vendor = v.vendor, market = v.market, gathered = v.gathered, optimal = v.best }
     cache[id] = p
     return p
   end

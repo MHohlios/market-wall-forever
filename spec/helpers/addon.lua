@@ -5,10 +5,16 @@ M.ADDON = "MarketWall"
 
 local function noop() end
 
--- A frame that accepts any method call and remembers its events, scripts and size
-local function NewFrame(frames)
-  local frame = { scripts = {}, events = {} }
+-- A frame that accepts any method call and remembers its parent, events, scripts, size and
+-- anchors: points[i] = { point, x, y } for anchors given as offsets from the parent
+local function NewFrame(frames, parent)
+  local frame = { scripts = {}, events = {}, points = {}, parent = parent }
   function frame:SetSize(width, height) self.width, self.height = width, height end
+  function frame:SetWidth(width) self.width = width end
+  function frame:SetHeight(height) self.height = height end
+  function frame:SetPoint(point, x, y)
+    if type(x) ~= "table" then self.points[#self.points + 1] = { point, x or 0, y or 0 } end
+  end
   function frame:SetScript(name, fn) self.scripts[name] = fn end
   function frame:RegisterEvent(event) self.events[event] = true end
   frame.RegisterUnitEvent = frame.RegisterEvent
@@ -31,7 +37,7 @@ end
 -- Fresh globals and a fresh addon namespace on every call, so tests do not share state
 function M.Load()
   local frames = {}
-  _G.CreateFrame = function() return NewFrame(frames) end
+  _G.CreateFrame = function(_, _, parent) return NewFrame(frames, parent) end
   _G.date, _G.time = os.date, os.time
   _G.strtrim = function(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
   _G.SlashCmdList = {}
@@ -50,7 +56,7 @@ function M.Load()
     end
   end
 
-  return ns, Fire
+  return ns, Fire, frames
 end
 
 return M

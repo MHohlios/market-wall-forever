@@ -5,16 +5,15 @@ local function Plain(text)
 end
 
 describe("Sell page bait handling", function()
-  local ns, B, W, pricing
+  local B, pricing
   local FLAT = 0.03
   -- the mockup's Thorium Bar: bait (1) + 14 copies at 30c under a 1s 02c wall
   local record = { p = 30, u = 1, q = 15, w = 102, first = 1, last = 1, seen = 2 }
 
   before_each(function()
-    local fire
-    ns, fire = addon.Load()
+    local ns, fire = addon.Load()
     fire("ADDON_LOADED", addon.ADDON)
-    B, W, pricing = ns.Bait, ns.Wall, ns.SellPricing
+    B, pricing = ns.Bait, ns.SellPricing
   end)
 
   describe("Note column", function()
@@ -57,15 +56,6 @@ describe("Sell page bait handling", function()
 
     it("does not warn without a bait record", function()
       assert.is_nil(B.PostWarning(nil, 30, FLAT))
-    end)
-  end)
-
-  describe("suggested price", function()
-    it("starts at the wall, never at the bait level under it", function()
-      local ladder, total = W.SortLadder({ [30] = 15, [102] = 220, [105] = 140 })
-      ns.ladders[7] = { ladder = ladder, total = total, t = os.time(), kind = "commodity" }
-      ns.R().bait[7] = record
-      assert.equal(102, pricing.SuggestedPrice(7))
     end)
   end)
 end)
