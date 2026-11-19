@@ -404,8 +404,8 @@ local DIP_COLUMNS = {
 local DISENCHANT_COLUMNS = {
   { "Item", 220, nil, "Weapons and armor, uncommon or better, listed under what disenchanting them is worth. Click a row to load live listings before buying." },
   { "Price", 90, "RIGHT", "The cheapest buyout found in the scan." },
-  { "DE value after cut", 130, "RIGHT", "Expected value of the materials from one disenchant, at their wall prices, after the auction house cut on reselling them." },
-  { "Profit", 100, "RIGHT", "Disenchant value after cut minus the price." },
+  { "Net DE value", 130, "RIGHT", "Expected value of the materials from one disenchant, at their wall prices, after the auction house cut and the deposit to list each material, as the item tooltip's Net disenchant shows it." },
+  { "Profit", 100, "RIGHT", "Net disenchant value minus the price." },
   { "Profit %", 80, "RIGHT", "Profit as a share of the price." },
   { "Odds from", 150, nil, "Where the material odds come from: your own disenchants (recorded by MarketWall), a Forever estimate, or the classic disenchanting table." },
 }
@@ -899,7 +899,7 @@ local SETTINGS = {
     tip = "Items with fewer days of scans than this get an orange low-data flag. It only sets the flag; nothing is hidden. 1 to " .. (ns.cfgDefaults.baselineDays + 1) .. "." },
   { key = "minSnipeProfit", label = "Minimum snipe profit", kind = "money", tip = "Snipes with less total profit than this, after the cut, are left out." },
   { key = "minSnipeDiscount", label = "Minimum snipe discount", kind = "pct", tip = "Snipe units must cost at least this much less than the normal price." },
-  { key = "minDisenchantProfit", label = "Minimum disenchant profit", kind = "money", tip = "Disenchant deals with less profit per item than this, after the cut on the materials, are left out." },
+  { key = "minDisenchantProfit", label = "Minimum disenchant profit", kind = "money", tip = "Disenchant deals with less profit per item than this, after the cut and deposits on the materials, are left out." },
   { key = "minDisenchantPct", label = "Minimum disenchant profit %", kind = "pct", tip = "Disenchant deals must profit at least this share of their price." },
   { key = "dipPct", label = "Dip size", kind = "pct", tip = "How far below its normal price the wall must fall to count as a dip." },
   { key = "minSupply", label = "Minimum supply", kind = "int", tip = "Items with fewer units listed than this are left out of Snipes and Dips, because thin markets give unreliable prices." },

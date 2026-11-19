@@ -225,16 +225,17 @@ function ns.IsGear(id)
   return classID == WEAPON or classID == ARMOR
 end
 
--- One disenchant deal: uncommon or better weapons and armor whose disenchant value, after the
--- cut on reselling the materials, beats the price by both thresholds. Nil otherwise, and true
--- as well while the item's data is still loading.
-local function Deal(id, price, cut, minProfit, minPct)
+-- One disenchant deal: uncommon or better weapons and armor whose net disenchant value, after
+-- the cut and the deposits on reselling the materials (Outlet.Net, as the tooltip shows it),
+-- beats the price by both thresholds. Nil otherwise, and true as well while the item's data is
+-- still loading.
+local function Deal(id, price, cut, depositOf, minProfit, minPct)
   local _, _, quality, level, _, _, _, _, _, _, _, classID = C_Item.GetItemInfo(id)
   if not quality then return nil, true end
   if not (quality >= UNCOMMON and (classID == WEAPON or classID == ARMOR)) then return nil end
-  local value, note = ns.DisenchantValue(id)
+  local value, note, deposits = ns.DisenchantValue(id, depositOf)
   if not value then return nil end
-  value = value * (1 - cut)
+  value = ns.Outlet.Net(value, cut, deposits)
   local profit = value - price
   local pct = profit / price
   if profit <= 0 or profit < minProfit or pct < minPct then return nil end
@@ -242,12 +243,13 @@ local function Deal(id, price, cut, minProfit, minPct)
     odds = ODDS_FROM[note] or note or "classic table", skill = ns.DisenchantSkill(level) }
 end
 
--- prices: { [itemID] = cheapest buyout }. Returns the deals, most profit first, and the
--- prices of items whose data is still loading, to try again once it arrives.
-function ns.FindDisenchantDeals(prices, cut, minProfit, minPct)
+-- prices: { [itemID] = cheapest buyout }; depositOf(materialID): the one-unit deposit to list a
+-- material. Returns the deals, most profit first, and the prices of items whose data is still
+-- loading, to try again once it arrives.
+function ns.FindDisenchantDeals(prices, cut, depositOf, minProfit, minPct)
   local deals, loading = {}, {}
   for id, price in pairs(prices) do
-    local deal, isLoading = Deal(id, price, cut, minProfit, minPct)
+    local deal, isLoading = Deal(id, price, cut, depositOf, minProfit, minPct)
     if deal then
       deals[#deals + 1] = deal
     elseif isLoading then

@@ -138,7 +138,8 @@ local function AddLoadedGear(id)
   if not price then return end
   loadingGear[id] = nil
   if not next(loadingGear) then scanner:UnregisterEvent("GET_ITEM_INFO_RECEIVED") end
-  local deal = ns.FindDisenchantDeals({ [id] = price }, ns.Cfg("ahCut"), ns.Cfg("minDisenchantProfit"), ns.Cfg("minDisenchantPct"))[1]
+  local deal = ns.FindDisenchantDeals({ [id] = price }, ns.Cfg("ahCut"), ns.Mobs.GamePrices().deposit,
+    ns.Cfg("minDisenchantProfit"), ns.Cfg("minDisenchantPct"))[1]
   if not deal then return end
   local at = #ns.disenchants + 1
   for i, d in ipairs(ns.disenchants) do
@@ -339,7 +340,8 @@ local function Finalize(maps, names, stamp)
       end
       ns.snipes, ns.dips = snipes, dips
       -- after the loop, so materials are priced at today's walls
-      ns.disenchants, loadingGear = ns.FindDisenchantDeals(gearPrices, cut, ns.Cfg("minDisenchantProfit"), ns.Cfg("minDisenchantPct"))
+      ns.disenchants, loadingGear = ns.FindDisenchantDeals(gearPrices, cut, ns.Mobs.GamePrices().deposit,
+        ns.Cfg("minDisenchantProfit"), ns.Cfg("minDisenchantPct"))
       if next(loadingGear) then
         scanner:RegisterEvent("GET_ITEM_INFO_RECEIVED")
       else

@@ -5,6 +5,7 @@ local COMMON, UNCOMMON = 1, 2
 local STRANGE_DUST, LESSER_MAGIC_ESSENCE = 10940, 10938
 local LOW_CRAFT_ID = 250620     -- one of Forever's crafted items with an estimate
 local CUT = 0.05
+local function NO_DEPOSITS() return 0 end
 
 describe("FindDisenchantDeals", function()
   local ns, items, prices
@@ -36,7 +37,7 @@ describe("FindDisenchantDeals", function()
   -- 1000), so 399 after the 5% cut
   it("keeps gear listed under its value after the cut", function()
     Item(1001, UNCOMMON, 10, ARMOR)
-    local deals = ns.FindDisenchantDeals({ [1001] = 300 }, CUT, 0, 0)
+    local deals = ns.FindDisenchantDeals({ [1001] = 300 }, CUT, NO_DEPOSITS,0, 0)
     assert.equal(1, #deals)
     local d = deals[1]
     assert.equal(1001, d.id)
@@ -50,36 +51,55 @@ describe("FindDisenchantDeals", function()
 
   it("leaves out gear priced over its value after the cut, though under its value before it", function()
     Item(1001, UNCOMMON, 10, ARMOR)
-    assert.same({}, ns.FindDisenchantDeals({ [1001] = 410 }, CUT, 0, 0))
+    assert.same({}, ns.FindDisenchantDeals({ [1001] = 410 }, CUT, NO_DEPOSITS,0, 0))
+  end)
+
+  it("leaves out gear that profits after the cut alone once the materials' deposits count", function()
+    Item(1001, UNCOMMON, 10, ARMOR)
+    local deposits = { [STRANGE_DUST] = 30, [LESSER_MAGIC_ESSENCE] = 300 }
+    -- 80% of 1.5 dust at 30 + 20% of 1.5 essence at 300 = 126 in deposits: 399 - 126 = 273 net
+    assert.equal(1, #ns.FindDisenchantDeals({ [1001] = 380 }, CUT, NO_DEPOSITS, 0, 0))
+    assert.same({}, ns.FindDisenchantDeals({ [1001] = 380 }, CUT, function(id) return deposits[id] end, 0, 0))
+    local d = ns.FindDisenchantDeals({ [1001] = 200 }, CUT, function(id) return deposits[id] end, 0, 0)[1]
+    assert.near(273, d.value, 1e-6)   -- as the item tooltip's Net disenchant shows it
+    assert.near(73, d.profit, 1e-6)
+  end)
+
+  it("applies the minimum profit and % to the net", function()
+    Item(1001, UNCOMMON, 10, ARMOR)
+    local function Deposit(id) return id == STRANGE_DUST and 10 or 0 end   -- 12 in deposits: 87 profit at 300
+    assert.equal(1, #ns.FindDisenchantDeals({ [1001] = 300 }, CUT, Deposit, 86, 0.28))
+    assert.same({}, ns.FindDisenchantDeals({ [1001] = 300 }, CUT, Deposit, 88, 0))
+    assert.same({}, ns.FindDisenchantDeals({ [1001] = 300 }, CUT, Deposit, 0, 0.30))
   end)
 
   it("applies the minimum profit", function()
     Item(1001, UNCOMMON, 10, ARMOR)
-    assert.equal(1, #ns.FindDisenchantDeals({ [1001] = 300 }, CUT, 98, 0))
-    assert.same({}, ns.FindDisenchantDeals({ [1001] = 300 }, CUT, 100, 0))
+    assert.equal(1, #ns.FindDisenchantDeals({ [1001] = 300 }, CUT, NO_DEPOSITS,98, 0))
+    assert.same({}, ns.FindDisenchantDeals({ [1001] = 300 }, CUT, NO_DEPOSITS,100, 0))
   end)
 
   it("applies the minimum profit %", function()
     Item(1001, UNCOMMON, 10, ARMOR)
-    assert.equal(1, #ns.FindDisenchantDeals({ [1001] = 300 }, CUT, 0, 0.32))
-    assert.same({}, ns.FindDisenchantDeals({ [1001] = 300 }, CUT, 0, 0.34))
+    assert.equal(1, #ns.FindDisenchantDeals({ [1001] = 300 }, CUT, NO_DEPOSITS,0, 0.32))
+    assert.same({}, ns.FindDisenchantDeals({ [1001] = 300 }, CUT, NO_DEPOSITS,0, 0.34))
   end)
 
   it("leaves out items whose likely materials have no price", function()
     Item(1001, UNCOMMON, 10, ARMOR)
     prices[LESSER_MAGIC_ESSENCE] = nil
-    assert.same({}, ns.FindDisenchantDeals({ [1001] = 1 }, CUT, 0, 0))
+    assert.same({}, ns.FindDisenchantDeals({ [1001] = 1 }, CUT, NO_DEPOSITS,0, 0))
   end)
 
   it("leaves out items below uncommon, non-gear and uncached items", function()
     Item(1001, COMMON, 10, ARMOR)
     Item(LOW_CRAFT_ID, UNCOMMON, 10, CONSUMABLE)   -- has an estimate, but is not gear
-    assert.same({}, ns.FindDisenchantDeals({ [1001] = 1, [LOW_CRAFT_ID] = 1, [9999] = 1 }, CUT, 0, 0))
+    assert.same({}, ns.FindDisenchantDeals({ [1001] = 1, [LOW_CRAFT_ID] = 1, [9999] = 1 }, CUT, NO_DEPOSITS,0, 0))
   end)
 
   it("names the source of the odds and the skill each item needs", function()
     Item(LOW_CRAFT_ID, UNCOMMON, 30, WEAPON)
-    local d = ns.FindDisenchantDeals({ [LOW_CRAFT_ID] = 1 }, CUT, 0, 0)[1]
+    local d = ns.FindDisenchantDeals({ [LOW_CRAFT_ID] = 1 }, CUT, NO_DEPOSITS,0, 0)[1]
     assert.equal("Forever estimate", d.odds)
     assert.equal(50, d.skill)
   end)
@@ -88,7 +108,7 @@ describe("FindDisenchantDeals", function()
     Item(1001, UNCOMMON, 10, ARMOR)
     Item(1002, UNCOMMON, 10, WEAPON)   -- weapons lean to essence: 1230, so 1168.5 after the cut
     Item(1003, UNCOMMON, 12, ARMOR)
-    local deals = ns.FindDisenchantDeals({ [1001] = 300, [1002] = 300, [1003] = 200 }, CUT, 0, 0)
+    local deals = ns.FindDisenchantDeals({ [1001] = 300, [1002] = 300, [1003] = 200 }, CUT, NO_DEPOSITS,0, 0)
     assert.same({ 1002, 1003, 1001 }, { deals[1].id, deals[2].id, deals[3].id })
   end)
 end)
