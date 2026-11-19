@@ -122,26 +122,89 @@ describe("Ledger", function()
     end)
   end)
 
-  describe("in game", function()
-    local fire, money
+  describe("Adopt", function()
+    it("moves the legacy book to the character's key once, for the first character to log in", function()
+      local old = L.NewBook(500, 1)
+      local ledger = { ["Fikus-Forever"] = old }
+      assert.is_true(L.Adopt(ledger, "Player-1-A", "Fikus-Forever"))
+      assert.same({ ["Player-1-A"] = old }, ledger)
+      assert.is_false(L.Adopt(ledger, "Player-1-A", "Fikus-Forever"))   -- again: nothing to do
+      assert.is_false(L.Adopt(ledger, "Player-2-B", "Fikus-Forever"))   -- same name, other realm
+      assert.same({ ["Player-1-A"] = old }, ledger)
+    end)
 
-    before_each(function()
+    it("keeps a character's own book over a legacy one", function()
+      local own, old = L.NewBook(100, 1), L.NewBook(500, 1)
+      local ledger = { ["Player-1-A"] = own, ["Fikus-Forever"] = old }
+      assert.is_false(L.Adopt(ledger, "Player-1-A", "Fikus-Forever"))
+      assert.same({ ["Player-1-A"] = own, ["Fikus-Forever"] = old }, ledger)
+    end)
+  end)
+
+  describe("in game", function()
+    local fire, money, guid
+    local FARMER = "Player-4-0000AAAA"
+
+    local function Load(saved)
       ns, fire = addon.Load()
       L = ns.Ledger
-      money = 10000
+      _G.MarketWallDB = saved
+      fire("ADDON_LOADED", addon.ADDON)
+    end
+
+    before_each(function()
+      money, guid = 10000, FARMER
       _G.GetMoney = function() return money end
+      _G.UnitGUID = function(unit) return unit == "player" and guid or nil end
       _G.UnitName = function() return "Farmer" end
       _G.GetNormalizedRealmName = function() return "Forever" end
-      fire("ADDON_LOADED", addon.ADDON)
+      Load()
       fire("PLAYER_LOGIN")
     end)
 
     after_each(function()
-      _G.GetMoney, _G.UnitName, _G.GetNormalizedRealmName = nil, nil, nil
+      _G.GetMoney, _G.UnitGUID, _G.UnitName, _G.GetNormalizedRealmName = nil, nil, nil, nil
+    end)
+
+    -- Logs in again on the character with guid, keeping the saved variables
+    local function Relog()
+      Load(MarketWallDB)
+      fire("PLAYER_LOGIN")
+    end
+
+    it("keys each character's book by its GUID, so same-named characters keep separate books", function()
+      assert.equal(FARMER, ns.Recording.CharacterKey())
+      guid, money = "Player-5-0000BBBB", 300
+      Relog()
+      assert.equal(10000, MarketWallDB.ledger[FARMER].balance)
+      assert.equal(300, MarketWallDB.ledger[guid].balance)
+      assert.same({}, MarketWallDB.ledger[guid].entries)   -- no "offline" change from the other book
+    end)
+
+    it("waits for the GUID until entering the world when login does not know it yet", function()
+      MarketWallDB.ledger = {}
+      guid = nil
+      Relog()
+      assert.same({}, MarketWallDB.ledger)
+      guid = FARMER
+      fire("PLAYER_ENTERING_WORLD", true, false)
+      assert.equal(10000, MarketWallDB.ledger[FARMER].balance)
+    end)
+
+    it("hands the legacy Name-Realm book to the first same-named character to log in", function()
+      local old = L.NewBook(9000, 1)
+      MarketWallDB.ledger = { ["Farmer-Forever"] = old }
+      Relog()
+      assert.same({ [FARMER] = old }, MarketWallDB.ledger)
+      assert.equal("offline", old.entries[1][3])   -- 9000 to 10000 while not recorded
+      guid, money = "Player-5-0000BBBB", 300
+      Relog()
+      assert.equal(old, MarketWallDB.ledger[FARMER])
+      assert.equal(300, MarketWallDB.ledger[guid].opening[2])
     end)
 
     it("records an opening balance and attributes a sale at the merchant", function()
-      local book = MarketWallDB.ledger["Farmer-Forever"]
+      local book = MarketWallDB.ledger[FARMER]
       assert.equal(10000, book.opening[2])
       fire("MERCHANT_SHOW")
       money = 10450
@@ -161,7 +224,7 @@ describe("Ledger", function()
       fire("QUEST_TURNED_IN", 123, 0, 500)
       money = 10500
       fire("PLAYER_MONEY")
-      local book = MarketWallDB.ledger["Farmer-Forever"]
+      local book = MarketWallDB.ledger[FARMER]
       assert.equal("quest", book.entries[1][3])
       assert.equal(500, s.activities.quests.coin)
       assert.is_nil(s.activities["npc:1001"])

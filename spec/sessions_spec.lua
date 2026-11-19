@@ -28,6 +28,24 @@ describe("Sessions", function()
     return { t = t, kind = "loot", source = "npc:" .. npc, npc = npc, coin = coin, drops = drops or { [FISH] = 1 } }
   end
 
+  describe("Adopt", function()
+    it("moves an open session from the legacy Name-Realm key to the character's GUID, once", function()
+      local s = S.New("x", "Fikus-Forever", T0)
+      assert.is_true(S.Adopt(s, "Player-1-A", "Fikus-Forever", "Fikus"))
+      assert.same({ "Player-1-A", "Fikus" }, { s.char, s.name })
+      assert.is_false(S.Adopt(s, "Player-2-B", "Fikus-Forever", "Fikus"))   -- same name, other realm
+      assert.equal("Player-1-A", s.char)
+    end)
+
+    it("leaves stopped sessions and sessions of other characters alone", function()
+      local stopped = S.New("x", "Fikus-Forever", T0)
+      S.StopAt(stopped, T0 + 10)
+      assert.is_false(S.Adopt(stopped, "Player-1-A", "Fikus-Forever", "Fikus"))
+      assert.is_false(S.Adopt(S.New("x", "Other-Forever", T0), "Player-1-A", "Fikus-Forever", "Fikus"))
+      assert.is_false(S.Adopt(nil, "Player-1-A", "Fikus-Forever", "Fikus"))
+    end)
+  end)
+
   describe("timing", function()
     it("counts running time and leaves paused time out", function()
       local s = S.New("Tanaris turtles", "Farmer-Forever", T0)
@@ -204,7 +222,7 @@ describe("Sessions", function()
   end)
 
   describe("in game", function()
-    local fire, now
+    local fire, now, playerGUID
     local realPrint = print
     local spawn = 0
 
@@ -233,6 +251,9 @@ describe("Sessions", function()
       now = T0
       _G.time = function() return now end
       _G.print = function() end
+      playerGUID = "Player-4-0000AAAA"
+      _G.GetMoney = function() return 0 end
+      _G.UnitGUID = function(unit) return unit == "player" and playerGUID or nil end
       _G.UnitName = function() return "Farmer" end
       _G.GetNormalizedRealmName = function() return "Forever" end
       fire("ADDON_LOADED", addon.ADDON)
@@ -240,7 +261,28 @@ describe("Sessions", function()
     end)
 
     after_each(function()
-      _G.time, _G.print, _G.UnitName, _G.GetNormalizedRealmName = os.time, realPrint, nil, nil
+      _G.time, _G.print, _G.GetMoney, _G.UnitGUID, _G.UnitName, _G.GetNormalizedRealmName = os.time, realPrint, nil, nil, nil, nil
+    end)
+
+    it("names the character who started a session when another one tries to resume it", function()
+      local said
+      _G.print = function(...) said = table.concat({ ... }, " ") end
+      local s = S.Start("Tanaris turtles")
+      S.Pause()
+      playerGUID = "Player-5-0000BBBB"   -- a Farmer on another realm
+      S.Resume()
+      assert.matches("belongs to Farmer;", said)
+      assert.equal(T0, s.pausedAt)
+    end)
+
+    it("adopts an open session saved under the legacy Name-Realm key at login", function()
+      local s = S.New("Tanaris turtles", "Farmer-Forever", T0)
+      S.PauseAt(s, T0, true)
+      MarketWallDB.sessions = { s }
+      now = T0 + 30
+      fire("PLAYER_ENTERING_WORLD", false, true)
+      assert.same({ playerGUID, "Farmer" }, { s.char, s.name })
+      assert.is_nil(s.pausedAt)
     end)
 
     it("keeps running through a UI reload, leaving the reload's time out", function()

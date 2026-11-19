@@ -40,6 +40,13 @@ describe("Ledger view", function()
     assert.same({}, L.Books(ledger, "New-Forever", false))
   end)
 
+  it("shows only this character's book when another character has the same name", function()
+    local fikus, namesake = Main(), Alt()
+    local ledger = { ["Player-1-0000AAAA"] = fikus, ["Player-2-0000BBBB"] = namesake }
+    assert.same({ fikus }, L.Books(ledger, "Player-1-0000AAAA", false))
+    assert.same({ namesake }, L.Books(ledger, "Player-2-0000BBBB", false))
+  end)
+
   it("rolls up the chosen week or month for one character or all", function()
     local week, month = L.PeriodOf("week", NOW), L.PeriodOf("month", NOW)
     local main = L.Books(Ledgers(), "Main-Forever", false)

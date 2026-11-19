@@ -1,5 +1,5 @@
 -- MarketWall: the cash ledger. Every gold change of each character, with where it came from.
--- Saved in MarketWallDB.ledger, per character ("Name-Realm"): {
+-- Saved in MarketWallDB.ledger, per character by its GUID (Recording.CharacterKey): {
 --   opening = { t, money },   your gold the first time the ledger ran on this character
 --   balance =,                gold after the last recorded change
 --   entries = { { t, delta, source }, ... },   raw changes from the last KEEP_DAYS, oldest first
@@ -130,6 +130,15 @@ function Ledger.Login(book, money, t)
   return book
 end
 
+-- Books were once keyed "Name-Realm", which characters of the same name on different Forever
+-- realms shared. The first character under key to log in with no book of its own adopts the book
+-- under its legacy key; the others start fresh. Returns whether it adopted.
+function Ledger.Adopt(ledger, key, legacy)
+  if ledger[key] or not (legacy and ledger[legacy]) then return false end
+  ledger[key], ledger[legacy] = ledger[legacy], nil
+  return true
+end
+
 -- Opening money plus every recorded change; always equals the balance
 function Ledger.Total(book)
   local total = book.opening[2]
@@ -169,11 +178,14 @@ local function OnMoney()
   if entry then ns.Recording.Emit({ t = now, kind = "money", source = source, delta = entry[2] }) end
 end
 
+-- At PLAYER_LOGIN, or the first PLAYER_ENTERING_WORLD when the GUID was not known yet
 local function OnLogin()
   local key = ns.Recording.CharacterKey()
-  if not key then return end
-  book = Ledger.Login(MarketWallDB.ledger[key], GetMoney(), time())
-  MarketWallDB.ledger[key] = book
+  if book or not key then return end
+  local ledger = MarketWallDB.ledger
+  Ledger.Adopt(ledger, key, ns.Recording.LegacyKey())
+  book = Ledger.Login(ledger[key], GetMoney(), time())
+  ledger[key] = book
 end
 
 local function Hook(owner, name, fn)
@@ -197,12 +209,13 @@ Hook(C_AuctionHouse, "PostCommodity", function() Seen("auction_post") end)
 
 local frame = CreateFrame("Frame")
 frame:SetScript("OnEvent", function(_, event)
-  if event == "PLAYER_LOGIN" then return OnLogin() end
+  if event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then return OnLogin() end
   if event == "PLAYER_MONEY" then return OnMoney() end
   local window = WINDOWS[event]
   if window[2] then Open(window[1]) else Seen(window[1]) end
 end)
 frame:RegisterEvent("PLAYER_LOGIN")
+frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterEvent("PLAYER_MONEY")
 for event in pairs(WINDOWS) do
   pcall(frame.RegisterEvent, frame, event)   -- some of these may not exist on every client
