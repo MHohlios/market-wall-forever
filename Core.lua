@@ -32,7 +32,7 @@ ns.cfgDefaults = {
   mobDisenchant = "auto",  -- disenchanting in a mob's Optimal value: "auto" (with Enchanting), "always", "never"
   mobSkinning = "auto",    -- skinning in a mob's Optimal value: "auto" (with Skinning), "always", "never"
   mobRareShare = 0.02,     -- drops seen in fewer than this share of kills count as rare
-  mobMinKills = 10,        -- kills a mob needs before its value per kill shows
+  mobMinKills = 10,        -- seen kills under this flag a mob's values as rough
 }
 
 -- Settings Reset to defaults leaves alone: imported once from Disenchantry, which never imports again

@@ -92,16 +92,16 @@ describe("Mobs", function()
       vendor = { [LINEN] = 10, [FANG] = 50, [RING] = 100, [LEATHER] = 20, [DUSTLESS] = 7 }
       walls = { [LINEN] = { 100, true }, [FANG] = { 200, false }, [RING] = { 1000, true }, [LEATHER] = { 40, true } }
       de = { [RING] = 5000 }
-      opts = { cut = 0.05, disenchant = false, skinning = false, rareShare = 0.02, minKills = 3 }
+      opts = { cut = 0.05, disenchant = false, skinning = false, rareShare = 0.02 }
     end)
 
-    it("shows only counts below the minimum kills", function()
+    it("gives values from the first seen kill", function()
       local stats = M.Stats(Mob({ { K.LOOTED, 0, { [LINEN] = 1 } }, { K.UNSEEN }, { K.UNSEEN } }), Prices(), opts)
-      assert.same({ name = "Wolf", kills = 3, lifetime = 3, seen = 1 }, stats)
+      assert.same({ 3, 1 }, { stats.kills, stats.seen })
+      assert.same({ 10, 10 }, { stats.vendor.median, stats.vendor.average })
     end)
 
-    it("needs at least one seen kill even with minimum kills set to 0", function()
-      opts.minKills = 0
+    it("shows only counts with no seen kill", function()
       local stats = M.Stats(Mob({ { K.UNSEEN } }), Prices(), opts)
       assert.same({ name = "Wolf", kills = 1, lifetime = 1, seen = 0 }, stats)
     end)
@@ -192,7 +192,7 @@ describe("Mobs", function()
     end
 
     before_each(function()
-      opts = { cut = 0.05, disenchant = false, skinning = false, rareShare = 0.02, minKills = 3 }
+      opts = { cut = 0.05, disenchant = false, skinning = false, rareShare = 0.02 }
     end)
 
     it("gives each drop's share of seen kills, its quantity when it drops and one unit's value per lens", function()
