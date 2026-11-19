@@ -27,6 +27,7 @@ ns.cfgDefaults = {
   sellDuration = 2,        -- last auction duration picked on the Sell page: 1 = 12h, 2 = 24h, 3 = 48h
   baitSearchGap = 1.0,     -- seconds between Bait Detect searches; never less than 1
   baitConfirmPress = true, -- Bait Detect confirms each purchase with its own press
+  baitMinUnder = 0.50,     -- bait must sit at least this far under the wall; held to 10% to 95%
   minimapButton = true,    -- show the MW button on the minimap
   mobDisenchant = "auto",  -- disenchanting in a mob's Optimal value: "auto" (with Enchanting), "always", "never"
   mobSkinning = "auto",    -- skinning in a mob's Optimal value: "auto" (with Skinning), "always", "never"

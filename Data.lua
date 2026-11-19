@@ -288,7 +288,9 @@ function ns.UpdateBait(id, ladder, wall, stats, t, isCommodity)
     r.bait[id] = nil
     return
   end
-  r.bait[id] = B.Update(r.bait[id], ladder, wall, stats, ns.Cfg("minHistoryDays"), t)
+  -- A record that no longer qualifies comes back nil, which clears its saved flag
+  local minUnder = B.MinUnder(ns.Cfg("baitMinUnder"))
+  r.bait[id] = B.Update(r.bait[id], ladder, wall, stats, ns.Cfg("minHistoryDays"), minUnder, t)
 end
 
 -- Status for a watched item: "buy", "sell", "normal" or "nodata"

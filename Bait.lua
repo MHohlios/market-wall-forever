@@ -7,6 +7,8 @@ local B = {}
 ns.Bait = B
 
 local SCANS_TO_FLAG = 2
+-- Keeps exact edges inside their limits: 1000 * 0.03 and 1 - 80/100 both land just under in floating point
+local EDGE = 1e-9
 B.STALE_PURCHASE = 10   -- seconds a quote or purchase may stay unanswered before a press resets it
 
 local function UnitsAt(ladder, price)
@@ -17,19 +19,27 @@ local function UnitsAt(ladder, price)
   return 0
 end
 
--- The cheapest level when it is thin supply under the wall and below the item's normal range.
+-- The range the "minimum % under the wall" setting is held to
+B.MIN_UNDER, B.MAX_UNDER = 0.10, 0.95
+
+function B.MinUnder(setting)
+  return math.min(B.MAX_UNDER, math.max(B.MIN_UNDER, setting))
+end
+
+-- The cheapest level when it sits at least minUnder under the wall (0.5 is half the wall's
+-- price) and below the item's normal range. Ordinary undercutting stays close to the wall.
 -- minDays counts today, as Snipes and Dips do; stats cover past days only.
-local function Candidate(ladder, wall, stats, minDays)
+local function Candidate(ladder, wall, stats, minDays, minUnder)
   local cheapest = ladder and ladder[1]
-  if not cheapest or not wall or cheapest.p >= wall then return nil end
+  if not cheapest or not wall or 1 - cheapest.p / wall + EDGE < minUnder then return nil end
   if not stats or stats.n == 0 or stats.n + 1 < minDays or cheapest.p >= stats.p25 then return nil end
   return cheapest
 end
 
 -- One scan of an item: returns the new bait record, or nil when its cheapest level is not bait.
 -- record: { p = bait price, u = units first seen, q = units now, w = wall, first =, last =, seen = scans }
-function B.Update(record, ladder, wall, stats, minDays, now)
-  local level = Candidate(ladder, wall, stats, minDays)
+function B.Update(record, ladder, wall, stats, minDays, minUnder, now)
+  local level = Candidate(ladder, wall, stats, minDays, minUnder)
   if not level then return nil end
   if not record or record.p ~= level.p then
     return { p = level.p, u = level.q, q = level.q, w = wall, first = now, last = now, seen = 1 }
@@ -63,7 +73,6 @@ end
 
 -- A warning when posting at price would match the bait: at its price or within band of it.
 -- Returns nil when there is no bait record or the price is away from it.
-local EDGE = 1e-9   -- 1000 * 0.03 is just under 30 in floating point; keep the exact edge in the band
 function B.PostWarning(record, price, band)
   if not record or math.abs(price - record.p) > record.p * band + EDGE then return nil end
   return string.format("%d unit%s at %s sits %d%% under the %s wall. Likely bait; don't match it.",
