@@ -74,16 +74,19 @@ end
 -- with the duration. Until a real deposit teaches MarketWall the rate, it assumes the standard
 -- 15% per 12 hours. Learned rates are saved in MarketWallDB.depositRate[duration].
 Outlet.DEFAULT_DEPOSIT_RATES = { 0.15, 0.30, 0.60 }   -- 12h, 24h, 48h
--- Deposits are whole copper: smaller posts round too much to learn a rate from
-local MIN_LEARNING_VALUE = 100
 
 function Outlet.DepositRate(duration)
   return MarketWallDB.depositRate[duration] or Outlet.DEFAULT_DEPOSIT_RATES[duration]
 end
 
--- Keeps the rate of a real deposit for vendorValue copper of items, the latest one winning
+-- Keeps the rate of a real deposit for vendorValue copper of items, the latest one winning. A
+-- new rate reprices mob values, which are cached.
 function Outlet.LearnDepositRate(duration, deposit, vendorValue)
-  if vendorValue >= MIN_LEARNING_VALUE then MarketWallDB.depositRate[duration] = deposit / vendorValue end
+  if vendorValue <= 0 then return end
+  local rate = deposit / vendorValue
+  if MarketWallDB.depositRate[duration] == rate then return end
+  MarketWallDB.depositRate[duration] = rate
+  ns.Mobs.Invalidate()
 end
 
 -- The deposit for one unit of an item away from the auction house: 0 without a vendor price

@@ -155,9 +155,19 @@ describe("Outlet", function()
       assert.equal(200, ns.EstimateDeposit(1, 1))
     end)
 
-    it("learns nothing from posts too cheap for whole-copper deposits to show the rate", function()
-      O.LearnDepositRate(2, 1, 99)
-      assert.equal(300, ns.EstimateDeposit(1, 2))
+    it("learns from cheap items too, but not from items without a vendor price", function()
+      O.LearnDepositRate(2, 3, 60)
+      assert.equal(50, ns.EstimateDeposit(1, 2))
+      O.LearnDepositRate(2, 3, 0)
+      assert.equal(50, ns.EstimateDeposit(1, 2))
+    end)
+
+    it("reprices cached mob values when it learns a new rate", function()
+      local invalidated = 0
+      ns.Mobs.Invalidate = function() invalidated = invalidated + 1 end
+      O.LearnDepositRate(2, 50, 1000)
+      O.LearnDepositRate(2, 50, 1000)   -- the same rate again
+      assert.equal(1, invalidated)
     end)
 
     it("is nothing for an item without a vendor price", function()

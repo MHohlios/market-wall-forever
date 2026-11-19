@@ -38,7 +38,7 @@ describe("Sell page deposits", function()
   end)
 
   it("takes the game's deposit off the auction house rather than the estimate", function()
-    vendor = 60   -- too cheap to learn from, so the estimate stays at 18c
+    ns.EstimateDeposit = function() return 999 end
     ns.RefreshSell()
     assert.equal(WALL * 0.95 - 50, grouped[1].values.auction)
   end)
