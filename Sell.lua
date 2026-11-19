@@ -309,7 +309,7 @@ end
 local function BuildSale(w)
   local s = CreateFrame("Frame", nil, page)
   s:SetPoint("TOPLEFT", 0, TOP)
-  s:SetSize(LEFT_WIDTH, BOTTOM_Y - TOP)
+  s:SetSize(LEFT_WIDTH, TOP - BOTTOM_Y)
   page.sale = s
 
   page.icon = s:CreateTexture(nil, "ARTWORK")
@@ -394,7 +394,7 @@ end
 local function BuildInfo()
   local f = CreateFrame("Frame", nil, page)
   f:SetPoint("TOPLEFT", RIGHT_X, TOP)
-  f:SetSize(RIGHT_WIDTH, BOTTOM_Y - TOP)
+  f:SetSize(RIGHT_WIDTH, TOP - BOTTOM_Y)
   page.info = f
 
   page.view = PV.CreateView(f, { width = RIGHT_WIDTH, chartHeight = 100, cellWidth = 110, cells = CELLS })
