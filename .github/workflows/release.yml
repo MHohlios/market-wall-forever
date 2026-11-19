@@ -26,7 +26,7 @@ jobs:
             echo "::error::The release has no text. Add release notes, since they become the CurseForge changelog."
             exit 1
           fi
-          printf '%s\n' "$RELEASE_BODY" > CHANGELOG.md
+          printf '%s' "$RELEASE_BODY" > CHANGELOG.md
       # No GitHub token: the packager's GitHub upload would rewrite the release's name,
       # text and pre-release flag, so it uploads to CurseForge only.
       - uses: BigWigsMods/packager@01e8631a69c69d7654c788d152630d5fed9e3812 # v2.7.0
