@@ -53,7 +53,7 @@ describe("item tooltip lines", function()
     it("reads n/a on an item's first scan", function()
       SeedWalls(1000)
       ns.TooltipLines.Add(tooltip, ID)
-      assert.is_true(Has("Market|r"))
+      assert.is_true(Has("Net market|r"))
       assert.is_true(Has("7-day trend|r|" .. GREY_NA))
     end)
 
@@ -207,12 +207,12 @@ describe("item tooltip lines", function()
       Wall(SHARD, 2000)
     end)
 
-    it("lists Market, Vendor and Disenchant, then the materials, then market context", function()
+    it("lists Net market, Vendor and Net disenchant, then the materials, then market context", function()
       SeedWalls(500, 500, 500, 500)
       ns.R().supplied[ID] = true
       ns.R().watch[ID] = { buy = 400 }
       ns.TooltipLines.Add(tooltip, ID)
-      local order = { " ", "Market|r", "Vendor|r", "Disenchant", "Dust", "Essence", "Shard", "odds: classic table",
+      local order = { " ", "Net market|r", "Vendor|r", "Net disenchant", "Dust", "Essence", "Shard", "odds: classic table",
         " ", "Only 4 days of data", "Against median|r", "7-day trend|r", "Your buy / sell|r" }
       for i, text in ipairs(order) do
         if text == " " then
@@ -229,13 +229,13 @@ describe("item tooltip lines", function()
       assert.equal(Find("odds:"), #tooltip.lines)
     end)
 
-    it("notes a thin market on the Market row when a vendor is best beside a higher wall", function()
+    it("notes a thin market on the Net market row when a vendor is best beside a higher wall", function()
       items[ID].vendor = 400
       Wall(ID, 500)
       ns.R().supplied[ID] = nil   -- no real supply behind the wall
       MarketWallDB.cfg.mobDisenchant = "never"
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(tooltip.lines[Find("Market")]:find("(today) (thin market)|r", 1, true))
+      assert.truthy(tooltip.lines[Find("Net market")]:find("(today) (thin market)|r", 1, true))
       assert.truthy(tooltip.lines[Find("Vendor")]:find(BEST, 1, true))
 
       tooltip = NewTooltip()
@@ -244,28 +244,28 @@ describe("item tooltip lines", function()
       assert.is_nil(Find("thin market"))
     end)
 
-    it("puts the stack line right after Market", function()
+    it("puts the stack line right after Net market", function()
       Wall(ID, 500)
       _G.C_Container = { GetContainerItemInfo = function() return { itemID = ID, stackCount = 5 } end }
       tooltip = NewTooltip({ GetSlotAndBagID = function() return 4, 0 end })
       ns.TooltipLines.Add(tooltip, ID)
-      assert.equal(Find("Market|r") + 1, Find("Stack of 5"))
+      assert.equal(Find("Net market|r") + 1, Find("Stack of 5"))
       assert.equal(Find("Stack of 5") + 1, Find("Vendor|r"))
     end)
 
     it("marks disenchanting best when its materials after the cut pay most", function()
       Wall(ID, 500)   -- 475 after the cut, against 558 from disenchanting
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(tooltip.lines[Find("Disenchant")]:find(BEST, 1, true))
-      assert.is_nil(tooltip.lines[Find("Market|r")]:find(BEST, 1, true))
+      assert.truthy(tooltip.lines[Find("Net disenchant")]:find(BEST, 1, true))
+      assert.is_nil(tooltip.lines[Find("Net market|r")]:find(BEST, 1, true))
       assert.is_nil(tooltip.lines[Find("Vendor|r")]:find(BEST, 1, true))
     end)
 
     it("marks the market best when the wall after the cut pays most", function()
       Wall(ID, 1000)
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(tooltip.lines[Find("Market")]:find(BEST, 1, true))
-      assert.is_nil(tooltip.lines[Find("Disenchant")]:find(BEST, 1, true))
+      assert.truthy(tooltip.lines[Find("Net market")]:find(BEST, 1, true))
+      assert.is_nil(tooltip.lines[Find("Net disenchant")]:find(BEST, 1, true))
     end)
 
     it("marks the vendor best when it pays most", function()
@@ -273,28 +273,28 @@ describe("item tooltip lines", function()
       Wall(ID, 500)
       ns.TooltipLines.Add(tooltip, ID)
       assert.truthy(tooltip.lines[Find("Vendor")]:find(BEST, 1, true))
-      assert.is_nil(tooltip.lines[Find("Disenchant")]:find(BEST, 1, true))
+      assert.is_nil(tooltip.lines[Find("Net disenchant")]:find(BEST, 1, true))
     end)
 
     it("shows the market's net after the cut and a 24h deposit, with the listed price in grey", function()
       Wall(ID, 1000)   -- 950 after the cut, less 30% of the 100c vendor price
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(Find("|" .. ns.Money(920) .. " " .. GREY .. "net · 10s 0c listed (today)|r"))
+      assert.truthy(Find("|" .. ns.Money(920) .. " " .. GREY .. "· 10s 0c listed (today)|r"))
     end)
 
     it("marks nothing without a wall, as the Sell page groups it with no market data", function()
       ns.TooltipLines.Add(tooltip, ID)
       assert.is_nil(Find(BEST))
-      assert.is_nil(Find("Market"))
+      assert.is_nil(Find("Net market"))
       assert.truthy(Find("Vendor|r|" .. ns.Money(100)))
-      assert.truthy(Find("Disenchant|r|" .. ns.Money(558.125) .. " " .. GREY .. "net · 5s 88c in mats|r"))
+      assert.truthy(Find("Net disenchant|r|" .. ns.Money(558.125) .. " " .. GREY .. "· 5s 88c in mats|r"))
     end)
 
     it("takes each material's deposit off the disenchant net and says so under the breakdown", function()
       items[DUST].vendor, items[ESSENCE].vendor, items[SHARD].vendor = 10, 100, 200
       -- 75% × 2.5 × 3 + 20% × 1.5 × 30 + 5% × 60 = 17.625 in deposits at 30%
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(Find("Disenchant|r|" .. ns.Money(558.125 - 17.625) .. " "))
+      assert.truthy(Find("Net disenchant|r|" .. ns.Money(558.125 - 17.625) .. " "))
       assert.truthy(Find("odds: classic table · net after the cut and each material's deposit|r"))
       assert.truthy(Find("  Dust|" .. GREY .. "2.5× · 75%|r " .. ns.Money(100)))   -- materials keep their wall
     end)
@@ -311,25 +311,25 @@ describe("item tooltip lines", function()
       -- without deposits the market pays most: 20s 90c, against 20s 71c from disenchanting
       MarketWallDB.depositRate[2] = 0
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(tooltip.lines[Find("Market")]:find(BEST, 1, true))
-      assert.truthy(Find("|" .. ns.Money(2090) .. " " .. GREY .. "net · 22s 0c listed"))
+      assert.truthy(tooltip.lines[Find("Net market")]:find(BEST, 1, true))
+      assert.truthy(Find("|" .. ns.Money(2090) .. " " .. GREY .. "· 22s 0c listed"))
 
       -- at the standard 30% for 24h both drop below the vendor
       MarketWallDB.depositRate[2] = nil
       tooltip = NewTooltip()
       ns.TooltipLines.Add(tooltip, ID)
       assert.truthy(tooltip.lines[Find("Vendor")]:find(BEST, 1, true))
-      assert.truthy(Find("|" .. ns.Money(2090 - 615.6) .. " " .. GREY .. "net · 22s 0c listed"))
-      assert.truthy(Find("|" .. ns.Money(2071 - 107.25) .. " " .. GREY .. "net · 21s 80c in mats"))
+      assert.truthy(Find("|" .. ns.Money(2090 - 615.6) .. " " .. GREY .. "· 22s 0c listed"))
+      assert.truthy(Find("|" .. ns.Money(2071 - 107.25) .. " " .. GREY .. "· 21s 80c in mats"))
     end)
 
     it("leaves out the vendor row without a vendor price and the disenchant rows for an item that can't be", function()
       Item(ID, "Potion", { quality = UNCOMMON, level = 18, classID = CONSUMABLE })
       Wall(ID, 500)
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(Find("Market"))
+      assert.truthy(Find("Net market"))
       assert.is_nil(Find("Vendor"))
-      assert.is_nil(Find("Disenchant"))
+      assert.is_nil(Find("Net disenchant"))
       assert.is_nil(Find("odds:"))
     end)
 

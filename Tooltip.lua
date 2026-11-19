@@ -30,7 +30,7 @@ local function OutletLines(add, id, count)
   if wall then
     local age = ns.Today() - day
     local when = (age == 0 and "today") or (age == 1 and "yesterday") or (age .. " days ago")
-    add(OutletLabel("Market", Outlet.AUCTION, best), ns.Money(values.auction) .. " " .. GREY .. "net · "
+    add(OutletLabel("Net market", Outlet.AUCTION, best), ns.Money(values.auction) .. " " .. GREY .. "· "
       .. PlainMoney(wall) .. " listed (" .. when .. ")" .. (values.thin and " (thin market)" or "") .. "|r")
     if count and count > 1 then add(GREY .. "Stack of " .. count .. "|r", ns.Money(wall * count)) end
   end
@@ -40,10 +40,10 @@ local function OutletLines(add, id, count)
   -- shown whether or not disenchanting counts toward the best outlet
   local disenchant, _, deposits = ns.DisenchantValue(id, prices.deposit)
   if disenchant then
-    add(OutletLabel("Disenchant", Outlet.DISENCHANT, best), ns.Money(Outlet.Net(disenchant, opts.cut, deposits))
-      .. " " .. GREY .. "net · " .. PlainMoney(disenchant) .. " in mats|r")
+    add(OutletLabel("Net disenchant", Outlet.DISENCHANT, best), ns.Money(Outlet.Net(disenchant, opts.cut, deposits))
+      .. " " .. GREY .. "· " .. PlainMoney(disenchant) .. " in mats|r")
   elseif disenchant == false then
-    add(OutletLabel("Disenchant", Outlet.DISENCHANT, best), GREY .. "materials not scanned|r")
+    add(OutletLabel("Net disenchant", Outlet.DISENCHANT, best), GREY .. "materials not scanned|r")
   end
 end
 
