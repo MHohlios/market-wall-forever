@@ -153,6 +153,32 @@ describe("Mobs", function()
       assert.equal(4500, M.Lenses(Prices(), opts, {}).optimal(RING))
     end)
 
+    describe("a container drop", function()
+      local CLAM = DUSTLESS   -- sells to vendors for 7, with no market
+      local opened
+
+      local function WithOpened()
+        local prices = Prices()
+        prices.opened = function(id) return opened[id] end
+        return prices
+      end
+
+      it("is worth what it opens into on average in Optimal when that beats selling it", function()
+        opened = { [CLAM] = { opens = 2, coin = 10, drops = { [LINEN] = 2 } } }   -- (10 + 2 × 95) / 2
+        local stats = M.Stats(Mob({ { K.LOOTED, 5, { [CLAM] = 1 } } }), WithOpened(), opts)
+        assert.same({ 105, 12, 5 }, { stats.optimal.average, stats.vendor.average, stats.market.average })
+        assert.equal(100, M.DropTable(Mob({ { K.LOOTED, 0, { [CLAM] = 1 } } }), WithOpened(), opts)[1].optimal)
+      end)
+
+      it("keeps its sell value in Optimal when opening it pays less, or it was never opened", function()
+        opened = { [CLAM] = { opens = 1, coin = 3, drops = {} } }
+        local mob = Mob({ { K.LOOTED, 0, { [CLAM] = 1 } } })
+        assert.equal(7, M.Stats(mob, WithOpened(), opts).optimal.average)
+        opened = {}
+        assert.equal(7, M.Stats(mob, WithOpened(), opts).optimal.average)
+      end)
+    end)
+
     it("adds skinning to Optimal when it is on, and has its own lens from gathered kills", function()
       local mob = Mob({
         { K.LOOTED, 0, {}, { [LEATHER] = 2 } }, { K.EMPTY, nil, nil, { [LEATHER] = 1 } }, { K.LOOTED, 0, {} },

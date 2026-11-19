@@ -42,7 +42,7 @@ describe("data from an item's first scan", function()
 
   before_each(function()
     ns = addon.Load()
-    _G.MarketWallDB = { version = 1, cfg = {}, realms = {}, depositRate = {} }
+    _G.MarketWallDB = { version = 1, cfg = {}, realms = {}, depositRate = {}, containers = {} }
     _G.C_Item = {}
   end)
 

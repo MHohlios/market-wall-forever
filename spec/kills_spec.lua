@@ -326,6 +326,35 @@ describe("Kills", function()
     assert.equal(0, #Of("kill"))
   end)
 
+  describe("naming the container opened", function()
+    local CLAM, CLAM_GUID = 5523, "Item-5250-0-40000000ABCDEF"
+    local asked
+
+    before_each(function()
+      asked = {}
+      tracker = K.NewTracker(function(e) events[#events + 1] = e end, function() end, function(guid)
+        asked[#asked + 1] = guid
+        if guid == CLAM_GUID then return CLAM end
+      end)
+    end)
+
+    it("puts the container's item ID on its loot event", function()
+      tracker:Loot({ Slot(LINEN, 2, CLAM_GUID, 2), Coin("15 Copper", CLAM_GUID, 15) }, false, 100)
+      local loot = Of("loot")[1]
+      assert.same({ "item", CLAM, 15, { [LINEN] = 2 } }, { loot.source, loot.container, loot.coin, loot.drops })
+    end)
+
+    it("leaves the container unnamed when its item ID can't be known", function()
+      tracker:Loot({ Slot(LINEN, 2, "Item-5250-0-40000000FFFFFF", 2) }, false, 100)
+      assert.same({ "item" }, { Of("loot")[1].source, Of("loot")[1].container })
+    end)
+
+    it("never names a disenchanted item as a container", function()
+      tracker:Loot({ Slot(10940, 2, CLAM_GUID, 2) }, false, 100, nil, true)
+      assert.same({ 0, {} }, { #Of("loot"), asked })
+    end)
+  end)
+
   it("records no container loot for disenchanting results, which DisenchantLog.lua owns, even reopened", function()
     local item = "Item-5250-0-40000000ABCDEF"
     tracker:Loot({ Slot(10940, 2, item, 2) }, false, 101, nil, true)

@@ -1,6 +1,7 @@
 -- MarketWall: the best outlet for one unit of an item: the auction house, a vendor or
 -- disenchanting, after the auction house's fees. Mob values' lenses (Mobs.lua), farm sessions,
--- the item tooltip and the Sell page's bag groups share this rule, so they never disagree.
+-- the item tooltip and the Sell page's bag groups share this rule, so they never disagree. Only
+-- mob values add one more option: opening a container (Containers.lua).
 local _, ns = ...
 
 local Outlet = {}
