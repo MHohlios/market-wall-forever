@@ -4,7 +4,9 @@
 --   sessionGroups = { [activity name] = group name }, renames and merges that apply to every session
 --   creatures = { [npcID] = { name =, family = } }, from units you targeted or hovered
 -- A session is {
---   label, char, start, stop,   stop is nil while it runs
+--   label, start, stop,         stop is nil while it runs
+--   char, name,                 the GUID (Recording.CharacterKey) and name of who started it;
+--                               older sessions have char "Name-Realm" and no name
 --   paused =, pausedAt =,       seconds paused before now, and when the current pause began
 --   loggedOut =,                true when logging out made the current pause
 --   lastGain =,                 active seconds into the session of the last gain
@@ -28,8 +30,16 @@ local NAMES = {
   gathering = "Gathering", chests = "Chests and containers", quests = "Quests",
 }
 
-function Sessions.New(label, char, t)
-  return { label = label, char = char, start = t, paused = 0, lastGain = 0, gaps = {}, activities = {} }
+function Sessions.New(label, char, t, name)
+  return { label = label, char = char, name = name, start = t, paused = 0, lastGain = 0, gaps = {}, activities = {} }
+end
+
+-- An open session started under a character's legacy "Name-Realm" key moves to its GUID key,
+-- as its ledger book does (Ledger.Adopt). Returns whether it moved.
+function Sessions.Adopt(s, key, legacy, name)
+  if not (s and key) or s.stop or s.char ~= legacy then return false end
+  s.char, s.name = key, name
+  return true
 end
 
 -- Seconds the session has run, paused time left out
@@ -323,7 +333,7 @@ function Sessions.Start(label)
   local char = ns.Recording.CharacterKey()
   if not char then return end
   local list = MarketWallDB.sessions
-  local s = Sessions.New(label, char, time())
+  local s = Sessions.New(label, char, time(), ns.Recording.CharacterName())
   list[#list + 1] = s
   Print("Session \"" .. label .. "\" started.")
   return s
@@ -348,7 +358,7 @@ function Sessions.Resume()
   local s = Sessions.Current()
   if not s then return Print("No session is open.") end
   if s.char ~= ns.Recording.CharacterKey() then
-    return Print("Session \"" .. s.label .. "\" belongs to " .. s.char .. "; stop it to start one here.")
+    return Print("Session \"" .. s.label .. "\" belongs to " .. (s.name or s.char) .. "; stop it to start one here.")
   end
   if Sessions.ResumeAt(s, time()) then Print("Session \"" .. s.label .. "\" resumed.") end
 end
@@ -436,6 +446,8 @@ local HANDLERS = {
   end,
   -- the first one after loading; isReloadingUi is nil on a client that does not pass it
   PLAYER_ENTERING_WORLD = function(_, isReloadingUi)
+    local Recording = ns.Recording   -- adopts on every entry, in case the GUID was not known yet
+    Sessions.Adopt(Sessions.Current(), Recording.CharacterKey(), Recording.LegacyKey(), Recording.CharacterName())
     if entered then return end   -- zoning
     entered = true
     local s = Running()
