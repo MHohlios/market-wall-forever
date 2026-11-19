@@ -1,6 +1,6 @@
 local addon = require("spec.helpers.addon")
 
-local GREY = "|cffa3acac"
+local GREY, ORANGE = "|cffa3acac", "|cffffb057"
 
 describe("Mobs view", function()
   local ns, V
@@ -28,9 +28,9 @@ describe("Mobs view", function()
   local function All()
     return {
       market(Valued(1, "Lashtail Raptor", 80, 58), { [5] = true }),
-      { npc = 2, name = "Jungle Stalker", lifetime = 7, seen = 7 },
+      { npc = 2, name = "Jungle Stalker", lifetime = 7, seen = 0 },   -- every kill looted by someone else
       market(Valued(3, "Stranglethorn Raptor", 95, 142), {}),
-      { npc = 4, lifetime = 12, seen = 2 },   -- never targeted, so no name
+      { npc = 4, lifetime = 12, seen = 0 },   -- never targeted, so no name
       market(Valued(5, "Young Panther", 400, 11), {}),
     }
   end
@@ -41,10 +41,10 @@ describe("Mobs view", function()
     return names
   end
 
-  it("sorts by median per kill, with mobs short of kills last, most seen kills first", function()
+  it("sorts by median per kill, with mobs that have no seen kill last", function()
     local rows = V.Rows(All(), "optimal", "")
     assert.same({ "Young Panther", "Stranglethorn Raptor", "Lashtail Raptor", "Jungle Stalker", "NPC 4" }, Names(rows))
-    assert.equal(2, rows[5].kills)   -- the seen kills the minimum counts, not all 12
+    assert.equal(0, rows[5].kills)   -- the seen kills, not all 12
   end)
 
   describe("header sort", function()
@@ -104,11 +104,27 @@ describe("Mobs view", function()
     assert.equal("Young Panther", V.Rows(all, "optimal", "")[1].name)
   end)
 
-  it("counts unpriced drops and says how many kills a mob still needs", function()
+  it("counts unpriced drops and shows no values for a mob with no seen kill", function()
     local rows = V.Rows(All(), "optimal", "")
     local lashtail = V.MobCells(rows[3], 10)
-    assert.same({ "Lashtail Raptor", "58", ns.Money(80), ns.Money(160), ns.Money(120), "item:7 31%", "|cffffb057" .. "1|r" }, lashtail)
-    assert.same({ "Jungle Stalker", "7", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", GREY .. "needs 10 kills|r", "" },
+    assert.same({ "Lashtail Raptor", "58", ns.Money(80), ns.Money(160), ns.Money(120), "item:7 31%", ORANGE .. "1|r" }, lashtail)
+    assert.same({ "Jungle Stalker", ORANGE .. "0|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", "" },
       V.MobCells(rows[4], 10))
+  end)
+
+  describe("under the kills before values are reliable", function()
+    local panther   -- 11 seen kills
+    before_each(function() panther = V.Rows(All(), "optimal", "Panther")[1] end)
+
+    it("shows the values with the kill count in orange and a hover saying they are rough", function()
+      local cells = V.MobCells(panther, 12)
+      assert.same({ ORANGE .. "11|r", ns.Money(400) }, { cells[2], cells[3] })
+      assert.equal("Fewer than 12 kills; values are rough", V.MobTip(panther, 12))
+    end)
+
+    it("shows a plain kill count and no hover from the threshold on", function()
+      assert.equal("11", V.MobCells(panther, 11)[2])
+      assert.is_nil(V.MobTip(panther, 11))
+    end)
   end)
 end)

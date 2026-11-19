@@ -125,11 +125,11 @@ function Mobs.OptimalLabel(opts)
 end
 
 -- Value per kill under every lens, from the stored kills at current prices. Unseen kills are
--- left out; 0c kills count. Below opts.minKills seen kills only the counts are returned.
+-- left out; 0c kills count. With no seen kill only the counts are returned.
 -- vendorNoRare, marketNoRare and optimalNoRare leave out drops seen in under opts.rareShare of kills.
 -- prices: vendor(id), wall(id) -> wall and whether it has real supply,
 -- disenchant(id) -> copper or nil when not allowed
--- opts: cut, disenchant, skinning (include in Optimal), rareShare, minKills
+-- opts: cut, disenchant, skinning (include in Optimal), rareShare
 local function SeenKills(mob)
   local seen = {}
   for _, kill in ipairs(mob.kills) do
@@ -141,7 +141,7 @@ end
 function Mobs.Stats(mob, prices, opts)
   local seen = SeenKills(mob)
   local stats = { name = mob.name, kills = #mob.kills, lifetime = mob.life.kills, seen = #seen }
-  if #seen < math.max(1, opts.minKills) then return stats end
+  if #seen == 0 then return stats end
 
   local unpriced = {}
   local lens = Lenses(prices, opts, unpriced)
@@ -238,7 +238,6 @@ function Mobs.GameOptions()
     skinning = Included("mobSkinning",
       function() return (ns.ProfessionSkill(SKINNING_SKILL_LINE, SKINNING_SPELL, "Skinning") or 0) > 0 end),
     rareShare = ns.Cfg("mobRareShare"),
-    minKills = ns.Cfg("mobMinKills"),
   }
 end
 

@@ -50,14 +50,16 @@ remembers where you left it, and closes with Escape.
 ## Mob values
 
 MarketWall records each kill you, your pet or your party make and what it dropped.
-Hovering a mob adds its kill count and its value per kill to the tooltip: median and
-average under Vendor, Market, Skinning (when included) and Optimal, the Optimal average
-without rare drops, and the top drop. Values show once a mob has **Minimum kills**.
+Hovering a mob adds three lines to the tooltip: its worth per kill under Optimal, typical
+(median) and average; the median under Vendor, Market and Skinning (when included) beside
+its kill count; and the top drop. Values show from the first looted kill. Under **Kills
+before values are reliable**, the kill count reads an orange "< 10 kills", and the Mobs
+view shows that mob's kill count in orange.
 
 The search window's **Mobs** switch lists every recorded mob, sorted by median per kill
 under the Optimal, Market or Vendor lens, with a name filter. Click a mob for its drop
 table. Settings has the mob rows: disenchanting and skinning in Optimal (Auto, Always,
-Never), the rare drop threshold and the minimum kills. The Mobs view added
+Never), the rare drop threshold and the kills before values are reliable. The Mobs view added
 `MobsView.lua`, so restart the game once after updating to it.
 
 ## Farm sessions and the ledger

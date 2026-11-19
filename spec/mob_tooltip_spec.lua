@@ -25,58 +25,67 @@ describe("mob tooltip", function()
     }
   end
 
-  -- The lines as "left|right" strings, or the text of a single line
+  -- The lines as "left|right" strings
   local function Texts(lines)
     local texts = {}
-    for i, line in ipairs(lines) do texts[i] = line[2] and (line[1] .. "|" .. line[2]) or line[1] end
+    for i, line in ipairs(lines) do texts[i] = line[1] .. "|" .. line[2] end
     return texts
   end
 
-  local GOLD = "|cfff5c518"
+  local GOLD, ORANGE = "|cfff5c518", "|cffffb057"
 
   describe("lines", function()
     local Lines
     before_each(function() Lines = ns.TooltipLines.Mob end)
 
-    it("shows seen kills, a median and an average block, without-rare and the top drop", function()
+    local function Worth()
+      return GOLD .. "Worth per kill|r|" .. ns.Money(95) .. " " .. GREY .. "typical|r · " .. ns.Money(320) .. " " .. GREY .. "avg|r"
+    end
+    local function Outlets()
+      return GREY .. "Vendor|r " .. ns.Money(45) .. GREY .. " · Market|r " .. ns.Money(62)
+    end
+
+    it("shows Optimal worth per kill, each outlet's median beside the kills, and the top drop", function()
       assert.same({
-        "Stranglethorn Raptor|" .. GREY .. "140 kills (2 unseen)|r",
-        GOLD .. "Median per kill|r",
-        GREY .. "  Vendor|r|" .. ns.Money(45),
-        GREY .. "  Market|r|" .. ns.Money(62),
-        GREY .. "  Skinning|r|" .. ns.Money(30),
-        "  Optimal " .. GREY .. "(incl. skinning, DE)|r|" .. ns.Money(95),
-        GOLD .. "Average per kill|r",
-        GREY .. "  Vendor|r|" .. ns.Money(112),
-        GREY .. "  Market|r|" .. ns.Money(280),
-        GREY .. "  Skinning|r|" .. ns.Money(34),
-        "  Optimal " .. GREY .. "(incl. skinning, DE)|r|" .. ns.Money(320),
-        GREY .. "  Optimal, without rare drops|r|" .. ns.Money(105),
-        GREY .. "Top drop:|r Raptor Hide 4.2%" .. GREY .. " of kills|r",
+        Worth(),
+        Outlets() .. GREY .. " · Skin|r " .. ns.Money(30) .. "|" .. GREY .. "140 kills|r",
+        GREY .. "Top drop|r|Raptor Hide " .. GREY .. "4%|r",
       }, Texts(Lines(FullStats(), true, 10)))
     end)
 
     it("leaves out skinning when it is not included", function()
-      local texts = Texts(Lines(FullStats(), false, 10))
-      assert.equal(11, #texts)
-      assert.equal(GREY .. "  Market|r|" .. ns.Money(62), texts[4])
-      assert.equal(GOLD .. "Average per kill|r", texts[6])
+      assert.equal(Outlets() .. "|" .. GREY .. "140 kills|r", Texts(Lines(FullStats(), false, 10))[2])
     end)
 
-    it("shows a bare Optimal label when it includes neither skinning nor disenchanting", function()
+    it("rounds the top drop's share to a whole percent", function()
       local stats = FullStats()
-      stats.optimal.label = "Optimal"
-      assert.equal("  Optimal|" .. ns.Money(95), Texts(Lines(stats, false, 10))[5])
+      stats.top.share = 0.675
+      assert.equal(GREY .. "Top drop|r|Raptor Hide " .. GREY .. "68%|r", Texts(Lines(stats, false, 10))[3])
     end)
 
-    it("shows only the seen kill count, which the minimum counts, below the minimum kills", function()
-      local stats = { name = "Jungle Stalker", kills = 12, lifetime = 12, seen = 7 }
-      assert.same({ "Jungle Stalker|" .. GREY .. "7 kills (5 unseen)|r", GREY .. "Values show from 10 kills.|r" },
-        Texts(Lines(stats, true, 10)))
+    it("leaves out the top drop when nothing dropped", function()
+      local stats = FullStats()
+      stats.top = nil
+      assert.equal(2, #Lines(stats, false, 10))
     end)
 
-    it("shows nothing for a mob with no record", function()
+    it("shows values from one kill, flagging fewer than the reliable kills in orange", function()
+      local stats = FullStats()
+      stats.seen = 1
+      local texts = Texts(Lines(stats, false, 10))
+      assert.equal(Worth(), texts[1])
+      assert.equal(Outlets() .. "|" .. ORANGE .. "< 10 kills|r", texts[2])
+    end)
+
+    it("shows the kill count in grey from exactly the reliable kills", function()
+      local stats = FullStats()
+      stats.seen = 10
+      assert.equal(Outlets() .. "|" .. GREY .. "10 kills|r", Texts(Lines(stats, false, 10))[2])
+    end)
+
+    it("shows nothing for a mob with no record or no seen kill", function()
       assert.same({}, Lines(nil, true, 10))
+      assert.same({}, Lines({ name = "Jungle Stalker", kills = 3, lifetime = 3, seen = 0 }, true, 10))
     end)
   end)
 
@@ -92,7 +101,6 @@ describe("mob tooltip", function()
       function tooltip:AddDoubleLine(left, right) self.lines[#self.lines + 1] = left .. "|" .. right end
       _G.GameTooltip = tooltip
       ns.InitTooltip()
-      MarketWallDB.cfg.mobMinKills = 1
       for t = 1, 2 do
         ns.Recording.Emit({ t = t, kind = "kill", npc = RAPTOR, guid = "Creature-0-1-0-1-" .. RAPTOR .. "-" .. t,
           name = "Raptor", outcome = ns.Kills.LOOTED, coin = 50, drops = { [FLESH] = 1 } })
@@ -103,10 +111,35 @@ describe("mob tooltip", function()
       _G.Enum, _G.TooltipDataProcessor, _G.UnitGUID, _G.GameTooltip = nil, nil, nil, nil
     end)
 
+    local function KillCount()
+      return (tooltip.lines[3]:match("|([^|]*|c%x+[^|]*|r)$"))
+    end
+
     it("reads the creature from the mouseover GUID", function()
       guid = "Creature-0-1-0-1-" .. RAPTOR .. "-99"
       unitHook(tooltip)
-      assert.equal("Raptor|" .. GREY .. "2 kills|r", tooltip.lines[2])
+      assert.equal(" ", tooltip.lines[1])
+      local worth = "|cfff5c518Worth per kill|r|"
+      assert.equal(worth, tooltip.lines[2]:sub(1, #worth))
+      assert.equal(4, #tooltip.lines)
+    end)
+
+    it("moves the orange flag with the reliable kills setting, hiding nothing", function()
+      guid = "Creature-0-1-0-1-" .. RAPTOR .. "-99"
+      unitHook(tooltip)
+      assert.equal("|cffffb057< 10 kills|r", KillCount())
+      tooltip.lines = {}
+      MarketWallDB.cfg.mobMinKills = 2
+      unitHook(tooltip)
+      assert.equal(4, #tooltip.lines)
+      assert.equal(GREY .. "2 kills|r", KillCount())
+    end)
+
+    it("adds nothing for a mob whose kills were all looted by someone else", function()
+      ns.Recording.Emit({ t = 3, kind = "kill", npc = 999, guid = "Creature-0-1-0-1-999-3", outcome = ns.Kills.UNSEEN })
+      guid = "Creature-0-1-0-1-999-3"
+      unitHook(tooltip)
+      assert.same({}, tooltip.lines)
     end)
 
     it("adds nothing for players, pets or creatures with no record", function()

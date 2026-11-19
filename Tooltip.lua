@@ -118,35 +118,30 @@ end
 
 -- Mob tooltips -------------------------------------------------------------------------------
 
--- Seen kills, the ones values and Minimum kills count, and the unseen ones beside them
-local function KillCount(stats)
-  local unseen = stats.kills - stats.seen
-  return GREY .. stats.seen .. " kills" .. (unseen > 0 and " (" .. unseen .. " unseen)" or "") .. "|r"
+local ORANGE = "|cffffb057"
+
+-- Seen kills, the ones values count, or an orange flag while they are under reliableKills
+local function KillCount(seen, reliableKills)
+  if seen < reliableKills then return ORANGE .. "< " .. reliableKills .. " kills|r" end
+  return GREY .. seen .. " kills|r"
 end
 
--- The lines a mob adds to its tooltip, from Mobs.Stats: { left, right } pairs, or { text } for
--- a single line. Empty for a mob with no record. skinning: whether Optimal includes it.
--- Medians and averages get a block each, so every value lines up on the right edge.
-local function MobLines(stats, skinning, minKills)
-  if not stats then return {} end
-  local lines = { { stats.name or "Kills", KillCount(stats) } }
-  if not stats.optimal then
-    lines[2] = { GREY .. "Values show from " .. minKills .. " kills.|r" }
-    return lines
-  end
-  local function add(line) lines[#lines + 1] = line end
-  local optimal = stats.optimal.label:gsub("^Optimal (.+)$", "Optimal " .. GREY .. "%1|r")
-  for _, block in ipairs({ { "median", "Median per kill" }, { "average", "Average per kill" } }) do
-    local field = block[1]
-    add({ "|cfff5c518" .. block[2] .. "|r" })
-    add({ GREY .. "  Vendor|r", ns.Money(stats.vendor[field]) })
-    add({ GREY .. "  Market|r", ns.Money(stats.market[field]) })
-    if skinning and stats.skinning then add({ GREY .. "  Skinning|r", ns.Money(stats.skinning[field]) }) end
-    add({ "  " .. optimal, ns.Money(stats.optimal[field]) })
-  end
-  add({ GREY .. "  Optimal, without rare drops|r", ns.Money(stats.optimalNoRare.average) })
+-- The lines a mob adds to its tooltip, from Mobs.Stats, as { left, right } pairs: worth per
+-- kill under Optimal, each single outlet's median beside the kill count, and the top drop.
+-- Empty for a mob with no record or no seen kill. skinning: whether Optimal includes it.
+local function MobLines(stats, skinning, reliableKills)
+  if not (stats and stats.optimal) then return {} end
+  local optimal = stats.optimal
+  local outlets = GREY .. "Vendor|r " .. ns.Money(stats.vendor.median) .. GREY .. " · Market|r " .. ns.Money(stats.market.median)
+  if skinning and stats.skinning then outlets = outlets .. GREY .. " · Skin|r " .. ns.Money(stats.skinning.median) end
+  local lines = {
+    { GOLD .. "Worth per kill|r",
+      ns.Money(optimal.median) .. " " .. GREY .. "typical|r · " .. ns.Money(optimal.average) .. " " .. GREY .. "avg|r" },
+    { outlets, KillCount(stats.seen, reliableKills) },
+  }
   if stats.top then
-    add({ GREY .. "Top drop:|r " .. ns.ColorName(stats.top.id) .. " " .. ns.ShareText(stats.top.share) .. GREY .. " of kills|r" })
+    lines[3] = { GREY .. "Top drop|r",
+      ns.ColorName(stats.top.id) .. " " .. GREY .. string.format("%d%%", ns.Round(stats.top.share * 100)) .. "|r" }
   end
   return lines
 end
@@ -164,9 +159,7 @@ local function AddMobLines(tooltip)
   local lines = MobLines(ns.Mobs.For(npc), ns.Mobs.GameOptions().skinning, ns.Cfg("mobMinKills"))
   if #lines == 0 then return end
   tooltip:AddLine(" ")
-  for _, line in ipairs(lines) do
-    if line[2] then tooltip:AddDoubleLine(line[1], line[2], 1, 1, 1, 1, 1, 1) else tooltip:AddLine(line[1]) end
-  end
+  for _, line in ipairs(lines) do tooltip:AddDoubleLine(line[1], line[2], 1, 1, 1, 1, 1, 1) end
 end
 
 ns.TooltipLines = { Add = AddLines, StackCount = StackCount, Mob = MobLines }   -- exposed for tests

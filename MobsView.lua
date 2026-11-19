@@ -39,7 +39,7 @@ local function Count(set)
 end
 
 -- One row per mob from Mobs.All whose name contains the filter, ignoring case. Mobs with values
--- come first, highest median per kill under the lens first; mobs still short of kills follow,
+-- come first, highest median per kill under the lens first; mobs with no seen kill follow,
 -- most kills first.
 function V.Rows(all, lens, filter)
   local want = string.lower(strtrim(filter or ""))
@@ -65,14 +65,26 @@ function V.Rows(all, lens, filter)
   return rows
 end
 
--- Display cells for a mob row; rows short of kills say how many they need
-function V.MobCells(row, minKills)
+-- Whether a row has fewer seen kills than make its values reliable
+local function Rough(row, reliableKills)
+  return row.kills < reliableKills
+end
+
+-- Display cells for a mob row. The kill count is orange while the values are rough; a mob
+-- with no seen kill has no values.
+function V.MobCells(row, reliableKills)
+  local kills = Rough(row, reliableKills) and (ORANGE .. row.kills .. "|r") or tostring(row.kills)
   if not row.median then
-    return { row.name, tostring(row.kills), GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", GREY .. "needs " .. minKills .. " kills|r", "" }
+    return { row.name, kills, GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", "" }
   end
   local top = row.top and (ns.ColorName(row.top.id) .. " " .. ns.ShareText(row.top.share)) or GREY .. "-|r"
   local unpriced = row.unpriced > 0 and (ORANGE .. row.unpriced .. "|r") or (GREY .. "0|r")
-  return { row.name, tostring(row.kills), ns.Money(row.median), ns.Money(row.average), ns.Money(row.withoutRare), top, unpriced }
+  return { row.name, kills, ns.Money(row.median), ns.Money(row.average), ns.Money(row.withoutRare), top, unpriced }
+end
+
+-- The hover for a mob row whose values are rough, nil otherwise
+function V.MobTip(row, reliableKills)
+  if Rough(row, reliableKills) then return "Fewer than " .. reliableKills .. " kills; values are rough" end
 end
 
 function V.DropCells(drop)
@@ -201,10 +213,11 @@ function V.Build(parent)
     for i, button in ipairs(self.lensButtons) do
       if V.LENSES[i].key == self.lens then button:LockHighlight() else button:UnlockHighlight() end
     end
-    local minKills = ns.Cfg("mobMinKills")
+    local reliableKills = ns.Cfg("mobMinKills")
     local data = {}
     for _, row in ipairs(V.Rows(ns.Mobs.All(), self.lens, self.filter:GetText())) do
-      data[#data + 1] = { npc = row.npc, cells = V.MobCells(row, minKills), sort = V.MobSortValues(row) }
+      data[#data + 1] = { npc = row.npc, cells = V.MobCells(row, reliableKills), sort = V.MobSortValues(row),
+        tip = V.MobTip(row, reliableKills) }
     end
     local empty = next(MarketWallDB.mobs) and "No recorded mob matches." or "No kills recorded yet. Loot what you kill and each mob's value shows here."
     Show(MOB_COLUMNS, data, self.sorts.mobs, empty)

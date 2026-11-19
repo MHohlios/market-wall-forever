@@ -198,6 +198,8 @@ local function CreateList(parent, rows)
         GameTooltip:SetOwner(self, "ANCHOR_CURSOR_RIGHT")
         GameTooltip:SetItemByID(self.entry.id)
         GameTooltip:Show()
+      elseif self.entry and self.entry.tip then
+        ShowTip(self, self.entry.tip)
       end
     end)
     row:SetScript("OnLeave", HideTip)
@@ -851,7 +853,7 @@ local SETTINGS = {
   { key = "mobDisenchant", label = "Mob value: disenchanting", kind = "mode", tip = "Include disenchanting in a mob's Optimal value. Auto: when this character has Enchanting. Always suits an enchanter alt." },
   { key = "mobSkinning", label = "Mob value: skinning", kind = "mode", tip = "Include skinning in a mob's Optimal value. Auto: when this character has Skinning." },
   { key = "mobRareShare", label = "Rare drop threshold", kind = "pct", tip = "Drops seen in fewer kills than this count as rare, and are left out of the values without rare drops." },
-  { key = "mobMinKills", label = "Minimum kills", kind = "int", tip = "A mob needs this many kills with loot seen before its value per kill shows." },
+  { key = "mobMinKills", label = "Kills before values are reliable", kind = "int", tip = "A mob's values show from its first kill with loot seen. Under this many, its kill count shows in orange as a flag that the values are rough." },
   { key = "salvagerMode", label = "Salvager mode", kind = "mode", modes = { "auto", "on", "off" }, tip = "Count Salvager's disenchant bonus. Auto: while the buff is up. Imported once from Disenchantry, so Reset to defaults keeps it." },
   { key = "salvagerBonus", label = "Salvager bonus %", kind = "points", tip = "Extra materials Salvager gives, in percent. Imported once from Disenchantry, so Reset to defaults keeps it." },
 }
