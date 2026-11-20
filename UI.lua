@@ -2,7 +2,7 @@
 local _, ns = ...
 local W = ns.Wall
 
-local ui = { view = "watch", limits = {}, sort = {} }
+local ui = { view = "watch", limits = {}, sort = { snipes = { col = 6, desc = true } } }   -- Snipes by Profit
 ns.ui = ui
 
 local ROWS, ROW_H = 16, 20
@@ -126,6 +126,14 @@ end
 
 local function Pct(x)
   return string.format("%d%%", ns.Round(x * 100))
+end
+
+-- How long ago t was, for a table cell: "20 min", "2 h", "3 d"
+local function ShortAge(t)
+  local s = time() - t
+  if s < 3600 then return math.max(1, math.floor(s / 60)) .. " min" end
+  if s < 86400 then return math.floor(s / 3600) .. " h" end
+  return math.floor(s / 86400) .. " d"
 end
 
 local function ShowTip(owner, title, body, extra)
@@ -275,6 +283,46 @@ local function FitText(cell, text, suffix)
     Show(plain .. "…")
   end
 end
+-- A cell's text in its column's colour: green for the answer column, grey for supporting
+-- numbers, white otherwise. Text that brings its own colour keeps it.
+local function ColumnColor(col, text)
+  if text == "" or text:find("^|c") then return text end
+  if col.answer then return GAIN .. text .. "|r" end
+  if col.grey then return GREY .. text .. "|r" end
+  return text
+end
+
+-- A thin scrollbar just outside a list's right edge, so it never covers the last column; a list
+-- needs SCROLLBAR_W of room to its right. Shown only while there are more rows than fit.
+-- Dragging it sets the list's offset; the mouse wheel still scrolls too.
+local SCROLLBAR_W = 8
+local function CreateScrollBar(list)
+  local bar = CreateFrame("Slider", nil, list)
+  bar:SetOrientation("VERTICAL")
+  bar:SetWidth(SCROLLBAR_W)
+  bar:SetPoint("TOPLEFT", list, "TOPRIGHT", 0, -22)
+  bar:SetPoint("BOTTOMLEFT", list, "BOTTOMRIGHT")
+  bar:SetValueStep(1)
+  bar:SetObeyStepOnDrag(true)
+  local track = bar:CreateTexture(nil, "BACKGROUND")
+  track:SetAllPoints()
+  track:SetColorTexture(1, 1, 1, 0.06)
+  local thumb = bar:CreateTexture(nil, "ARTWORK")
+  thumb:SetColorTexture(0.96, 0.77, 0.09, 0.55)
+  thumb:SetSize(SCROLLBAR_W, 28)
+  bar:SetThumbTexture(thumb)
+  bar:SetScript("OnValueChanged", function(_, value)
+    if list.syncingBar then return end   -- the list moving the bar, not the player
+    local offset = math.floor(value + 0.5)
+    if offset ~= list.offset then
+      list.offset = offset
+      list:Refresh()
+    end
+  end)
+  bar:Hide()
+  return bar
+end
+
 local function CreateList(parent, rows)
   local size = rows or ROWS
   local list = CreateFrame("Frame", nil, parent)
@@ -285,6 +333,7 @@ local function CreateList(parent, rows)
     self.offset = math.max(0, math.min(maxOffset, self.offset - delta * 3))
     self:Refresh()
   end)
+  list.scrollBar = CreateScrollBar(list)
   for i = 1, size do
     local row = CreateFrame("Button", nil, list)
     row:SetHeight(ROW_H)
@@ -323,8 +372,9 @@ local function CreateList(parent, rows)
   end
   list.count = MakeText(list, "GameFontDisableSmall", "RIGHT")
   list.count:SetPoint("TOPRIGHT", list, "BOTTOMRIGHT", -8, -2)
+  -- an empty list hides its column titles and shows this, about mid-height
   list.empty = MakeText(list, "GameFontDisable", "CENTER")
-  list.empty:SetPoint("TOP", 0, -90)
+  list.empty:SetPoint("TOP", 0, -math.floor(size * ROW_H * 0.4))
   list.empty:SetWidth(560)
   list.empty:SetSpacing(4)
 
@@ -375,9 +425,10 @@ local function CreateList(parent, rows)
     return hit
   end
 
-  -- columns: { {title, width, justify, tip, cellTip = true?, money = true?}, ... }   sortCol/sortDesc
-  -- mark the active sort. A money column's cells hold copper, shown in the compact form, or nil
-  -- for a dash, or text to show as it is.
+  -- columns: { {title, width, justify, tip, cellTip = true?, money = true?, answer = true?,
+  -- grey = true?}, ... }   sortCol/sortDesc mark the active sort. A money column's cells hold
+  -- copper, shown in the compact form, or nil for a dash, or text to show as it is. The answer
+  -- column, one per table, is green and a size larger; grey columns hold supporting numbers.
   function list:SetColumns(columns, sortCol, sortDesc)
     self.columns = columns
     local x = 8
@@ -394,6 +445,7 @@ local function CreateList(parent, rows)
           cell:SetPoint("LEFT", row, "LEFT", cellX, 0)
           cell:SetWidth(col[2] - 8 - (cellX - x))
           cell:SetJustifyH(col[3] or "LEFT")
+          cell:SetFontObject(col.answer and "GameFontHighlight" or "GameFontHighlightSmall")
           cell:SetWordWrap(false)
           cell:Show()
         else
@@ -446,7 +498,7 @@ local function CreateList(parent, rows)
           local suffix = entry.suffixes and entry.suffixes[c]
           local text = entry.cells[c]
           if self.columns[c].money and type(text) ~= "string" then text = ns.MoneyShort(text) end
-          text = text or ""
+          text = ColumnColor(self.columns[c], text or "")
           if suffix then FitText(row.cells[c], text, suffix) else row.cells[c]:SetText(text) end
         end
         row.icon:SetTexture(entry.id and ns.Icon(entry.id) or nil)
@@ -467,14 +519,19 @@ local function CreateList(parent, rows)
         row:Hide()
       end
     end
-    if #data == 0 then
-      self.empty:SetText(self.emptyText or "")
-      self.empty:Show()
-      self.count:SetText("")
-    else
-      self.empty:Hide()
-      local last = math.min(#data, self.offset + size)
-      self.count:SetText(string.format("%d to %d of %d (mouse wheel scrolls)", self.offset + 1, last, #data))
+    for c, header in ipairs(self.headers) do header:SetShown(#data > 0 and self.columns[c] ~= nil) end
+    self.empty:SetText(#data == 0 and self.emptyText or "")
+    self.empty:SetShown(#data == 0)
+    -- a list longer than it shows says which rows are on screen, "1–16 of 105", and scrolls
+    local scrolls = #data > size
+    self.count:SetText(scrolls and string.format("%d–%d of %d", self.offset + 1, self.offset + size, #data) or "")
+    self.scrollBar:SetShown(scrolls)
+    if scrolls then
+      -- a shrinking range clamps the bar's old value; that must not move the list
+      self.syncingBar = true
+      self.scrollBar:SetMinMaxValues(0, #data - size)
+      self.scrollBar:SetValue(self.offset)
+      self.syncingBar = false
     end
   end
   return list
@@ -484,51 +541,50 @@ end
 -- Columns and view data. Each entry carries raw values in entry.sort for header sorting.
 -------------------------------------------------------------------------------
 local WALL_TIP = "The item's real price: the lowest price level that has meaningful supply behind it. A few stray cheap units do not move it."
--- Days of data behind each row; hovering a cell explains an orange one. cellTip: rows carry a
--- hover text for this column's cells in entry.cellTips.
-local DATA_COLUMN = { "Data", 44, "RIGHT", "Days of data behind the normal price. Orange: fewer than the \"Days before data is reliable\" setting, so the normal price may be off.", cellTip = true }
+-- An Item column's hover says a low-data item ends its name with an orange " · N d".
+-- cellTip: rows carry a hover text for this column's cells in entry.cellTips.
+local LOW_DATA_TIP = "An orange \" · N d\" after a name: only N days of data, fewer than the \"Days before data is reliable\" setting, so the normal price may be off."
 local WATCH_COLUMNS = {
-  { "Item", 140, nil, "Items you are tracking. Click a row for its chart and live listings." },
-  { "Wall price", 85, "RIGHT", WALL_TIP, money = true },
-  { "Lowest", 85, "RIGHT", "The single cheapest listing right now, even if it is only one unit.", money = true },
-  -- the watchlist has no room for a Data column, so this column's cells carry its badge
-  { "Normal range", 160, "RIGHT", "Where the wall price usually sits: the middle half of its daily history. On an item's first day, today's wall. No room for a Data column here: hover a cell for the item's days of data.", cellTip = true },
-  { "Buy below", 85, "RIGHT", "Your buy threshold. Units listed under this price count as deals. Set it on the item's page.", money = true },
-  { "Sell at", 85, "RIGHT", "Your target resale price. The row says Sell when the wall price reaches it.", money = true },
-  { "Units under", 65, "RIGHT", "How many units are listed under your buy price as of the last scan." },
-  { "Status", 80, "RIGHT", "Buy: units are under your buy price. Sell: the wall reached your sell price. Old: the price has not been scanned recently." },
+  { "Item", 152, nil, "Items you are tracking. Click a row for its chart and live listings. " .. LOW_DATA_TIP },
+  { "Wall", 80, "RIGHT", WALL_TIP, money = true },
+  { "Lowest", 80, "RIGHT", "The single cheapest listing right now, even if it is only one unit.", money = true, grey = true },
+  { "Normal range", 150, "RIGHT", "Where the wall price usually sits: the middle half of its daily history. On an item's first day, today's wall. Hover a cell for the exact range and the item's days of data.", cellTip = true, grey = true },
+  { "Buy below", 80, "RIGHT", "Your buy threshold. Units listed under this price count as deals. Set it on the item's page.", money = true },
+  { "Sell at", 80, "RIGHT", "Your target resale price. The row says Sell when the wall price reaches it.", money = true },
+  { "Under buy", 70, "RIGHT", "How many units are listed under your buy price as of the last scan." },
+  { "Status", 85, "RIGHT", "Buy: units are under your buy price. Sell: the wall reached your sell price. Old: the price has not been scanned recently, with its age. A dash: nothing to do.", answer = true },
 }
 local SNIPE_COLUMNS = {
-  { "Item", 170, nil, "Items with listings priced under their wall. Click a row to load live listings before buying." },
-  { "Wall price", 90, "RIGHT", WALL_TIP, money = true },
+  { "Item", 220, nil, "Items with listings priced under their wall. Click a row to load live listings before buying. " .. LOW_DATA_TIP },
   { "Cheapest", 90, "RIGHT", "The lowest listing found in the scan.", money = true },
-  { "Units", 70, "RIGHT", "Units listed under the wall that would still profit after the auction house cut." },
-  { "Cost", 100, "RIGHT", "What it costs to buy all of those units.", money = true },
-  { "Profit after cut", 120, "RIGHT", "Expected profit if you resell at the normal price, after the auction house cut. Uses the lower of today's wall and the historical median.", money = true },
-  { "Under normal", 90, "RIGHT", "How far the average cost of those units is below the normal price." },
-  DATA_COLUMN,
+  { "Units", 55, "RIGHT", "Units listed under the wall that would still profit after the auction house cut." },
+  { "Cost", 95, "RIGHT", "What it costs to buy all of those units.", money = true, grey = true },
+  { "Sells at (wall)", 110, "RIGHT", WALL_TIP, money = true, grey = true },
+  { "Profit", 110, "RIGHT", "Expected profit if you resell at the normal price, after the auction house cut. Uses the lower of today's wall and the historical median.", money = true, answer = true },
+  { "Under normal", 100, "RIGHT", "How far the average cost of those units is below the normal price." },
 }
 local DIP_COLUMNS = {
-  { "Item", 200, nil, "Items whose wall price dropped suddenly compared with their own history." },
-  { "Wall now", 90, "RIGHT", WALL_TIP, money = true },
-  { "Normal", 90, "RIGHT", "The median wall price over the history window.", money = true },
+  { "Item", 260, nil, "Items whose wall price dropped suddenly compared with their own history. " .. LOW_DATA_TIP },
+  { "Wall now", 95, "RIGHT", WALL_TIP, money = true },
+  { "Normal", 95, "RIGHT", "The median wall price over the history window.", money = true, grey = true },
   { "Under by", 80, "RIGHT", "How far today's wall is below the normal price." },
-  { "Supply", 90, "RIGHT", "Total units listed. More supply means the dip is real, not one seller." },
-  { "Profit each", 110, "RIGHT", "Expected profit per unit if the price returns to normal, after the auction house cut.", money = true },
-  DATA_COLUMN,
+  { "Supply", 80, "RIGHT", "Total units listed. More supply means the dip is real, not one seller.", grey = true },
+  { "Profit each", 110, "RIGHT", "Expected profit per unit if the price returns to normal, after the auction house cut.", money = true, answer = true },
 }
 local DISENCHANT_COLUMNS = {
   { "Item", 220, nil, "Weapons and armor, uncommon or better, listed under what disenchanting them is worth. Click a row to load live listings before buying." },
   { "Price", 90, "RIGHT", "The cheapest buyout found in the scan.", money = true },
-  { "Net DE value", 130, "RIGHT", "Expected value of the materials from one disenchant, at their wall prices, after the auction house cut and the deposit to list each material, as the item tooltip's Disenchant (net) shows it.", money = true },
-  { "Profit", 100, "RIGHT", "Net disenchant value minus the price.", money = true },
+  { "Net DE value", 130, "RIGHT", "Expected value of the materials from one disenchant, at their wall prices, after the auction house cut and the deposit to list each material, as the item tooltip's Disenchant (net) shows it.", money = true, grey = true },
+  { "Profit", 100, "RIGHT", "Net disenchant value minus the price.", money = true, answer = true },
   { "Profit %", 80, "RIGHT", "Profit as a share of the price." },
-  { "Odds from", 150, nil, "Where the material odds come from: your own disenchants (recorded by MarketWall), a Forever estimate, or the classic disenchanting table." },
+  { "Odds from", 150, nil, "Where the material odds come from: your own disenchants (recorded by MarketWall), a Forever estimate, or the classic disenchanting table.", grey = true },
 }
 local COLUMNS = { watch = WATCH_COLUMNS, snipes = SNIPE_COLUMNS, dips = DIP_COLUMNS, disenchant = DISENCHANT_COLUMNS }
+ui.COLUMNS = COLUMNS   -- for specs
 
+-- The Status answer: green Buy and Sell, a grey dash when there is nothing to do
 local STATUS_TEXT = {
-  buy = BUY .. "Buy|r", sell = GAIN .. "Sell|r", normal = "Normal", nodata = GREY .. "Not scanned|r",
+  buy = GAIN .. "Buy|r", sell = GAIN .. "Sell|r", normal = GREY .. "-|r", nodata = GREY .. "Not scanned|r",
 }
 local STATUS_ORDER = { buy = 1, sell = 2, normal = 3, old = 4, nodata = 5 }
 
@@ -544,21 +600,20 @@ local function WatchData()
     local stale = status ~= "nodata" and cur.t and (time() - cur.t > staleAfter)
     if stale then
       status = "old"
-      statusText = GREY .. "Old, " .. ns.Ago(cur.t) .. "|r"
+      statusText = WARN .. "Old · " .. ShortAge(cur.t) .. "|r"
     end
-    local range, exactRange = GREY .. "building|r", nil
+    local range, exactRange = "building", nil
     if stats.n > 0 then
-      range = ns.MoneyShort(stats.p25) .. " to " .. ns.MoneyShort(stats.p75)
+      range = ns.MoneyShort(stats.p25) .. " – " .. ns.MoneyShort(stats.p75)
       exactRange = ns.Money(stats.p25) .. " to " .. ns.Money(stats.p75)
     end
+    local under = cur.under and tostring(cur.under) or "-"
+    if under == "0" or under == "-" then under = GREY .. under .. "|r" end
     local name = ns.Name(id)
     local days = ns.DaysOfData(id)
     data[#data + 1] = {
       id = id, status = status, name = name, highlight = (status == "buy"), dim = stale,
-      cells = {
-        ns.ColorName(id), cur.w, cur.m, range, entry.buy, entry.sell,
-        cur.under and tostring(cur.under) or "-", statusText,
-      },
+      cells = { ns.ColorName(id), cur.w, cur.m, range, entry.buy, entry.sell, under, statusText },
       sort = { name, cur.w, cur.m, stats.n > 0 and stats.p25 or nil, entry.buy, entry.sell, cur.under, -STATUS_ORDER[status] },
       suffixes = { ns.DataSuffix(days) }, itemTip = ns.LowDataTip(days),
       cellTips = { [4] = exactRange and (exactRange .. "\n" .. ns.DataBadgeTip(days)) or ns.DataBadgeTip(days) },
@@ -577,26 +632,28 @@ local function SnipeData()
   for i = 1, #ns.snipes do
     local s = ns.snipes[i]
     data[i] = { id = s.id,
-      cells = { ns.ColorName(s.id), s.wall, s.min, tostring(s.units), s.cost, s.profit, Pct(s.discount), ns.DataBadge(s.days) },
-      sort = { ns.Name(s.id), s.wall, s.min, s.units, s.cost, s.profit, s.discount, s.days },
-      cellTips = { [8] = ns.DataTip(s.days) },
+      cells = { ns.ColorName(s.id), s.min, tostring(s.units), s.cost, s.wall, s.profit, Pct(s.discount) },
+      sort = { ns.Name(s.id), s.min, s.units, s.cost, s.wall, s.profit, s.discount },
+      suffixes = { ns.DataSuffix(s.days) }, itemTip = ns.LowDataTip(s.days),
     }
   end
   return data
 end
+ui.SnipeData = SnipeData   -- for specs
 
 local function DipData()
   local data = {}
   for i = 1, #ns.dips do
     local d = ns.dips[i]
     data[i] = { id = d.id,
-      cells = { ns.ColorName(d.id), d.wall, d.median, Pct(d.under), tostring(d.total), d.profit, ns.DataBadge(d.days) },
-      sort = { ns.Name(d.id), d.wall, d.median, d.under, d.total, d.profit, d.days },
-      cellTips = { [7] = ns.DataTip(d.days) },
+      cells = { ns.ColorName(d.id), d.wall, d.median, Pct(d.under), tostring(d.total), d.profit },
+      sort = { ns.Name(d.id), d.wall, d.median, d.under, d.total, d.profit },
+      suffixes = { ns.DataSuffix(d.days) }, itemTip = ns.LowDataTip(d.days),
     }
   end
   return data
 end
+ui.DipData = DipData   -- for specs
 
 -- Deals this character can disenchant, or all of them when the box is ticked or the skill is
 -- unknown. Also returns the skill and how many deals it hides.
@@ -767,7 +824,7 @@ local function CreateChart(parent)
 end
 ns.widgets = {
   MakeButton = MakeButton, MakeText = MakeText, MakeEdit = MakeEdit, ShowTip = ShowTip, HideTip = HideTip,
-  OnLinkInsert = OnLinkInsert, CreateList = CreateList, MakeTabRow = MakeTabRow, SelectTab = SelectTab, MakeSwitch = MakeSwitch, FitText = FitText, CreateChart = CreateChart, ShowMenu = ShowMenu, Prompt = Prompt, ListHeight = function(rows) return 22 + rows * ROW_H end,
+  OnLinkInsert = OnLinkInsert, CreateList = CreateList, ShortAge = ShortAge, MakeTabRow = MakeTabRow, SelectTab = SelectTab, MakeSwitch = MakeSwitch, FitText = FitText, CreateChart = CreateChart, ShowMenu = ShowMenu, Prompt = Prompt, ListHeight = function(rows) return 22 + rows * ROW_H end,
   CONTENT_DROP = CONTENT_DROP,
 }
 
@@ -1190,7 +1247,7 @@ function ui.Show(view)
   ui.list:SetShown(isList)
   ui.footer:SetShown(view == "watch")
   ui.disenchantFooter:SetShown(view == "disenchant")
-  ui.hint:SetShown(isList)
+  ui.hint:SetShown(isList and view ~= "watch")   -- the watchlist's hint sits in its Add row
   for name, tab in pairs(ui.nav) do
     local backToList = isItem and name == ui.lastList
     SelectTab(tab, name == view or backToList)
@@ -1200,42 +1257,84 @@ function ui.Show(view)
   ns.RefreshUI()
 end
 
+-- An empty list's message: a white headline, then grey detail under it
+local function EmptyText(title, body)
+  return ns.COLOR.VALUE .. title .. "|r" .. (body and ("\n" .. body) or "")
+end
+ns.widgets.EmptyText = EmptyText
+
 -- Empty-list text: noneText after a full scan this session, else when to run one
 function ui.WaitingText(noneText, neverText)
   if not ns.lastFullScan then
     local r = ns.R()
-    if r.lastFull then return "Results are from this session only. Run a full scan to refresh the list.\nLast full scan: " .. ns.Ago(r.lastFull) .. "." end
-    return neverText
+    if r.lastFull then return EmptyText("Results are from this session only.", "Run a full scan to refresh the list. Last full scan: " .. ns.Ago(r.lastFull) .. ".") end
+    return EmptyText(neverText)
   end
-  return noneText
+  return EmptyText(noneText)
 end
 
-local function ListView(view, data, emptyText, hint)
+-- "1 snipe", "105 snipes"
+local function Count(n, noun)
+  return n .. " " .. noun .. (n == 1 and "" or "s")
+end
+
+-- note: the view's own part of the status line, such as its count
+local function ListView(view, data, emptyText, hint, note)
   ApplySort(view, data)
   local sort = ui.sort[view]
   ui.list:SetColumns(COLUMNS[view], sort and sort.col, sort and sort.desc)
   ui.list:SetData(data, emptyText)
   ui.hint:SetText(hint)
+  ui.statusNote = note
+end
+
+-- Why the Disenchant list is empty, and what the box under the message does about it
+function ui.DisenchantEmptyText(skill, hidden)
+  if not ns.lastFullScan then
+    return ui.WaitingText(nil, "Run a full scan to look for gear listed under its disenchant value.")
+  end
+  local body = {}
+  if skill == 0 then body[#body + 1] = "Your Enchanting is 0, so only items you can't disenchant yet would show." end
+  if hidden > 0 then body[#body + 1] = string.format("%s in the last scan need more skill; tick the box to see them.", Count(hidden, "deal")) end
+  local title = hidden > 0 and "No deals at your Enchanting skill." or "No disenchant deals in the last full scan."
+  return EmptyText(title, #body > 0 and table.concat(body, "\n") or nil)
+end
+
+-- The show-all box sits under the empty message, or at the bottom beside a filled list
+local function PlaceShowAll(empty)
+  local footer = ui.disenchantFooter
+  footer:ClearAllPoints()
+  if empty then
+    footer:SetPoint("TOP", ui.list.empty, "BOTTOM", 0, -12)
+    footer:SetWidth(230)
+  else
+    footer:SetPoint("BOTTOMLEFT", 0, 4)
+    footer:SetPoint("BOTTOMRIGHT", 0, 4)
+  end
 end
 
 local function RefreshDisenchant()
   local data, skill, hidden = DisenchantData()
-  local empty
-  if not ns.lastFullScan then
-    empty = ui.WaitingText(nil, "Run a full scan to look for gear listed under its disenchant value.")
-  elseif hidden > 0 then
-    empty = string.format("No deals at your Enchanting skill. %d more need a higher skill; tick the box below to see them.", hidden)
-  else
-    empty = "No disenchant deals in the last full scan."
-  end
-  local skillText = skill and ("Enchanting " .. skill) or (WARN .. "Enchanting skill unknown, so every item is shown|r")
-  ListView("disenchant", data, empty, skillText .. ". Click a row to load live listings before buying.")
+  -- the status line ends before the scan buttons, so its note stays short; the hint explains
+  local skillNote = skill and ("Enchanting " .. ns.COLOR.VALUE .. skill .. "|r") or (WARN .. "Enchanting unknown|r")
+  local hint = "Click a row to load live listings before buying."
+  if not skill then hint = hint .. " Your Enchanting skill is unknown, so every item is shown." end
+  ListView("disenchant", data, ui.DisenchantEmptyText(skill, hidden), hint, skillNote)
   ui.showAllBox:SetChecked(ns.Cfg("disenchantShowAll") and true or false)
+  PlaceShowAll(#data == 0)
+end
+
+local function RefreshWatch()
+  local data = WatchData()
+  ListView("watch", data,
+    EmptyText("Your watchlist is empty.", "Add items you buy or sell often, and MarketWall tells you when to buy and when to sell."))
+  ui.footer.hint:SetShown(#data > 0)
 end
 
 function ns.RefreshUI()
   ns.RefreshSearch()   -- the search window stands apart from the auction house
   if not ui.frame or not ui.frame:IsShown() then return end
+  ui.statusNote = nil
   local view = ui.view
   if view == "item" then
     RefreshItem()
@@ -1248,21 +1347,42 @@ function ns.RefreshUI()
   elseif view == "crafting" then
     ui.crafting:Refresh()
   elseif view == "watch" then
-    ListView("watch", WatchData(),
-      "Your watchlist is empty.\nType an item name below, or shift-click an item into the box, then press Add.",
-      "Click a row for its chart and listings. Hover a column title for what it means.")
+    RefreshWatch()
   elseif view == "snipes" then
-    ListView("snipes", SnipeData(),
+    local data = SnipeData()
+    ListView("snipes", data,
       ui.WaitingText("No snipes in the last full scan.", "Run a full scan to look for listings priced under the wall."),
-      "Click a row to load live listings before buying. An orange Data cell: few days of data, so the normal price may be off.")
+      "Click a row to load live listings before buying. " .. WARN .. "Orange days|r: little data, normal price may be off.",
+      Count(#data, "snipe"))
   elseif view == "dips" then
-    ListView("dips", DipData(),
+    local data = DipData()
+    ListView("dips", data,
       ui.WaitingText("No dips in the last full scan.", "Run a full scan. Dips compare today's wall price with each item's own history."),
-      "Items need a day of history before they can dip. Items sliding for days are left out.")
+      "Items need a day of history before they can dip; items sliding for days are left out.",
+      Count(#data, "dip"))
   elseif view == "disenchant" then
     RefreshDisenchant()
   end
   ns.UpdateStatus()
+end
+
+-- The idle status line: "Full scan just now · Watchlist scan never · 105 snipes", grey with
+-- the times in white. Bait Detect's list comes from full scans and its own live searches.
+function ui.StatusLine()
+  local r = ns.R()
+  local function Value(text) return "|r" .. ns.COLOR.VALUE .. text .. "|r" .. GREY end
+  local parts = { "Full scan " .. Value(ns.Ago(r.lastFull)) }
+  if ui.view == "bait" then
+    parts[1] = parts[1] .. ", updated by live searches"
+  else
+    parts[#parts + 1] = "Watchlist scan " .. Value(ns.Ago(r.lastWatch))
+  end
+  parts[#parts + 1] = ui.statusNote
+  local text = GREY .. table.concat(parts, " · ") .. "|r"
+  if not r.lastFull or ns.DayOf(r.lastFull) ~= ns.Today() then
+    text = text .. GREY .. " · |r" .. WARN .. "No full scan yet today|r"
+  end
+  return text
 end
 
 -- Status line, progress bar and the Full scan button's cooldown
@@ -1271,11 +1391,7 @@ function ns.UpdateStatus()
   local busy = ns.scanState.running or ns.fullScanRunning
   local text = ns.statusText
   if not busy and (not text or not ns.statusTime or GetTime() - ns.statusTime > 8) then
-    local r = ns.R()
-    text = GREY .. "Full scan: " .. ns.Ago(r.lastFull) .. "    Watchlist scan: " .. ns.Ago(r.lastWatch) .. "|r"
-    if not r.lastFull or ns.DayOf(r.lastFull) ~= ns.Today() then
-      text = text .. WARN .. "    No full scan yet today|r"
-    end
+    text = ui.StatusLine()
   end
   ui.status:SetText(text or "")
   if busy and ns.progress then
@@ -1347,7 +1463,7 @@ local function Build()
 
   ui.list = CreateList(f)
   ui.list:SetPoint("TOPLEFT", 0, -CONTENT_TOP)
-  ui.list:SetPoint("RIGHT")
+  ui.list:SetPoint("RIGHT", -SCROLLBAR_W, 0)
   ui.list:SetHeight(22 + ROWS * ROW_H)
   ui.list.onClick = function(entry) ui.ShowItem(entry.id) end
   ui.list.onHeader = HeaderClicked
@@ -1359,15 +1475,25 @@ local function Build()
   ui.footer:SetPoint("BOTTOMLEFT", 0, 4)
   ui.footer:SetPoint("BOTTOMRIGHT", 0, 4)
   ui.footer:SetHeight(26)
-  local label = MakeText(ui.footer, "GameFontNormalSmall")
-  label:SetPoint("LEFT", 8, 0)
+  local label = MakeText(ui.footer, "GameFontDisableSmall")
+  label:SetPoint("LEFT", 12, 0)
   label:SetText("Add item")
-  ui.addBox = MakeEdit(ui.footer, 240)
+  ui.addBox = MakeEdit(ui.footer, 360)
   ui.addBox:SetPoint("LEFT", label, "RIGHT", 12, 0)
   ui.addBox:SetScript("OnEnterPressed", AddFromBox)
+  local placeholder = MakeText(ui.addBox, "GameFontDisableSmall")
+  placeholder:SetPoint("LEFT", 2, 0)
+  placeholder:SetText("Type a name or shift-click an item")
+  local function UpdatePlaceholder(box) placeholder:SetShown(box:GetText() == "" and not box:HasFocus()) end
+  for _, event in ipairs({ "OnTextChanged", "OnEditFocusGained", "OnEditFocusLost" }) do
+    ui.addBox:HookScript(event, UpdatePlaceholder)   -- the template's own focus handling stays
+  end
   local add = MakeButton(ui.footer, "Add", 60)
   add:SetPoint("LEFT", ui.addBox, "RIGHT", 6, 0)
   add:SetScript("OnClick", AddFromBox)
+  ui.footer.hint = MakeText(ui.footer, "GameFontDisableSmall", "RIGHT")
+  ui.footer.hint:SetPoint("RIGHT", -12, 0)
+  ui.footer.hint:SetText("Click a row for its chart and listings.")
 
   ui.disenchantFooter = CreateFrame("Frame", nil, f)
   ui.disenchantFooter:SetPoint("BOTTOMLEFT", 0, 4)

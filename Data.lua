@@ -106,24 +106,24 @@ function ns.LowDataText(days)
   return "Only " .. DaysText(days) .. " of data · treat these numbers as rough"
 end
 
--- The hover for a list's Data cell
+-- One hover line on an item's days of data
 function ns.DataTip(days)
   if not ns.IsLowData(days) then return DaysText(days) .. " of data." end
   return "Only " .. DaysText(days) .. " of data; the normal price may be off."
 end
 
--- A list's Data cell: "3 d", orange while low on data, grey after
+-- "3 d", orange while low on data, grey after
 function ns.DataBadge(days)
   return (ns.IsLowData(days) and WARN or GREY) .. days .. " d|r"
 end
 
--- The badge and its hover in one cell tip, for lists with no room for a Data column
+-- The badge and its line in one cell hover, such as the Watchlist's Normal range
 function ns.DataBadgeTip(days)
   return "Data: " .. ns.DataBadge(days) .. "\n" .. ns.DataTip(days)
 end
 
--- For lists with no room for a Data column: the orange " · N d" an Item cell ends with, and the
--- line its hover adds, while the item is low on data; nil for both otherwise
+-- The orange " · N d" a list's Item cell ends with, and the line its hover adds, while the
+-- item is low on data; nil for both otherwise
 function ns.DataSuffix(days)
   if not ns.LowDataText(days) then return nil end
   return WARN .. " · " .. days .. " d|r"

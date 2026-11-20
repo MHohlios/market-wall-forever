@@ -80,7 +80,7 @@ describe("data from an item's first scan", function()
     assert.equal("|cffa3acac5 d|r", ns.DataBadge(5))
   end)
 
-  describe("lists with no room for a Data column", function()
+  describe("the badge after a low-data item's name", function()
     local YOUNG, SEASONED = 7, 8
     local SUFFIX = "|cffffb057 · 1 d|r"
     local TIP = "Only 1 day of data; the normal price may be off."
@@ -117,6 +117,23 @@ describe("data from an item's first scan", function()
       assert.equal("Data: 1 d\n" .. TIP, Plain(rows[YOUNG].cellTips[3]))
       assert.same({}, rows[SEASONED].suffixes)
       assert.is_nil(rows[SEASONED].itemTip)
+    end)
+
+    it("does the same for Snipes and Dips, which have no Data column", function()
+      local deal = { wall = 100, min = 50, median = 120, units = 1, cost = 50, profit = 40, discount = 0.5, under = 0.2, total = 9 }
+      local function Deal(id, days)
+        local copy = { id = id, days = days }
+        for k, v in pairs(deal) do copy[k] = v end
+        return copy
+      end
+      ns.snipes = { Deal(YOUNG, 1), Deal(SEASONED, 5) }
+      ns.dips = { Deal(YOUNG, 1), Deal(SEASONED, 5) }
+      for _, rows in ipairs({ ByID(ns.ui.SnipeData()), ByID(ns.ui.DipData()) }) do
+        assert.same({ SUFFIX }, rows[YOUNG].suffixes)
+        assert.equal(TIP, rows[YOUNG].itemTip)
+        assert.same({}, rows[SEASONED].suffixes)
+        assert.is_nil(rows[SEASONED].itemTip)
+      end
     end)
 
     -- A cell 90 wide, with every character 6 wide and colour codes taking no room

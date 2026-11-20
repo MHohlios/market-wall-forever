@@ -154,10 +154,10 @@ normal range, and has stayed at that price for two scans in a row
 is today's wall.
 
 Every number shows from an item's first scan. Until an item has `minHistoryDays` days of
-data (5 by default, "Days before data is reliable"), tooltips, the item window, the Sell page
-and the Snipes and Dips Data column flag it in orange; the setting hides nothing. The Watchlist
-and Bait Detect lists have no room for that column, so a low-data item's name ends with an
-orange " · N d" there instead, and hovering their Normal range and Wall cells shows the badge.
+data (5 by default, "Days before data is reliable"), tooltips, the item window and the Sell page
+flag it in orange; the setting hides nothing. In the Watchlist, Snipes, Dips and Bait Detect
+lists, a low-data item's name ends with an orange " · N d", and hovering the Watchlist's Normal
+range or Bait Detect's Wall cells shows the item's days of data.
 The setting is held to 1 through 15, the most days of data an item can have. Dips need at least one earlier day to compare against.
 Copies are the units posted at the bait price since it first appeared.
 

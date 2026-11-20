@@ -6,12 +6,11 @@ local W, B = ns.Wall, ns.Bait
 local widgets = ns.widgets
 local MakeButton, MakeText, MakeEdit = widgets.MakeButton, widgets.MakeText, widgets.MakeEdit
 
-local GAIN, WARN, GREY = ns.COLOR.GAIN, ns.COLOR.WARN, ns.COLOR.GREY
+local WARN, GREY = ns.COLOR.WARN, ns.COLOR.GREY
 local LIST_WIDTH, RIGHT_X, RIGHT_WIDTH = 420, 432, 350
 local LIST_ROWS, LADDER_ROWS = 15, 8
 local SEARCHES_SHOWN_LIMIT = 100
 local BINDING = "MARKETWALL_BAIT_ACTION"
-local PILING_TINT = { 0.31, 0.76, 0.42, 0.16 }
 local UNDER_TINT = { 0.31, 0.76, 0.42, 0.10 }
 
 -- Names shown in Key Bindings for the binding in Bindings.xml
@@ -20,13 +19,13 @@ BINDING_NAME_MARKETWALL_BAIT_ACTION = "Bait Detect: search or buy"
 
 local COLUMNS = {
   { "Item", 112, nil, "Commodities whose cheapest price level looks like bait: thin supply under the wall, below the item's normal range, seen in two scans in a row." },
-  { "Bait", 110, "RIGHT", "Units first seen at the bait price, and that price.", cellTip = true },
-  -- the list is full, so this column's cells carry the Data badge other lists show in a column
-  { "Wall", 90, "RIGHT", "The item's real price: the lowest price level with meaningful supply behind it. No room for a Data column here: hover a cell for the item's days of data.", cellTip = true, money = true },
-  { "Under", 38, "RIGHT", "How far the bait price is under the wall." },
-  { "Copies", 40, "RIGHT", "Units posted at the bait price since it first appeared. Green rows: copies are piling up; those are the cheap units worth buying." },
-  { "Seen", 30, "RIGHT", "How long ago the bait price first appeared." },
+  { "Bait", 80, "RIGHT", "The bait price. Hover a cell for how many units were first seen at it.", cellTip = true, money = true },
+  { "Wall", 80, "RIGHT", "The item's real price: the lowest price level with meaningful supply behind it. Hover a cell for the item's days of data.", cellTip = true, money = true, grey = true },
+  { "Under", 50, "RIGHT", "How far the bait price is under the wall." },
+  { "Copies", 52, "RIGHT", "Units posted at the bait price since it first appeared. Green: copies are piling up; those are the cheap units worth buying.", answer = true },
+  { "Seen", 46, "RIGHT", "How long ago the bait price first appeared.", grey = true },
 }
+ns.BaitColumns = COLUMNS   -- for specs
 
 local page
 local selectedID
@@ -35,13 +34,6 @@ local thresholds, buyBait, spent = {}, {}, {}   -- per item, this session
 local searched = {}                              -- per item: B.Snapshot of its last live search
 local searches = {}                              -- GetTime() of each search, last minute only
 local lastSearch                                 -- GetTime() of the last search, for any item
-
-local function Short(t)
-  local s = time() - t
-  if s < 3600 then return math.max(1, math.floor(s / 60)) .. "m" end
-  if s < 86400 then return math.floor(s / 3600) .. "h" end
-  return math.floor(s / 86400) .. "d"
-end
 
 local function Gap()
   return math.max(1, ns.Cfg("baitSearchGap"))
@@ -206,13 +198,14 @@ local function ListData()
     local r, copies = item.record, B.Copies(item.record)
     local days = ns.DaysOfData(item.id)
     data[i] = {
-      id = item.id, highlight = (item.id == selectedID), tint = copies > 0 and PILING_TINT or nil,
+      id = item.id, highlight = (item.id == selectedID),
       cells = {
-        ns.ColorName(item.id), r.u .. " @ " .. ns.MoneyShort(r.p), r.w, string.format("%d%%", ns.Round(B.Under(r) * 100)),
-        (copies > 0 and GAIN or GREY) .. copies .. "|r", Short(r.first),
+        ns.ColorName(item.id), r.p, r.w, string.format("%d%%", ns.Round(B.Under(r) * 100)),
+        -- the answer is green only while copies pile up
+        copies > 0 and tostring(copies) or ns.COLOR.VALUE .. copies .. "|r", widgets.ShortAge(r.first),
       },
       suffixes = { ns.DataSuffix(days) }, itemTip = ns.LowDataTip(days),
-      cellTips = { [2] = ns.Money(r.p) ~= ns.MoneyShort(r.p) and ns.Money(r.p) or nil, [3] = ns.DataBadgeTip(days) },
+      cellTips = { [2] = string.format("%d unit%s first seen at this price.", r.u, r.u == 1 and "" or "s"), [3] = ns.DataBadgeTip(days) },
     }
   end
   return data
@@ -220,9 +213,9 @@ end
 ns.BaitListData = ListData   -- for specs
 
 local function EmptyText()
-  if not ns.R().lastFull then return "Run a full scan to look for baited items." end
-  return string.format("Nothing looks baited right now.\nAn item shows here when its cheapest level sits at least %d%% under the wall and below its normal range in two scans in a row.",
-    ns.Round(ns.Bait.MinUnder(ns.Cfg("baitMinUnder")) * 100))
+  if not ns.R().lastFull then return widgets.EmptyText("Run a full scan to look for baited items.") end
+  return widgets.EmptyText("Nothing looks baited right now.", string.format("An item shows here when its cheapest level sits at least %d%% under the wall and below its normal range in two scans in a row.",
+    ns.Round(ns.Bait.MinUnder(ns.Cfg("baitMinUnder")) * 100)))
 end
 
 local function DrawLadder(id, held, wall)
@@ -302,9 +295,9 @@ end
 
 function ns.RefreshBait()
   if not page then return end
-  local r = ns.R()
-  page.heading:SetText("Possibly baited · from full scan " .. ns.Ago(r.lastFull) .. ", updated by live searches")
-  page.list:SetData(ListData(), EmptyText())
+  local data = ListData()
+  ns.ui.statusNote = #data .. " possibly baited"
+  page.list:SetData(data, EmptyText())
   DrawDetail()
 end
 
@@ -416,22 +409,17 @@ function ns.BuildBaitPage(parent)
   page:SetPoint("TOPLEFT", 0, -widgets.CONTENT_DROP)
   page:SetPoint("BOTTOMRIGHT")
 
-  page.heading = MakeText(page, "GameFontNormalSmall")
-  page.heading:SetPoint("TOPLEFT", 8, -54)
-  page.heading:SetWidth(LIST_WIDTH - 8)
-  page.heading:SetWordWrap(false)
-
   page.list = widgets.CreateList(page, LIST_ROWS)
-  page.list:SetPoint("TOPLEFT", 0, -68)
+  page.list:SetPoint("TOPLEFT", 0, -50)
   page.list:SetSize(LIST_WIDTH, widgets.ListHeight(LIST_ROWS))
   page.list:SetColumns(COLUMNS)
   page.list.empty:SetWidth(LIST_WIDTH - 20)
   page.list.onClick = function(entry) Select(entry.id) end
 
   local hint = MakeText(page, "GameFontDisableSmall")
-  hint:SetPoint("TOPLEFT", page.list, "BOTTOMLEFT", 8, -18)
-  hint:SetWidth(LIST_WIDTH - 8)
-  hint:SetText("Green rows: copies are piling up at the bait price. Copies are units posted at that price since it first appeared. Click a row to search it.")
+  hint:SetPoint("TOPLEFT", page.list, "BOTTOMLEFT", 8, -2)
+  hint:SetWidth(LIST_WIDTH - 90)   -- leaves the list's "1–15 of N" its room on the right
+  hint:SetText("Green copies: units piling up at the bait price, the ones worth buying.")
 
   page.pick = MakeText(page, "GameFontDisable", "CENTER")
   page.pick:SetPoint("TOPLEFT", RIGHT_X, -160)
