@@ -1061,12 +1061,13 @@ end
 function ui.Show(view)
   ui.view = view
   if not ui.frame then return end
-  local isItem, isSettings, isSell, isBait = (view == "item"), (view == "settings"), (view == "sell"), (view == "bait")
-  local isList = not isItem and not isSettings and not isSell and not isBait
+  local isItem, isSettings, isSell, isBait, isCrafting = (view == "item"), (view == "settings"), (view == "sell"), (view == "bait"), (view == "crafting")
+  local isList = not isItem and not isSettings and not isSell and not isBait and not isCrafting
   ui.item:SetShown(isItem)
   ui.settings:SetShown(isSettings)
   ui.sell:SetShown(isSell)
   ui.bait:SetShown(isBait)
+  ui.crafting:SetShown(isCrafting)
   ui.list:SetShown(isList)
   ui.footer:SetShown(view == "watch")
   ui.disenchantFooter:SetShown(view == "disenchant")
@@ -1123,6 +1124,8 @@ function ns.RefreshUI()
     ns.RefreshSell()
   elseif view == "bait" then
     ns.RefreshBait()
+  elseif view == "crafting" then
+    ui.crafting:Refresh()
   elseif view == "watch" then
     ListView("watch", WatchData(),
       "Your watchlist is empty.\nType an item name below, or shift-click an item into the box, then press Add.",
@@ -1187,7 +1190,7 @@ local function Build()
   local previous
   -- widths fit each label, so eight buttons leave room for the scan buttons on the right
   for _, def in ipairs({ { "watch", "Watchlist", 72 }, { "snipes", "Snipes", 58 }, { "dips", "Dips", 46 }, { "disenchant", "Disenchant", 76 },
-    { "bait", "Bait Detect", 80 }, { "sell", "Sell", 44 }, { "settings", "Settings", 64 } }) do
+    { "bait", "Bait Detect", 80 }, { "sell", "Sell", 44 }, { "crafting", "Crafting", 64 }, { "settings", "Settings", 64 } }) do
     local b = MakeButton(f, def[2], def[3])
     if previous then b:SetPoint("LEFT", previous, "RIGHT", 4, 0) else b:SetPoint("TOPLEFT", 8, -6) end
     b:SetScript("OnClick", function() ui.Show(def[1]) end)
@@ -1274,6 +1277,9 @@ local function Build()
   ui.sell:Hide()
   ui.bait = ns.BuildBaitPage(f)
   ui.bait:Hide()
+  -- clicking a pattern opens its item page, which loads its live listings; buying stays a press
+  ui.crafting = ns.CraftingView.Build(f, { top = -50, onPattern = ui.ShowItem })
+  ui.crafting:Hide()
 
   -- item names and icons arrive late; redraw at most twice a second while that happens.
   -- The same tick keeps the status line and the cooldown on the Full scan button current.
