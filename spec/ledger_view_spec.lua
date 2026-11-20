@@ -123,4 +123,17 @@ describe("Ledger view", function()
     local recent = L.Days({ book }, "month", L.PeriodOf("month", later), later)
     assert.equal(0, recent[1].net)   -- within the kept days: no change is a real 0
   end)
+
+  it("counts the day the kept window starts in as unknown, since its morning may be pruned", function()
+    local cutoff = NOW - Ledger.KEEP_DAYS * DAY   -- midday, 90 days back
+    local book = Ledger.NewBook(0, cutoff - 30 * DAY)
+    Ledger.Record(book, 100, cutoff - 3600, "loot")   -- pruned
+    Ledger.Record(book, 300, cutoff + 3600, "loot")   -- kept, the same day
+    Ledger.Record(book, 400, cutoff + DAY, "loot")    -- kept, the next day
+    Ledger.Prune(book, NOW)
+    local byDay = {}
+    for _, day in ipairs(L.Days({ book }, "month", L.PeriodOf("month", cutoff), NOW)) do byDay[day.day] = day end
+    assert.is_nil(byDay[ns.DayOf(cutoff)].net)
+    assert.equal(100, byDay[ns.DayOf(cutoff) + 1].net)
+  end)
 end)

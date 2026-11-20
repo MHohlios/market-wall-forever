@@ -7,7 +7,7 @@ local Ledger = ns.Ledger
 local L = {}
 ns.LedgerView = L
 
-local TABLE_ROWS, TABLE_WIDTH, BARS_HEIGHT, BAR_GAP = 8, 362, 56, 4
+local TABLE_ROWS, TABLE_WIDTH, BARS_HEIGHT, BAR_GAP = 9, 362, 56, 4
 local GREY, WARN, GAIN, LOSS = ns.COLOR.GREY, ns.COLOR.WARN, ns.COLOR.GAIN, ns.COLOR.LOSS
 local LAST = { other = 1, offline = 2 }   -- these sources list last, in this order
 local TOTAL_TINT = { 0.96, 0.77, 0.09, 0.10 }
@@ -106,13 +106,13 @@ function L.UnrecordedText(summary)
 end
 
 -- Net gold of each day in the period, from the books' raw entries: { { day =, net = }, ... } in
--- day order, a day with no change at 0. Raw entries are kept Ledger.KEEP_DAYS, so a day older
--- than that has net nil, unknown rather than 0.
+-- day order, a day with no change at 0. Raw entries are kept Ledger.KEEP_DAYS, so a day not
+-- wholly inside that window has net nil, unknown rather than 0.
 function L.Days(books, kind, key, now)
   local function Midday(period) return ns.DayOf(L.PeriodStart(kind, period) + 43200) end   -- clear of clock changes
   local first = Midday(key)
   local count = Midday(L.Step(kind, key, 1)) - first
-  local kept = ns.DayOf(now) - Ledger.KEEP_DAYS
+  local kept = ns.DayOf(now - Ledger.KEEP_DAYS * 86400) + 1   -- the first whole day still kept
   local days = {}
   for i = 1, count do days[i] = { day = first + i - 1, net = first + i - 1 >= kept and 0 or nil } end
   for _, book in ipairs(books) do
@@ -149,10 +149,27 @@ end
 -- Panel
 -------------------------------------------------------------------------------
 
+-- A table of sources that scrolls when they don't all fit, with its total pinned below it
 local function Table(panel, title, tip)
-  local list = ns.widgets.CreateList(panel, TABLE_ROWS)
-  list:SetSize(TABLE_WIDTH, ns.widgets.ListHeight(TABLE_ROWS))
+  local w = ns.widgets
+  local list = w.CreateList(panel, TABLE_ROWS)
+  list:SetSize(TABLE_WIDTH, w.ListHeight(TABLE_ROWS))
   list.title, list.tip = title, tip
+  local total = CreateFrame("Frame", nil, panel)
+  total:SetSize(TABLE_WIDTH, 20)
+  total:SetPoint("TOPLEFT", list, "BOTTOMLEFT", 0, -16)   -- below the list's row count
+  local tint = total:CreateTexture(nil, "BACKGROUND")
+  tint:SetAllPoints()
+  tint:SetColorTexture(TOTAL_TINT[1], TOTAL_TINT[2], TOTAL_TINT[3], TOTAL_TINT[4])
+  local label = w.MakeText(total, "GameFontHighlightSmall")
+  label:SetPoint("LEFT", 30, 0)   -- in line with the rows' first cells
+  label:SetText("Total")
+  total.value = w.MakeText(total, "GameFontHighlightSmall", "RIGHT")
+  total.value:SetPoint("RIGHT", -8, 0)
+  total:EnableMouse(true)
+  total:SetScript("OnEnter", function(self) if self.exact then w.ShowTip(self, self.exact) end end)
+  total:SetScript("OnLeave", w.HideTip)
+  list.total = total
   return list
 end
 
@@ -295,28 +312,31 @@ function L.Build(parent)
   panel.bars:SetPoint("TOPLEFT", 14, -106)
 
   panel.income = Table(panel, "Income", "Gold received, by where it came from.")
-  panel.income:SetPoint("TOPLEFT", 12, -190)
+  panel.income:SetPoint("TOPLEFT", 12, -184)
   panel.spending = Table(panel, "Spending", "Gold spent, by what it went on. Unrecorded is gold that changed while MarketWall wasn't running.")
-  panel.spending:SetPoint("TOPLEFT", 12 + TABLE_WIDTH + 12, -190)
+  panel.spending:SetPoint("TOPLEFT", 12 + TABLE_WIDTH + 12, -184)
 
   panel.opening = w.MakeText(panel, "GameFontDisableSmall")
   panel.opening:SetPoint("BOTTOMLEFT", 14, 12)
   panel.opening:SetPoint("RIGHT", -14, 0)
 
-  -- The total is green for income and red for spending; Unrecorded is orange. A coloured amount
-  -- is text, so the row's hover gives its exact value.
+  -- The pinned total is green for income and red for spending; Unrecorded is orange. A coloured
+  -- amount is text, so the row's hover gives its exact value.
   local function Fill(list, side, totalColor)
     list:SetColumns({ { list.title, 240, nil, list.tip }, { "", 122, "RIGHT", "Copper in the period shown.", money = true } })
     local data = {}
     for _, row in ipairs(L.Rows(side)) do
-      local total, unrecorded = row.source == "total", row.source == "offline"
-      local color = (total and totalColor) or (unrecorded and WARN)
-      data[#data + 1] = {
-        cells = { unrecorded and (WARN .. row.label .. "|r") or row.label,
-          color and (color .. ns.MoneyShort(row.copper) .. "|r") or row.copper },
-        tip = color and ns.Money(row.copper) or nil,
-        tint = total and TOTAL_TINT or nil,
-      }
+      if row.source == "total" then
+        list.total.value:SetText(totalColor .. ns.MoneyShort(row.copper) .. "|r")
+        list.total.exact = ns.Money(row.copper)
+      else
+        local unrecorded = row.source == "offline"
+        data[#data + 1] = {
+          cells = { unrecorded and (WARN .. row.label .. "|r") or row.label,
+            unrecorded and (WARN .. ns.MoneyShort(row.copper) .. "|r") or row.copper },
+          tip = unrecorded and ns.Money(row.copper) or nil,
+        }
+      end
     end
     list:SetData(data)
   end
@@ -337,7 +357,7 @@ function L.Build(parent)
     self.netText:SetText((summary.net < 0 and "-" or "") .. ns.MoneyShort(math.abs(summary.net)))
     self.unrecorded:SetText(L.UnrecordedText(summary) or "")
     self.bars:SetShown(#books > 0)
-    self.bars:Draw(L.Days(books, self.kind, key, now),ns.DayOf(now), self.kind)
+    self.bars:Draw(L.Days(books, self.kind, key, now), ns.DayOf(now), self.kind)
     Fill(self.income, roll.income, GAIN)
     Fill(self.spending, roll.spending, LOSS)
     self.opening:SetText(#books > 0 and L.OpeningText(books)
