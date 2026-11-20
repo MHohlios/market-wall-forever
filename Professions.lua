@@ -111,46 +111,55 @@ local function ReadReagents(schematic)
   return reagents
 end
 
--- Modern: one learned recipe, its product and recipe. Nil for a recipe not learned or without an
--- item product, such as an enchant, and while its schematic is loading.
+-- Modern: one recipe. Its product and recipe when learned and readable; nil when not learned or
+-- while its schematic loads; false when it makes no item, such as an enchant.
 local function ReadModernRecipe(recipeID)
   local info = C_TradeSkillUI.GetRecipeInfo(recipeID)
   if type(info) ~= "table" or not info.learned then return nil end
   local schematic = C_TradeSkillUI.GetRecipeSchematic(recipeID, false)
-  local product = type(schematic) == "table" and schematic.outputItemID
-  local reagents = product and ReadReagents(schematic)
+  if type(schematic) ~= "table" then return nil end
+  local product = schematic.outputItemID
+  if not product then return false end
+  local reagents = ReadReagents(schematic)
   if not reagents then return nil end
   local low = schematic.quantityMin or 1
   return product, { name = info.name, made = (low + (schematic.quantityMax or low)) / 2, reagents = reagents,
     colour = RELATIVE_COLOURS[info.relativeDifficulty] }
 end
 
--- False while the window shows another player's or an NPC's recipes, or is changing profession
-local function ShowsOwnRecipes()
-  for _, name in ipairs({ "IsTradeSkillLinked", "IsTradeSkillGuild", "IsNPCCrafting", "IsDataSourceChanging" }) do
-    local check = C_TradeSkillUI[name]
-    if type(check) == "function" and check() then return false end
-  end
-  return true
-end
-
+-- Like ReadWindow; false when every learned recipe read makes no item
 local function ReadModernWindow()
-  if not ShowsOwnRecipes() then return nil end
+  local changing = C_TradeSkillUI.IsDataSourceChanging
+  if type(changing) == "function" and changing() then return nil end
   local profession = C_TradeSkillUI.GetBaseProfessionInfo()
   local name = type(profession) == "table" and profession.professionName
   if type(name) ~= "string" or name == "" then return nil end
-  local recipes = {}
+  local recipes, itemless = {}, false
   for _, recipeID in ipairs(C_TradeSkillUI.GetAllRecipeIDs() or {}) do
     local product, recipe = ReadModernRecipe(recipeID)
     if product then recipes[product] = recipe end
+    itemless = itemless or product == false
   end
+  if itemless and not next(recipes) then return false end
   return name, profession.skillLevel, profession.maxSkillLevel, recipes
+end
+
+-- True when the window shows another player's, a guild's or an NPC's recipes, through either API
+local function ShowsOthersRecipes()
+  for _, name in ipairs({ "IsTradeSkillLinked", "IsTradeSkillGuild", "IsNPCCrafting" }) do
+    for _, calls in pairs({ _G, C_TradeSkillUI }) do
+      if type(calls) == "table" and type(calls[name]) == "function" and calls[name]() then return true end
+    end
+  end
+  return false
 end
 
 -- The open profession window: its name, rank, maximum rank and { [product] = recipe } for the
 -- recipes readable now. Classic first; C_TradeSkillUI when the Classic calls read no recipe.
--- Nil when no profession is open or the client lacks both APIs.
+-- False for a window skipped on purpose: another's recipes, or recipes that make no item. Nil
+-- when no profession is open or readable yet, or the client lacks both APIs.
 function Professions.ReadWindow()
+  if ShowsOthersRecipes() then return false end
   if Has(_G, CLASSIC_API) then
     local name, rank, maxRank, recipes = ReadClassicWindow()
     if name and next(recipes) then return name, rank, maxRank, recipes end
@@ -164,19 +173,21 @@ local function CharacterBook()
   return key and MarketWallDB.crafting[key]
 end
 
--- Saves the open window into this character's book; true when it saved. A read with no recipe
--- readable yet, as while the window loads, saves nothing, and a later event reads again.
+-- Saves the open window into this character's book: "saved", "skipped" for a window skipped on
+-- purpose, else nil. A read with no recipe readable yet, as while the window loads, saves
+-- nothing, and a later event reads again.
 function Professions.Read()
   local name, rank, maxRank, recipes = Professions.ReadWindow()
+  if name == false then return "skipped" end
   local key = name and next(recipes) and ns.Recording.CharacterKey()
-  if not key then return false end
+  if not key then return nil end
   local book = MarketWallDB.crafting[key] or {}
   MarketWallDB.crafting[key] = book
   local saved = book[name] or { recipes = {} }
   saved.rank, saved.maxRank, saved.t = rank, maxRank, time()
   for product, recipe in pairs(recipes) do saved.recipes[product] = recipe end
   book[name] = saved
-  return true
+  return "saved"
 end
 
 -- Lookups -----------------------------------------------------------------------------------
@@ -278,9 +289,11 @@ end
 -- Reading in game -----------------------------------------------------------------------------
 
 local seen, unregistered = {}, {}   -- profession window events: [event] = count, and those the client lacks
-local savedThisWindow, lastError, noted
+-- The open window's reads so far: nil before any, "unread", or "saved" or "skipped" once one was
+local window
+local lastError, noted
 
--- Once a session, when a profession window closes without a read saving anything
+-- Once a session, when the player's own profession window closes with no read saving from it
 local function NoteUnread()
   if noted then return end
   noted = true
@@ -290,13 +303,13 @@ end
 local function OnEvent(_, event)
   seen[event] = (seen[event] or 0) + 1
   if event == "TRADE_SKILL_CLOSE" then
-    if not savedThisWindow then NoteUnread() end
-    savedThisWindow = false
+    if window == "unread" then NoteUnread() end
+    window = nil
     return
   end
-  local ok, saved = pcall(Professions.Read)
-  if not ok then lastError = tostring(saved) end
-  savedThisWindow = savedThisWindow or (ok and saved)
+  local ok, result = pcall(Professions.Read)
+  if not ok then lastError = tostring(result) end
+  if ok and result then window = result elseif window == nil then window = "unread" end
 end
 
 local frame = CreateFrame("Frame")
@@ -339,6 +352,8 @@ function Professions.Diagnose()
     print("  Reading now failed: " .. tostring(name))
   elseif name then
     print("  Reading now: " .. name .. ", " .. Count(recipes) .. " recipes readable")
+  elseif name == false then
+    print("  Reading now: skipped, as the window shows another's recipes or recipes that make no item")
   else
     print("  Reading now: no profession window readable. Open one and type /mw professions again.")
   end

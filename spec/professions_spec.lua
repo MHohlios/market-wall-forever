@@ -101,6 +101,17 @@ describe("Professions", function()
       assert.same({}, MarketWallDB.crafting)
     end)
 
+    it("saves nothing while the window shows another player's, a guild's or an NPC's recipes", function()
+      for _, check in ipairs({ "IsTradeSkillLinked", "IsTradeSkillGuild", "IsNPCCrafting" }) do
+        Stub(check, function() return true end)
+        fire("TRADE_SKILL_SHOW")
+        Stub(check, function() return false end)
+      end
+      assert.same({}, MarketWallDB.crafting)
+      fire("TRADE_SKILL_SHOW")
+      assert.is_table(Saved().recipes[BOLT])
+    end)
+
     it("keeps recipes a later read no longer shows, as a collapsed header hides them", function()
       fire("TRADE_SKILL_SHOW")
       rows = { rows[1], rows[3] }
@@ -194,6 +205,7 @@ describe("Professions", function()
       local ids = api.GetAllRecipeIDs
       api.GetAllRecipeIDs = function() return {} end
       fire("TRADE_SKILL_SHOW")
+      assert.same({}, MarketWallDB.crafting)
       rows[3].reagents[2][1] = false
       api.GetAllRecipeIDs = ids
       fire("TRADE_SKILL_DATA_SOURCE_CHANGED")
@@ -232,10 +244,31 @@ describe("Professions", function()
       assert.same({ "couldn't read recipes from that profession window. /mw professions shows why." }, printed)
     end)
 
-    it("says nothing when a read saved", function()
+    it("says nothing when a read saved, even on a second close", function()
+      fire("TRADE_SKILL_SHOW")
+      Stub("GetTradeSkillNumReagents", nil)
+      fire("TRADE_SKILL_UPDATE")
+      fire("TRADE_SKILL_CLOSE")
+      fire("TRADE_SKILL_CLOSE")
+      assert.same({}, printed)
+    end)
+
+    it("says nothing for a window skipped on purpose", function()
+      Stub("IsTradeSkillLinked", function() return true end)
+      fire("TRADE_SKILL_SHOW")
+      fire("TRADE_SKILL_CLOSE")
+      Stub("IsTradeSkillLinked", nil)
+      Stub("GetTradeSkillLine", nil)
+      Stub("C_TradeSkillUI", {
+        GetBaseProfessionInfo = function() return { professionName = "Enchanting" } end,
+        GetAllRecipeIDs = function() return { 1 } end,
+        GetRecipeInfo = function() return { name = "Enchant Cloak", learned = true } end,
+        GetRecipeSchematic = function() return { reagentSlotSchematics = {} } end,
+      })
       fire("TRADE_SKILL_SHOW")
       fire("TRADE_SKILL_CLOSE")
       assert.same({}, printed)
+      assert.same({}, MarketWallDB.crafting)
     end)
 
     it("reports which calls the client lacks and what a read finds now", function()
