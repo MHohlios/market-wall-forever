@@ -269,6 +269,29 @@ describe("Sessions", function()
       assert.same({ 44 * 60, 1, 15 * 60 }, { report.duration, report.gaps, report.gapSeconds })
     end)
 
+    it("drops an idle gap longer than the new running time though it ended before a pause", function()
+      local s = S.New("Forgotten", "c", T0)
+      S.Add(s, Loot(T0 + 5 * 60, TURTLE, 100))
+      S.Add(s, Loot(T0 + 10 * HOUR, TURTLE, 100))   -- a 595 min gap
+      S.PauseAt(s, T0 + 10 * HOUR)
+      S.ResumeAt(s, T0 + 20 * HOUR)
+      S.StopAt(s, T0 + 20 * HOUR + 5 * 60)
+      assert.equal(595 * 60, s.gaps[1][2])
+      assert.is_true(S.SetDuration(s, 44 * 60))
+      local report = S.Report(s, lenses.optimal, tostring, T0 + 30 * HOUR)
+      assert.same({ 44 * 60, 0, 0 }, { report.duration, report.gaps, report.gapSeconds })
+    end)
+
+    it("keeps a merged session's gaps within its edited running time", function()
+      local a, b = Run("x", T0, HOUR, 0), Run("x", T0 + 2 * HOUR, HOUR, 0)   -- each ends in a 60 min gap
+      local list = { a, b }
+      S.Merge(list, a, b)
+      assert.is_true(S.SetDuration(b, 90 * 60))
+      local gapSeconds = 0
+      for _, gap in ipairs(b.gaps) do gapSeconds = gapSeconds + gap[2] end
+      assert.same({ 1, HOUR }, { #b.gaps, gapSeconds })
+    end)
+
     it("deletes only a stopped session that is in the list", function()
       local old, open = Run("a", T0, HOUR, 0), S.New("b", "c", T0 + 2 * HOUR)
       local list = { old, open }

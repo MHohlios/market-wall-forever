@@ -247,7 +247,8 @@ function Sessions.Report(s, price, name, now)
   local gapSeconds = 0
   for _, gap in ipairs(s.gaps) do gapSeconds = gapSeconds + gap[2] end
   return { label = s.label, start = s.start, duration = duration, value = value, coin = coin,
-    perHour = PerHour(value, duration), groups = groups, gaps = #s.gaps, gapSeconds = gapSeconds, ended = s.ended }
+    perHour = PerHour(value, duration), groups = groups, gaps = #s.gaps, gapSeconds = gapSeconds, ended = s.ended,
+    open = s.stop == nil }
 end
 
 -- Sessions, newest first, with label as given (nil for all). value(s): its value earned.
@@ -312,14 +313,19 @@ function Sessions.RenameLabel(list, from, to)
 end
 
 -- Sets a stopped session's running time, keeping its start: it stops that long after it started,
--- paused time left as it was. Gaps that ended after the new stop go, such as the idle hours of a
--- session left running by mistake. Returns whether it changed.
+-- paused time left as it was. Gaps past the new running time go, such as the idle hours of a
+-- session left running by mistake. Gaps never overlap, so those within the running time add up to
+-- no more than it: oldest first, a gap that would take the total past it ended after it, and so
+-- did every later one. Returns whether it changed.
 function Sessions.SetDuration(s, seconds)
   if not s.stop or seconds <= 0 then return false end
   s.stop = s.start + s.paused + seconds
-  local kept = {}
+  table.sort(s.gaps, function(a, b) return a[1] < b[1] end)
+  local kept, total = {}, 0
   for _, gap in ipairs(s.gaps) do
-    if gap[1] <= s.stop then kept[#kept + 1] = gap end
+    if gap[1] > s.stop or total + gap[2] > seconds then break end
+    kept[#kept + 1] = gap
+    total = total + gap[2]
   end
   s.gaps = kept
   return true
