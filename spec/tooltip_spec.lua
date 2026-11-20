@@ -71,9 +71,9 @@ describe("item tooltip lines", function()
   describe("7-day trend, with Shift held", function()
     before_each(function() shift = true end)
 
-    it("shows only the heading and a Market row without a price for a never-scanned item", function()
+    it("shows nothing for a never-scanned item", function()
       ns.TooltipLines.Add(tooltip, ID)
-      assert.same({ " ", HEADING .. "MarketWall|r|", "  " .. FADED .. "Market|r|" .. FADED .. "no price|r" }, tooltip.lines)
+      assert.same({}, tooltip.lines)
     end)
 
     it("reads n/a on an item's first scan", function()
@@ -314,10 +314,20 @@ describe("item tooltip lines", function()
       assert.truthy(Find("Disenchant|r|" .. FADED .. ns.MoneyFaded(558.125)))   -- still shown
     end)
 
-    it("brightens nothing when no outlet pays", function()
-      Item(ID, "Potion", { quality = UNCOMMON, level = 18, classID = CONSUMABLE })
+    it("adds no block for an item with nothing to price: no wall, vendor price, disenchant or conversion", function()
+      Item(ID, "Hearthstone", { quality = 1, level = 1, classID = CONSUMABLE })
+      shift = true
       ns.TooltipLines.Add(tooltip, ID)
-      assert.same({}, BrightRows())
+      assert.same({}, tooltip.lines)
+    end)
+
+    it("shows the block with Market at no price when only a container value prices the item", function()
+      local CLAM = 5523
+      Item(CLAM, "Clam", { classID = 15 })
+      MarketWallDB.containers[CLAM] = { opens = 2, coin = 30, drops = { [DUST] = 4 } }
+      ns.TooltipLines.Add(tooltip, CLAM)
+      assert.truthy(Find("Market|r|" .. FADED .. "no price|r"))
+      assert.truthy(Find("Opens to"))
     end)
 
     it("notes a thin market on the Market row when a vendor is best beside a higher wall", function()

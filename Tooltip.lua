@@ -77,7 +77,7 @@ end
 
 -- One row per outlet in a fixed order, each at what one unit nets after the cut and an estimated
 -- deposit, then the stack and what a container opens to. details adds the disenchant materials
--- and the conversion's recipe.
+-- and the conversion's recipe. True when the item has something to price.
 local function OutletLines(add, id, count, details)
   local prices, opts = ns.Mobs.GamePrices(), ns.Mobs.GameOptions()
   local values = Outlet.Priced(prices, opts, id)
@@ -116,6 +116,7 @@ local function OutletLines(add, id, count, details)
   local history = MarketWallDB.containers[id]
   local opened = ns.Containers.OpenedValue(history, prices, opts)
   if opened then FadedRow(add, "Opens to avg (" .. history.opens .. " opened)", opened) end
+  return values.auction ~= nil or values.vendor > 0 or disenchant ~= nil or conversion ~= nil or opened ~= nil
 end
 
 -- The orange flag while the item's market is low on data
@@ -169,16 +170,23 @@ local function StackCount(tooltip, id)
   return info and info.itemID == id and info.stackCount or nil
 end
 
--- The MarketWall block: the heading, the outlet rows, and with Shift held the detail
+-- The MarketWall block: the heading, the outlet rows, and with Shift held the detail. Nothing for
+-- an item with nothing to price, such as a hearthstone.
 local function AddLines(tooltip, id)
   if not id or not MarketWallDB then return end
   local function add(left, right) tooltip:AddDoubleLine(left, right) end
   local details = IsShiftKeyDown()
 
+  -- the outlet rows wait until they show the item has a price, below the heading and the flag
+  local rows = {}
+  local priced = OutletLines(function(left, right) rows[#rows + 1] = { left, right } end,
+    id, StackCount(tooltip, id), details)
+  if not priced then return end
+
   tooltip:AddLine(" ")
   add(HEADING .. "MarketWall|r", not details and HasDetail(id) and HINT .. "Shift: details|r" or "")
   LowDataFlag(add, id)
-  OutletLines(add, id, StackCount(tooltip, id), details)
+  for _, row in ipairs(rows) do add(row[1], row[2]) end
   if details then MarketContextLines(add, id) end
 end
 
