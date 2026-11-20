@@ -46,6 +46,15 @@ describe("Sell page layout", function()
     assert.is_true(page.bags.points[1][2] + page.bags.width <= page.listings.points[1][2])
   end)
 
+  it("gives the answer's breakdown a row of its own under the status line, wide enough for gold amounts", function()
+    local LINE = 13
+    -- "92 × 2s 5c = 1g 88s 60c · 5% cut -9s 43c · deposit -27s 60c" runs about 350 wide in the small font
+    assert.is_true(page.breakdown.width >= 450)
+    assert.is_true(Top(page.breakdown) >= Top(page.info) + LINE)
+    assert.is_true(Top(page.breakdown) + LINE <= page.strip.height)
+    assert.is_true(page.versus.width >= 240)   -- and wraps rather than cutting a long comparison off
+  end)
+
   it("keeps the warnings over the bags' column, where the bags make room for them", function()
     assert.equal(Top(page.bags), Top(page.warnings))
     assert.equal(page.bags.width, page.warnings.width)

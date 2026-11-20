@@ -14,17 +14,20 @@ local DURATIONS = { { 1, "12h" }, { 2, "24h" }, { 3, "48h" } }
 
 -- The Market tab's page is about 782 x 480 below the navigation row
 local WIDTH = 782
-local STRIP_TOP, STRIP_HEIGHT = -50, 92
+local STRIP_TOP, STRIP_HEIGHT = -50, 106
 local BODY_TOP = STRIP_TOP - STRIP_HEIGHT - 6
 local BODY_HEIGHT = 480 + BODY_TOP
 local LEFT_WIDTH, RIGHT_X = 300, 312
-local POST_X, ANSWER_X = 384, 556   -- the strip's Duration and Post column, and its answer column
+local POST_X, POST_WIDTH = 384, 130    -- the strip's Duration and Post column
+local ANSWER_X = POST_X + POST_WIDTH + 12
 local ANSWER_WIDTH = WIDTH - ANSWER_X - 8
 local STATUS_Y = -76                -- the status line, under Price each
+-- the answer's breakdown: a row of its own under the status line, ending under the answer
+local BREAKDOWN_Y, BREAKDOWN_WIDTH = -91, WIDTH - 58 - 8
 local WARNINGS_GAP = 4
 local RIGHT_WIDTH = WIDTH - RIGHT_X
 local TAB_LINE = 28                 -- the right panel's tabs stand on a line this far below its top
-local LIST_ROWS = 13
+local LIST_ROWS = 12
 
 local AUCTION_COLUMNS = {
   { "Price each", 130, nil, "Each price level listed right now, cheapest first. Click a row to set Price each to it." },
@@ -445,7 +448,7 @@ local function BuildPostControls(w, s)
     local duration = def[1]
     local radio = CreateFrame("CheckButton", nil, s, "UIRadioButtonTemplate")
     radio:SetSize(16, 16)
-    radio:SetPoint("TOPLEFT", POST_X - 2 + (i - 1) * 56, -20)
+    radio:SetPoint("TOPLEFT", POST_X - 2 + (i - 1) * 46, -20)
     radio:SetScript("OnClick", function()
       MarketWallDB.cfg.sellDuration = duration
       ns.Mobs.Invalidate()   -- the duration prices the deposits in mob values and disenchant deals
@@ -458,7 +461,7 @@ local function BuildPostControls(w, s)
     page.durations[duration] = radio
   end
 
-  page.post = w.MakeButton(s, "Post", 160)
+  page.post = w.MakeButton(s, "Post", POST_WIDTH)
   page.post:SetHeight(26)
   page.post:SetPoint("TOPLEFT", POST_X, -44)
   page.post:SetScript("OnClick", function() Post(false) end)
@@ -476,16 +479,17 @@ local function BuildAnswer(w, s)
   page.net:SetPoint("TOPLEFT", 0, -20)
   page.versus = w.MakeText(a, "GameFontHighlightSmall")
   page.versus:SetPoint("TOPLEFT", 0, -42)
-  page.versus:SetWidth(ANSWER_WIDTH)
-  page.versus:SetWordWrap(false)
-  page.breakdown = w.MakeText(a, "GameFontHighlightSmall")
-  page.breakdown:SetPoint("TOPLEFT", 0, -58)
-  page.breakdown:SetWidth(ANSWER_WIDTH)   -- a gold-priced line wraps onto a second line
+  page.versus:SetWidth(ANSWER_WIDTH)   -- a long gold comparison wraps onto a second line
+  -- wider than the answer column, reaching left under the Post column, so the line stays one line
+  page.breakdown = w.MakeText(a, "GameFontHighlightSmall", "RIGHT")
+  page.breakdown:SetPoint("TOPRIGHT", 0, BREAKDOWN_Y)
+  page.breakdown:SetWidth(BREAKDOWN_WIDTH)
+  page.breakdown:SetWordWrap(false)
 
   -- font strings take no mouse, so a frame over the breakdown carries the deposit's tooltip
   local depositTip = CreateFrame("Frame", nil, a)
-  depositTip:SetPoint("TOPLEFT", 0, -56)
-  depositTip:SetSize(ANSWER_WIDTH, 30)
+  depositTip:SetPoint("TOPRIGHT", 0, BREAKDOWN_Y + 2)
+  depositTip:SetSize(BREAKDOWN_WIDTH, 16)
   depositTip:EnableMouse(true)
   depositTip:SetScript("OnEnter", function(self)
     w.ShowTip(self, "Deposit", "Counted here as a cost, the worst case. The game refunds the deposit when the auction sells, and keeps it if the auction expires or you cancel it.")
