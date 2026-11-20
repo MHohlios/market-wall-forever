@@ -79,6 +79,18 @@ describe("Crafting", function()
       assert.same({ 2850, 2530 }, { e.net, e.profit })
     end)
 
+    it("has no net or profit, rather than a loss, when nothing prices the product", function()
+      local e = Evaluate(Recipe({ source = { kind = "trainer", cost = 500 } }), { buy = { [THREAD] = 10 }, walls = { [CLOTH] = { 100, true } } })
+      assert.equal(320, e.cost)
+      assert.is_nil(e.net)
+      assert.is_nil(e.profit)
+      assert.is_nil(e.margin)
+      assert.is_nil(e.payback)
+      -- a vendor price alone still values it
+      e = Evaluate(Recipe(), { buy = { [THREAD] = 10 }, walls = { [CLOTH] = { 100, true } }, vendor = { [PRODUCT] = 400 } })
+      assert.same({ 400, 80 }, { e.net, e.profit })
+    end)
+
     it("has no profit or margin when the cost is unknown", function()
       local e = Evaluate(Recipe(), { walls = { [PRODUCT] = { 1000, true } } })
       assert.same({ 950 }, { e.net })

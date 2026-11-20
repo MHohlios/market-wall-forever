@@ -116,13 +116,14 @@ end
 --   days(id)      the item's daily records, today the current day (for Crafting.Market)
 --   rank          the player's skill in the profession, nil when unknown
 -- Returns { recipe, cost, mats (Crafting.Cost's lines), outlet (Outlet.Values for one unit),
--- net, profit, margin, market, learnCost, learnSource, payback, colour }. cost, profit, margin
--- and payback are nil when unknown.
+-- net, profit, margin, market, learnCost, learnSource, payback, colour }. cost, net, profit,
+-- margin and payback are nil when unknown: net is unknown when no outlet prices the product.
 function Crafting.Evaluate(recipe, at)
   local cost, mats = Crafting.Cost(recipe, at.prices)
   local outlet = Outlet.Priced(at.prices, at.opts, recipe.product)
-  local net = outlet.best * recipe.made
-  local profit = cost and net - cost
+  local unpriced = outlet.outlet == Outlet.NO_DATA and outlet.best == 0
+  local net = not unpriced and outlet.best * recipe.made or nil
+  local profit = cost and net and net - cost
   local _, supplied = at.prices.wall(recipe.product)
   local learnCost, learnSource = Crafting.LearnCost(recipe, at.prices)
   return {
