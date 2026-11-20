@@ -414,7 +414,7 @@ end
 function ns.BuildBaitPage(parent)
   page = CreateFrame("Frame", nil, parent)
   page:SetPoint("TOPLEFT", 0, -widgets.CONTENT_DROP)
-  page:SetPoint("BOTTOMRIGHT", 0, -widgets.CONTENT_DROP)
+  page:SetPoint("BOTTOMRIGHT")
 
   page.heading = MakeText(page, "GameFontNormalSmall")
   page.heading:SetPoint("TOPLEFT", 8, -54)
