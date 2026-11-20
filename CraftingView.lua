@@ -215,7 +215,7 @@ end
 -- window and when, and the age of the prices
 function V.StatusText(profession, rank, known, lastFull)
   local head = profession
-  if rank then head = head .. " " .. rank .. (known and known.maxRank and ("/" .. known.maxRank) or "") end
+  if rank and rank > 0 then head = head .. " " .. rank .. (known and known.maxRank and ("/" .. known.maxRank) or "") end
   local recipes
   if known then
     local n = Count(known.recipes)

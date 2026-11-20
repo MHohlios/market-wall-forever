@@ -596,7 +596,8 @@ end
 function ns.BuildSellPage(parent)
   local w = ns.widgets
   page = CreateFrame("Frame", nil, parent)
-  page:SetAllPoints()
+  page:SetPoint("TOPLEFT", 0, -w.CONTENT_DROP)
+  page:SetPoint("BOTTOMRIGHT", 0, -w.CONTENT_DROP)
 
   BuildStrip(w)
   local bags = Panel(page, 0, BODY_TOP, LEFT_WIDTH, BODY_HEIGHT)
