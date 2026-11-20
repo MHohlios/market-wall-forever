@@ -118,6 +118,23 @@ describe("the Market tab", function()
       assert.is_true(MarketPage():IsShown())
     end)
 
+    it("leads back from an item page through the list's tab, which stays clickable", function()
+      -- like the game: selecting a tab disables it, and a disabled button ignores clicks
+      _G.PanelTemplates_SelectTab = function(t) t.disabled = true end
+      _G.PanelTemplates_DeselectTab = function(t) t.disabled = false end
+      for _, tab in pairs(ns.ui.nav) do
+        function tab:Enable() self.disabled = false end
+      end
+      local function Click(tab) if not tab.disabled then tab.scripts.OnClick() end end
+
+      ClickMarket()
+      Click(ns.ui.nav.snipes)
+      ns.ui.lastList = "snipes"   -- as ui.ShowItem records it
+      ns.ui.Show("item")
+      Click(ns.ui.nav.snipes)
+      assert.equal("snipes", ns.ui.view)
+    end)
+
     it("hides Market and deselects its tab on a Blizzard mode", function()
       ClickMarket()
       local deselected

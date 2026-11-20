@@ -1134,7 +1134,9 @@ function ui.Show(view)
   ui.disenchantFooter:SetShown(view == "disenchant")
   ui.hint:SetShown(isList)
   for name, tab in pairs(ui.nav) do
-    SelectTab(tab, name == view or (isItem and name == ui.lastList))
+    local backToList = isItem and name == ui.lastList
+    SelectTab(tab, name == view or backToList)
+    if backToList then tab:Enable() end   -- selecting disables a tab; this one leads back from the item page
   end
   ui.list.offset = 0
   ns.RefreshUI()
