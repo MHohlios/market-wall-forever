@@ -317,6 +317,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
     MarketWallDB.sessionGroups = MarketWallDB.sessionGroups or {}
     MarketWallDB.creatures = MarketWallDB.creatures or {}
     MarketWallDB.depositRate = MarketWallDB.depositRate or {}   -- learned auction deposit rates, see Outlet.lua
+    MarketWallDB.crafting = MarketWallDB.crafting or {}   -- known recipes per character, see Professions.lua
   elseif event == "PLAYER_LOGIN" then
     ns.realmData = nil
     ns.R()
@@ -391,7 +392,7 @@ SlashCmdList["MARKETWALL"] = function(msg)
     print("  /mw full                          full market scan")
     print("  /mw set <setting> <value>         change a setting, /mw set lists them")
     print("  /mw resetpos <item>               clear your tracked position")
-    print("  /mw probe start|stop|status       record what the client exposes for kills, loot and money")
+    print("  /mw probe start|stop|status       record what the client exposes for kills, loot, money and trainers")
     print("  /mw search                        open the item search window")
     print("  /mw minimap                       hide or show the minimap button")
     print("  /mw session start <label>|stop|pause|resume   a farm session; /mw session shows the running one")

@@ -22,6 +22,9 @@ Outlet.lua
 Containers.lua
 Mobs.lua
 Ledger.lua
+Crafting.lua
+Recipes/Tailoring.lua
+Professions.lua
 Quests.lua
 Sessions.lua
 UI.lua

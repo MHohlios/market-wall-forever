@@ -30,6 +30,8 @@ read_globals = {
   "GetCursorPosition", "GetTime", "IsShiftKeyDown", "PlaySound", "UnitGUID", "UnitName", "UnitCreatureFamily", "CanLootUnit", "IsFishingLoot",
   "GetNumLootItems", "GetLootSlotInfo", "GetLootSlotLink", "GetLootSlotType", "GetLootSourceInfo",
   "StaticPopup_Show", "hooksecurefunc", "ChatEdit_InsertLink",
+  "GetTradeSkillLine", "GetNumTradeSkills", "GetTradeSkillInfo", "GetTradeSkillItemLink", "GetTradeSkillNumMade",
+  "GetTradeSkillNumReagents", "GetTradeSkillReagentInfo", "GetTradeSkillReagentItemLink",
   "PanelTemplates_DeselectTab", "PanelTemplates_SelectTab", "PanelTemplates_TabResize",
   -- Frames and constants
   "LibStub",                -- only to find Auctionator's tabs, when it is installed
