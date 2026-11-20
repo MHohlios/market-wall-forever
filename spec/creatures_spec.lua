@@ -71,6 +71,78 @@ describe("Creatures", function()
     end)
   end)
 
+  describe("Ask", function()
+    local cache, links, now, realCreateFrame
+
+    -- A hidden tooltip as the game builds it: a creature link shows the cached name, or no lines
+    -- when the cache lacks it. Clearing drops the lines, but the first line keeps its old text.
+    local function Tooltip()
+      local lines = 0
+      local firstLine = { text = nil }
+      function firstLine.GetText() return firstLine.text end
+      _G.MarketWallCreatureScanTextLeft1 = firstLine
+      local tooltip = setmetatable({}, { __index = function() return function() end end })
+      function tooltip.ClearLines() lines = 0 end
+      function tooltip.NumLines() return lines end
+      function tooltip.SetHyperlink(_, link)
+        links[#links + 1] = link
+        local name = cache[tonumber(link:match("^unit:Creature%-0%-0%-0%-0%-(%d+)%-"))]
+        if name then lines, firstLine.text = 1, name end
+      end
+      return tooltip
+    end
+
+    before_each(function()
+      cache, links, now = {}, {}, 1000
+      _G.time = function() return now end
+      realCreateFrame = _G.CreateFrame
+      _G.CreateFrame = function(kind, ...)
+        if kind == "GameTooltip" then return Tooltip() end
+        return realCreateFrame(kind, ...)
+      end
+    end)
+
+    after_each(function()
+      _G.time, _G.CreateFrame, _G.MarketWallCreatureScanTextLeft1 = os.time, realCreateFrame, nil
+    end)
+
+    it("saves the name the creature cache gives", function()
+      cache[BOAR] = "Mottled Boar"
+      assert.equal("Mottled Boar", C.Name(BOAR))
+      assert.same({ "unit:Creature-0-0-0-0-" .. BOAR .. "-0000000000" }, links)
+      assert.same({ name = "Mottled Boar" }, MarketWallDB.creatures[BOAR])
+    end)
+
+    it("saves nothing when the cache does not know the creature", function()
+      assert.is_nil(C.Name(BOAR))
+      assert.is_nil(MarketWallDB.creatures[BOAR])
+    end)
+
+    it("never names a creature from a line left by an earlier scan", function()
+      cache[BOAR] = "Mottled Boar"
+      C.Name(BOAR)
+      assert.is_nil(C.Name(WOLF))
+      assert.is_nil(MarketWallDB.creatures[WOLF])
+    end)
+
+    it("ignores a secret name", function()
+      cache[BOAR] = "Mottled Boar"
+      _G.issecretvalue = function(v) return v == "Mottled Boar" end
+      assert.is_nil(C.Name(BOAR))
+      assert.is_nil(MarketWallDB.creatures[BOAR])
+    end)
+
+    it("asks again for a creature only after a minute", function()
+      assert.is_nil(C.Name(BOAR))
+      cache[BOAR] = "Mottled Boar"   -- the game's answer arrives
+      now = now + 59
+      assert.is_nil(C.Name(BOAR))
+      now = now + 1
+      assert.equal("Mottled Boar", C.Name(BOAR))
+      assert.equal(2, #links)
+    end)
+  end)
+
   describe("in game", function()
     it("records the target, the mouseover and nameplates", function()
       units.target = { Guid(WOLF), "Timber Wolf", "Wolf" }

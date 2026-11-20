@@ -43,12 +43,14 @@ local Readable = ns.Readable
 local scanner, askedAt = nil, {}
 
 -- The name the game's creature cache gives a creature link, or nil. Guarded: a client that has
--- no creature links leaves the tooltip empty or refuses the link.
+-- no creature links leaves the tooltip empty or refuses the link. Lines are cleared first, so a
+-- line left from an earlier scan never names this creature.
 local function TooltipName(npc)
   scanner = scanner or CreateFrame("GameTooltip", "MarketWallCreatureScan", UIParent, "GameTooltipTemplate")
   scanner:SetOwner(UIParent, "ANCHOR_NONE")
+  scanner:ClearLines()
   local ok = pcall(scanner.SetHyperlink, scanner, "unit:Creature-0-0-0-0-" .. npc .. "-0000000000")
-  local line = ok and _G.MarketWallCreatureScanTextLeft1
+  local line = ok and scanner:NumLines() > 0 and _G.MarketWallCreatureScanTextLeft1
   local text = line and Readable(line:GetText())
   scanner:Hide()
   if type(text) == "string" and text ~= "" and text ~= _G.UNKNOWNOBJECT then return text end
