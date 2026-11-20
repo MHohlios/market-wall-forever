@@ -86,7 +86,8 @@ local function Deposit(item, quantity)
   end
   if not deposit then return 0 end
   local vendor = Vendor(item.id)
-  if vendor then Outlet.LearnDepositRate(duration, deposit, vendor * quantity) end
+  -- the neutral Auction House charges its own deposits, which say nothing about your faction's
+  if vendor and not ns.neutralAH then Outlet.LearnDepositRate(duration, deposit, vendor * quantity) end
   return deposit
 end
 

@@ -82,7 +82,7 @@ end
 
 local function Select(id)
   selectedID = id
-  S.Remember(ns.R().recent, id, RECENT)
+  if not ns.neutralAH then S.Remember(ns.R().recent, id, RECENT) end   -- nothing is saved there
   LoadListings(id)
   ns.RefreshSearch()
 end
