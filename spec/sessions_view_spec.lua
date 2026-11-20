@@ -78,6 +78,7 @@ describe("Sessions view", function()
       local s = Farm()
       assert.equal("|cffa3acacstill open|r", V.Stats(S.Report(s, Price, Name, T0 + 60), "optimal")[2][2])
       S.StopAt(s, T0 + 3600)
+      assert.equal("|cffa3acac-|r", V.Stats(S.Report(s, Price, Name, T0 + 9999), "optimal")[2][2])   -- none kept, as after some merges
       s.ended = { optimal = 777, market = 0, vendor = 0 }
       s.gaps = { { T0, 700 }, { T0, 900 } }
       local stats = V.Stats(S.Report(s, Price, Name, T0 + 9999), "optimal")
@@ -172,6 +173,9 @@ describe("Sessions view", function()
       assert.is_nil(V.ParseDuration("0"))
       assert.is_nil(V.ParseDuration("an hour"))
       assert.is_nil(V.ParseDuration("1:5"))
+      assert.is_nil(V.ParseDuration("0:00"))
+      assert.is_nil(V.ParseDuration("1:75"))
+      assert.equal(3540, V.ParseDuration("0:59"))
     end)
   end)
 end)

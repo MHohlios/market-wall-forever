@@ -102,7 +102,8 @@ function V.Stats(report, lens)
     or string.format("%d (%d min)", report.gaps, math.floor(report.gapSeconds / 60))
   return {
     { "Value earned (current prices)", ns.Money(report.value) },
-    { "At session end", report.ended and ns.Money(report.ended[lens]) or (GREY .. "still open|r") },
+    -- a stopped session may have none: stopped before they were kept, or merged with one that was
+    { "At session end", report.ended and ns.Money(report.ended[lens]) or (GREY .. (report.open and "still open" or "-") .. "|r") },
     { "Gold / hour", ns.Money(report.perHour) },
     { "Coins looted", ns.Money(report.coin) },
     { "Gaps over 10 min", gaps },
@@ -177,11 +178,17 @@ function V.MergeText(from, into)
     string.format("Their times and loot add up under \"%s\", from the earlier start. %s", into.label, KEEP)
 end
 
--- Seconds from typed minutes, "44", or hours and minutes, "1:12"; nil unless above zero
+-- Seconds from typed minutes, "44", or hours and minutes, "1:12"; nil unless above zero, and
+-- for hours and minutes unless the minutes are under 60
 function V.ParseDuration(text)
   local hours, minutes = string.match(text, "^(%d+):(%d%d)$")
-  if hours then return (tonumber(hours) * 60 + tonumber(minutes)) * 60 end
-  minutes = tonumber(string.match(text, "^%d+$"))
+  if hours then
+    hours, minutes = tonumber(hours), tonumber(minutes)
+    if minutes > 59 then return nil end
+    minutes = hours * 60 + minutes
+  else
+    minutes = tonumber(string.match(text, "^%d+$"))
+  end
   return minutes and minutes > 0 and minutes * 60 or nil
 end
 
