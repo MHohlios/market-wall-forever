@@ -65,10 +65,12 @@ ns.COLOR = {
   WARN = "|cffffb057",    -- warnings only: low data, stale, rough, suspected bait
   LOSS = "|cffe06060",    -- loss
   BUY = "|cff7cc0ff",     -- your buy price and what is under it, like the chart's buy line
+  BRAND = "|cff2fa39d",   -- the MarketWall name, as the item tooltip's heading shows it
+  BEST = "|cff3fe6d6",    -- the item tooltip's best way to sell, in the brand's teal
 }
 
 local function Print(...)
-  print(ns.COLOR.LABEL .. "MarketWall|r:", ...)
+  print(ns.COLOR.BRAND .. "MarketWall|r:", ...)
 end
 ns.Print = Print
 
