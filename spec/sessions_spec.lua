@@ -122,7 +122,9 @@ describe("Sessions", function()
       local creatures = { [TURTLE] = { name = "Snapping Turtle", family = "Turtle" }, [BANDIT] = { name = "Defias Bandit" } }
       assert.equal("Turtle", S.ActivityName("npc:" .. TURTLE, creatures))
       assert.equal("Defias Bandit", S.ActivityName("npc:" .. BANDIT, creatures))
-      assert.equal("Mob 9", S.ActivityName("npc:9", creatures))
+      assert.equal("Unknown mob (9)", S.ActivityName("npc:9", creatures))
+      assert.equal("Murloc", S.ActivityName("npc:9", creatures, function(npc) return npc == 9 and "Murloc" or nil end))
+      assert.equal("Unknown mob (9)", S.ActivityName("npc:9", creatures, function() return nil end))
       assert.equal("Chests and containers", S.ActivityName("chests", creatures))
     end)
 
@@ -219,6 +221,101 @@ describe("Sessions", function()
       assert.same({ best = 40, median = 25 }, S.Compare(rows))
       assert.same({ best = 30, median = 20 }, S.Compare({ rows[1], rows[2], rows[3] }))
       assert.is_nil(S.Compare({}))
+    end)
+  end)
+
+  describe("editing", function()
+    local HOUR = 3600
+
+    -- A stopped session: label, start, running seconds, coin from TURTLE and its drops
+    local function Run(label, start, seconds, coin, drops)
+      local s = S.New(label, "c", start)
+      s.activities["npc:" .. TURTLE] = { coin = coin, drops = drops or {} }
+      S.StopAt(s, start + seconds)
+      return s
+    end
+
+    it("formats running time in minutes and hours", function()
+      assert.same({ "<1 min", "44 min", "1 h 12 min", "2 h" },
+        { S.DurationText(59), S.DurationText(44 * 60 + 17), S.DurationText(72 * 60), S.DurationText(2 * HOUR + 30) })
+    end)
+
+    it("renames a label on every session that has it, and only those", function()
+      local list = { Run("Farm Turt", T0, HOUR, 0), Run("Herbs", T0 + 2 * HOUR, HOUR, 0), Run("Farm Turt", T0 + 4 * HOUR, HOUR, 0) }
+      assert.equal(2, S.RenameLabel(list, "Farm Turt", "Farm Turtle v2"))
+      assert.same({ "Farm Turtle v2", "Herbs", "Farm Turtle v2" }, { list[1].label, list[2].label, list[3].label })
+      assert.same({ "Farm Turtle v2", "Herbs" }, S.Labels(list))
+      assert.equal(0, S.RenameLabel(list, "Nothing", "x"))
+    end)
+
+    it("sets a stopped session's running time from its start, keeping its paused time", function()
+      local s = S.New("x", "c", T0)
+      S.PauseAt(s, T0 + 600)
+      S.ResumeAt(s, T0 + 900)   -- 300 s paused
+      S.StopAt(s, T0 + 5 * HOUR)
+      assert.is_true(S.SetDuration(s, 44 * 60))
+      assert.same({ T0, T0 + 300 + 44 * 60, 44 * 60 }, { s.start, s.stop, S.Duration(s) })
+      assert.is_false(S.SetDuration(s, 0))
+      assert.is_false(S.SetDuration(S.New("open", "c", T0), 60))   -- a running session keeps its clock
+    end)
+
+    it("deletes only a stopped session that is in the list", function()
+      local old, open = Run("a", T0, HOUR, 0), S.New("b", "c", T0 + 2 * HOUR)
+      local list = { old, open }
+      assert.is_false(S.Delete(list, open))
+      assert.is_true(S.Delete(list, old))
+      assert.same({ open }, list)
+      assert.is_false(S.Delete(list, old))
+    end)
+
+    it("offers merging into the neighbouring sessions and any other with the same label, newest first", function()
+      local a, b, c, d = Run("Turtles", T0, HOUR, 0), Run("Herbs", T0 + 2 * HOUR, HOUR, 0),
+        Run("Ore", T0 + 4 * HOUR, HOUR, 0), Run("Turtles", T0 + 6 * HOUR, HOUR, 0)
+      local open = S.New("Turtles", "c", T0 + 8 * HOUR)
+      local list = { a, b, c, d, open }
+      assert.same({ d, b }, S.MergeTargets(list, a))
+      assert.same({ d, b }, S.MergeTargets(list, c))
+      assert.same({ c, a }, S.MergeTargets(list, d))   -- never the open session
+      assert.same({}, S.MergeTargets(list, open))
+    end)
+
+    it("merges two sessions: times and loot add up, the earlier start and the target's label are kept", function()
+      local older = Run("Farm Turt", T0, 32 * 60, 300, { [SCALE] = 2 })
+      older.gaps = { { T0 + 100, 700 } }
+      older.ended = { vendor = 10, market = 20, optimal = 30 }
+      local other = Run("Herbs", T0 + 2 * HOUR, HOUR, 0)
+      local newer = Run("Farm Turtle v2", T0 + 4 * HOUR, 44 * 60, 500, { [SCALE] = 1, [FISH] = 4 })
+      newer.ended = { vendor = 1, market = 2, optimal = 3 }
+      newer.activities.quests = { coin = 400, drops = {} }
+      local list = { older, other, newer }
+
+      assert.is_true(S.Merge(list, older, newer))
+      assert.same({ older = false, start = T0, label = "Farm Turtle v2" },
+        { older = list[1] == older or list[2] == older or list[3] == older, start = newer.start, label = newer.label })
+      assert.equal(76 * 60, S.Duration(newer))
+      assert.same({ coin = 800, drops = { [SCALE] = 3, [FISH] = 4 } }, newer.activities["npc:" .. TURTLE])
+      assert.equal(400, newer.activities.quests.coin)
+      assert.same({ { T0 + 100, 700 }, { T0 + 4 * HOUR + 44 * 60, 44 * 60 } }, newer.gaps)   -- both, in time order
+      assert.same({ vendor = 11, market = 22, optimal = 33 }, newer.ended)
+      assert.same({ newer, other }, list)   -- in start order
+    end)
+
+    it("drops the value at session end when only one of the merged sessions has it", function()
+      local a, b = Run("x", T0, HOUR, 0), Run("x", T0 + 2 * HOUR, HOUR, 0)
+      a.ended = { optimal = 5 }
+      local list = { a, b }
+      assert.is_true(S.Merge(list, a, b))
+      assert.is_nil(b.ended)
+    end)
+
+    it("never merges an open session, a session into itself or one missing from the list", function()
+      local a, open = Run("x", T0, HOUR, 0), S.New("x", "c", T0 + 2 * HOUR)
+      local list = { a, open }
+      assert.is_false(S.Merge(list, a, open))
+      assert.is_false(S.Merge(list, open, a))
+      assert.is_false(S.Merge(list, a, a))
+      assert.is_false(S.Merge(list, Run("y", T0 + HOUR, 60, 0), a))
+      assert.same({ a, open }, list)
     end)
   end)
 

@@ -146,12 +146,13 @@ function Sessions.AddLootCoin(s, shown, received, t)
   return true
 end
 
--- An activity's own name: beasts by creature family, other mobs by name
-function Sessions.ActivityName(key, creatures)
+-- An activity's own name: beasts by creature family, other mobs by name. lookup(npc), when
+-- given, names a mob creatures does not.
+function Sessions.ActivityName(key, creatures, lookup)
   local npc = tonumber(key:match("^npc:(%d+)$"))
   if not npc then return NAMES[key] or key end
   local creature = creatures[npc] or {}
-  return creature.family or creature.name or ("Mob " .. npc)
+  return creature.family or creature.name or (lookup and lookup(npc)) or ("Unknown mob (" .. npc .. ")")
 end
 
 -- The group an activity name is shown under
@@ -287,6 +288,96 @@ function Sessions.Labels(list)
   return labels
 end
 
+-- Editing ----------------------------------------------------------------------------------
+-- Edits change only the session list. The Ledger and Mobs record the same gold and kills on
+-- their own, so they keep them whatever happens to a session. A running or paused session can
+-- be relabelled but not merged, shortened or deleted.
+
+local function IndexOf(list, s)
+  for i, other in ipairs(list) do
+    if other == s then return i end
+  end
+end
+
+-- Gives every session labelled from the label to. Returns how many changed.
+function Sessions.RenameLabel(list, from, to)
+  local count = 0
+  for _, s in ipairs(list) do
+    if s.label == from then
+      s.label = to
+      count = count + 1
+    end
+  end
+  return count
+end
+
+-- Sets a stopped session's running time, keeping its start: it stops that long after it started,
+-- paused time left as it was. Returns whether it changed.
+function Sessions.SetDuration(s, seconds)
+  if not s.stop or seconds <= 0 then return false end
+  s.stop = s.start + s.paused + seconds
+  return true
+end
+
+-- Removes a stopped session from the list. Returns whether it was there.
+function Sessions.Delete(list, s)
+  local i = s.stop and IndexOf(list, s)
+  if not i then return false end
+  table.remove(list, i)
+  return true
+end
+
+-- Stopped sessions s can merge into: the ones just before and after it, and every other with
+-- its label, newest first
+function Sessions.MergeTargets(list, s)
+  local at = IndexOf(list, s)
+  local targets = {}
+  if not (at and s.stop) then return targets end
+  for i = #list, 1, -1 do
+    local other = list[i]
+    if other ~= s and other.stop and (other.label == s.label or math.abs(i - at) == 1) then
+      targets[#targets + 1] = other
+    end
+  end
+  return targets
+end
+
+local function AddDrops(into, drops)
+  for id, qty in pairs(drops) do into[id] = (into[id] or 0) + qty end
+end
+
+-- Folds the stopped session from into the stopped session into, and removes from. into keeps
+-- its label and character and takes the earlier start and the later stop; running times add,
+-- the time between them counting as paused; activities, gaps and values at session end add up.
+-- Values at end are kept only when both have them. Returns whether it merged.
+function Sessions.Merge(list, from, into)
+  if from == into or not (from.stop and into.stop and IndexOf(list, from) and IndexOf(list, into)) then return false end
+  local seconds = Sessions.Duration(from) + Sessions.Duration(into)
+  into.start = math.min(from.start, into.start)
+  into.stop = math.max(from.stop, into.stop, into.start + seconds)
+  into.paused = into.stop - into.start - seconds
+  for key, activity in pairs(from.activities) do
+    local target = Activity(into, key)
+    target.coin = target.coin + activity.coin
+    AddDrops(target.drops, activity.drops)
+  end
+  for _, gap in ipairs(from.gaps) do into.gaps[#into.gaps + 1] = gap end
+  table.sort(into.gaps, function(a, b) return a[1] < b[1] end)
+  if from.ended and into.ended then
+    for lens, value in pairs(from.ended) do into.ended[lens] = (into.ended[lens] or 0) + value end
+  else
+    into.ended = nil
+  end
+  table.remove(list, IndexOf(list, from))
+  table.remove(list, IndexOf(list, into))   -- back in start order, any open session still last
+  local at = #list + 1
+  for i, s in ipairs(list) do
+    if s.start > into.start then at = i break end
+  end
+  table.insert(list, at, into)
+  return true
+end
+
 -- In game -----------------------------------------------------------------------------------
 
 local Print = ns.Print
@@ -303,8 +394,13 @@ function Sessions.GameLenses()
   return ns.Mobs.Lenses(ns.Mobs.GamePrices(), ns.Mobs.GameOptions(), {})
 end
 
+local function MobName(npc)
+  local mob = MarketWallDB.mobs[npc]
+  return ns.Creatures.Name(npc, mob and mob.name)
+end
+
 local function Name(key)
-  return Sessions.GroupOf(MarketWallDB.sessionGroups, Sessions.ActivityName(key, MarketWallDB.creatures))
+  return Sessions.GroupOf(MarketWallDB.sessionGroups, Sessions.ActivityName(key, MarketWallDB.creatures, MobName))
 end
 
 -- A session's report under lens ("vendor", "market" or "optimal") at current prices
@@ -318,6 +414,16 @@ function Sessions.Clock(seconds)
   return string.format("%d:%02d:%02d", math.floor(seconds / 3600), math.floor(seconds % 3600 / 60), seconds % 60)
 end
 local Clock = Sessions.Clock
+
+-- Seconds as "44 min", "1 h 12 min" or "2 h"; under a minute "<1 min"
+function Sessions.DurationText(seconds)
+  local minutes = math.floor(math.max(0, seconds) / 60)
+  if minutes == 0 then return "<1 min" end
+  local hours = math.floor(minutes / 60)
+  if hours == 0 then return minutes .. " min" end
+  minutes = minutes % 60
+  return minutes == 0 and (hours .. " h") or string.format("%d h %d min", hours, minutes)
+end
 
 local function Summary(s)
   local report = Sessions.ReportFor(s, "optimal")
