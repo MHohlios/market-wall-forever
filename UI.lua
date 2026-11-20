@@ -1123,12 +1123,13 @@ end
 function ui.Show(view)
   ui.view = view
   if not ui.frame then return end
-  local isItem, isSettings, isSell, isBait = (view == "item"), (view == "settings"), (view == "sell"), (view == "bait")
-  local isList = not isItem and not isSettings and not isSell and not isBait
+  local isItem, isSettings, isSell, isBait, isCrafting = (view == "item"), (view == "settings"), (view == "sell"), (view == "bait"), (view == "crafting")
+  local isList = not isItem and not isSettings and not isSell and not isBait and not isCrafting
   ui.item:SetShown(isItem)
   ui.settings:SetShown(isSettings)
   ui.sell:SetShown(isSell)
   ui.bait:SetShown(isBait)
+  ui.crafting:SetShown(isCrafting)
   ui.list:SetShown(isList)
   ui.footer:SetShown(view == "watch")
   ui.disenchantFooter:SetShown(view == "disenchant")
@@ -1187,6 +1188,8 @@ function ns.RefreshUI()
     ns.RefreshSell()
   elseif view == "bait" then
     ns.RefreshBait()
+  elseif view == "crafting" then
+    ui.crafting:Refresh()
   elseif view == "watch" then
     ListView("watch", WatchData(),
       "Your watchlist is empty.\nType an item name below, or shift-click an item into the box, then press Add.",
@@ -1251,7 +1254,7 @@ local function Build()
   ui.nav = MakeTabRow(f, PORTRAIT_CLEAR, TAB_BOTTOM, {
     { key = "watch", label = "Watchlist" }, { key = "snipes", label = "Snipes" }, { key = "dips", label = "Dips" },
     { key = "disenchant", label = "Disenchant" }, { key = "bait", label = "Bait Detect" }, { key = "sell", label = "Sell" },
-    { key = "settings", label = "Settings" },
+    { key = "crafting", label = "Crafting" }, { key = "settings", label = "Settings" },
   }, ui.Show)
 
   ui.fullButton = MakeButton(f, "Full scan", 116)
@@ -1333,6 +1336,9 @@ local function Build()
   ui.sell:Hide()
   ui.bait = ns.BuildBaitPage(f)
   ui.bait:Hide()
+  -- clicking a pattern opens its item page, which loads its live listings; buying stays a press
+  ui.crafting = ns.CraftingView.Build(f, { top = -50, onPattern = ui.ShowItem })
+  ui.crafting:Hide()
 
   -- item names and icons arrive late; redraw at most twice a second while that happens.
   -- The same tick keeps the status line and the cooldown on the Full scan button current.

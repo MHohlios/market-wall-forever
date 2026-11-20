@@ -29,6 +29,7 @@ describe("loading the addon", function()
     assert.is_function(ns.MobsView.Build)   -- MobsView.lua, before Search.lua builds it
     assert.is_function(ns.LedgerView.Build) -- LedgerView.lua, the same
     assert.is_function(ns.SessionsView.Build) -- SessionsView.lua, the same
+    assert.is_function(ns.CraftingView.Build) -- CraftingView.lua, the same, and the Market tab's
     assert.is_function(ns.OpenSessions)     -- from Search.lua, for the minimap menu
     assert.is_function(ns.UpdateSessionTracker) -- SessionTracker.lua
     assert.is_function(ns.InitTooltip)      -- from Tooltip.lua, the last TOC file
