@@ -198,29 +198,26 @@ end
 
 -- Mob tooltips -------------------------------------------------------------------------------
 
--- Seen kills, the ones values count, or an orange flag while they are under reliableKills
+-- Seen kills, the ones values count, in orange and marked rough while they are under reliableKills
 local function KillCount(seen, reliableKills)
-  if seen < reliableKills then return ORANGE .. "< " .. reliableKills .. " kills|r" end
-  return GREY .. seen .. " kills|r"
+  local kills = seen .. (seen == 1 and " kill" or " kills")
+  if seen < reliableKills then return ORANGE .. kills .. ", rough|r" end
+  return GREY .. kills .. "|r"
 end
 
 -- The lines a mob adds to its tooltip, from Mobs.Stats, as { left, right } pairs: worth per
--- kill under Optimal, each single outlet's median beside the kill count, and the top drop.
--- Empty for a mob with no record or no seen kill. skinning: whether Optimal includes it.
-local function MobLines(stats, skinning, reliableKills)
+-- kill (Optimal's median) alone, then its average beside the kill count, and the top drop.
+-- Empty for a mob with no record or no seen kill.
+local function MobLines(stats, reliableKills)
   if not (stats and stats.optimal) then return {} end
-  local optimal = stats.optimal
-  local outlets = "Vendor " .. ns.Money(stats.vendor.median) .. " · Market " .. ns.Money(stats.market.median)
-  if skinning and stats.skinning then outlets = outlets .. " · Skin " .. ns.Money(stats.skinning.median) end
   local lines = {
-    { GOLD .. "Worth per kill|r",
-      ns.Money(optimal.median) .. " " .. GREY .. "typical|r · " .. ns.Money(optimal.average) .. " " .. GREY .. "avg|r" },
-    { GREY .. outlets .. "|r", KillCount(stats.seen, reliableKills) },
+    { GOLD .. "Worth per kill|r", WHITE .. ns.Money(stats.optimal.median) .. "|r" },
+    { GREY .. "Average " .. ns.MoneyFaded(stats.optimal.average) .. "|r", KillCount(stats.seen, reliableKills) },
   }
   if stats.top then
     local pct = ns.Round(stats.top.share * 100)
     lines[3] = { GREY .. "Top drop|r",
-      ns.ColorName(stats.top.id) .. " " .. GREY .. (pct == 0 and "<1" or pct) .. "%|r" }
+      GREY .. ns.ColorName(stats.top.id) .. " " .. GREY .. (pct == 0 and "<1" or pct) .. "%|r" }
   end
   return lines
 end
@@ -235,7 +232,7 @@ local function AddMobLines(tooltip)
   if not MarketWallDB then return end
   local npc = MouseoverNPC()
   if not npc then return end
-  local lines = MobLines(ns.Mobs.For(npc), ns.Mobs.GameOptions().skinning, ns.Cfg("mobMinKills"))
+  local lines = MobLines(ns.Mobs.For(npc), ns.Cfg("mobMinKills"))
   if #lines == 0 then return end
   tooltip:AddLine(" ")
   for _, line in ipairs(lines) do tooltip:AddDoubleLine(line[1], line[2], 1, 1, 1, 1, 1, 1) end

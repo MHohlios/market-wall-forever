@@ -38,61 +38,75 @@ describe("mob tooltip", function()
     local Lines
     before_each(function() Lines = ns.TooltipLines.Mob end)
 
-    local function Worth()
-      return GOLD .. "Worth per kill|r|" .. ns.Money(95) .. " " .. GREY .. "typical|r · " .. ns.Money(320) .. " " .. GREY .. "avg|r"
-    end
-    -- All grey, the amounts showing the coin icons
-    local function Outlets(skin)
-      return GREY .. "Vendor " .. ns.Money(45) .. " · Market " .. ns.Money(62) .. (skin or "") .. "|r"
-    end
+    local WHITE = "|cffffffff"
+    local function Worth() return GOLD .. "Worth per kill|r|" .. WHITE .. ns.Money(95) .. "|r" end
+    local function Average(count) return GREY .. "Average " .. ns.MoneyFaded(320) .. "|r|" .. count end
 
-    it("shows Optimal worth per kill, each outlet's median beside the kills, and the top drop", function()
+    it("shows the median worth per kill alone, the average beside the kills, and the top drop", function()
       assert.same({
         Worth(),
-        Outlets(" · Skin " .. ns.Money(30)) .. "|" .. GREY .. "140 kills|r",
-        GREY .. "Top drop|r|Raptor Hide " .. GREY .. "4%|r",
-      }, Texts(Lines(FullStats(), true, 10)))
+        Average(GREY .. "140 kills|r"),
+        GREY .. "Top drop|r|" .. GREY .. "Raptor Hide " .. GREY .. "4%|r",
+      }, Texts(Lines(FullStats(), 10)))
     end)
 
-    it("leaves out skinning when it is not included", function()
-      assert.equal(Outlets() .. "|" .. GREY .. "140 kills|r", Texts(Lines(FullStats(), false, 10))[2])
+    it("leaves the vendor, market and skinning outlets out", function()
+      for _, text in ipairs(Texts(Lines(FullStats(), 10))) do
+        assert.is_nil(text:find("Vendor"))
+        assert.is_nil(text:find("Market"))
+        assert.is_nil(text:find("Skin"))
+      end
+    end)
+
+    it("keeps the top drop's item quality color", function()
+      _G.C_Item = { GetItemQualityByID = function() return 2 end }
+      _G.ITEM_QUALITY_COLORS = { [2] = { hex = "|cff1eff00" } }
+      assert.equal(GREY .. "Top drop|r|" .. GREY .. "|cff1eff00Raptor Hide|r " .. GREY .. "4%|r",
+        Texts(Lines(FullStats(), 10))[3])
+      _G.ITEM_QUALITY_COLORS = nil
     end)
 
     it("rounds the top drop's share to a whole percent", function()
       local stats = FullStats()
       stats.top.share = 0.675
-      assert.equal(GREY .. "Top drop|r|Raptor Hide " .. GREY .. "68%|r", Texts(Lines(stats, false, 10))[3])
+      assert.equal(GREY .. "Top drop|r|" .. GREY .. "Raptor Hide " .. GREY .. "68%|r", Texts(Lines(stats, 10))[3])
     end)
 
     it("shows a top drop share that rounds to 0% as under 1%", function()
       local stats = FullStats()
       stats.top.share = 0.004
-      assert.equal(GREY .. "Top drop|r|Raptor Hide " .. GREY .. "<1%|r", Texts(Lines(stats, false, 10))[3])
+      assert.equal(GREY .. "Top drop|r|" .. GREY .. "Raptor Hide " .. GREY .. "<1%|r", Texts(Lines(stats, 10))[3])
     end)
 
     it("leaves out the top drop when nothing dropped", function()
       local stats = FullStats()
       stats.top = nil
-      assert.equal(2, #Lines(stats, false, 10))
+      assert.equal(2, #Lines(stats, 10))
     end)
 
-    it("shows values from one kill, flagging fewer than the reliable kills in orange", function()
+    it("shows the kill count in orange as rough while under the reliable kills", function()
+      local stats = FullStats()
+      stats.seen = 3
+      local texts = Texts(Lines(stats, 10))
+      assert.equal(Worth(), texts[1])
+      assert.equal(Average(ORANGE .. "3 kills, rough|r"), texts[2])
+    end)
+
+    it("says one kill in the singular", function()
       local stats = FullStats()
       stats.seen = 1
-      local texts = Texts(Lines(stats, false, 10))
-      assert.equal(Worth(), texts[1])
-      assert.equal(Outlets() .. "|" .. ORANGE .. "< 10 kills|r", texts[2])
+      assert.equal(Average(ORANGE .. "1 kill, rough|r"), Texts(Lines(stats, 10))[2])
     end)
 
     it("shows the kill count in grey from exactly the reliable kills", function()
       local stats = FullStats()
       stats.seen = 10
-      assert.equal(Outlets() .. "|" .. GREY .. "10 kills|r", Texts(Lines(stats, false, 10))[2])
+      assert.equal(Average(GREY .. "10 kills|r"), Texts(Lines(stats, 10))[2])
     end)
 
     it("shows nothing for a mob with no record or no seen kill", function()
-      assert.same({}, Lines(nil, true, 10))
-      assert.same({}, Lines({ name = "Jungle Stalker", kills = 3, lifetime = 3, seen = 0 }, true, 10))
+      assert.same({}, Lines(nil, 10))
+      assert.same({}, Lines({ name = "Jungle Stalker", kills = 3, lifetime = 3, seen = 0 }, 10))
     end)
   end)
 
@@ -134,7 +148,7 @@ describe("mob tooltip", function()
     it("moves the orange flag with the reliable kills setting, hiding nothing", function()
       guid = "Creature-0-1-0-1-" .. RAPTOR .. "-99"
       unitHook(tooltip)
-      assert.equal("|cffffb057< 10 kills|r", KillCount())
+      assert.equal("|cffffb057" .. "2 kills, rough|r", KillCount())
       tooltip.lines = {}
       MarketWallDB.cfg.mobMinKills = 2
       unitHook(tooltip)
