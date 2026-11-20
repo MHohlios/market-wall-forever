@@ -112,6 +112,25 @@ describe("a list", function()
       assert.equal("8–10 of 10", list.count.text)
     end)
 
+    it("opens at the top after a longer list was scrolled to its end", function()
+      -- like the game's slider: a shrinking range clamps the value and reports the change
+      local bar = list.scrollBar
+      function bar:SetValue(value)
+        self.value = value
+        self.scripts.OnValueChanged(self, value)
+      end
+      function bar:SetMinMaxValues(_, max)
+        if (rawget(self, "value") or 0) > max then self:SetValue(max) end
+      end
+      list:SetData(Rows(20))
+      bar.scripts.OnValueChanged(bar, 17)
+      bar.value = 17
+      list.offset = 0   -- as switching views does
+      list:SetData(Rows(6))
+      assert.equal("1–3 of 6", list.count.text)
+      assert.equal("Item 1", CellText(1, 1))
+    end)
+
     it("needs neither the count nor the scrollbar when every row fits", function()
       list:SetData(Rows(3))
       assert.equal("", list.count.text)

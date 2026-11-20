@@ -292,15 +292,16 @@ local function ColumnColor(col, text)
   return text
 end
 
--- A thin scrollbar down a list's right edge, shown only while there are more rows than fit.
+-- A thin scrollbar just outside a list's right edge, so it never covers the last column; a list
+-- needs SCROLLBAR_W of room to its right. Shown only while there are more rows than fit.
 -- Dragging it sets the list's offset; the mouse wheel still scrolls too.
 local SCROLLBAR_W = 8
 local function CreateScrollBar(list)
   local bar = CreateFrame("Slider", nil, list)
   bar:SetOrientation("VERTICAL")
   bar:SetWidth(SCROLLBAR_W)
-  bar:SetPoint("TOPRIGHT", 0, -22)
-  bar:SetPoint("BOTTOMRIGHT")
+  bar:SetPoint("TOPLEFT", list, "TOPRIGHT", 0, -22)
+  bar:SetPoint("BOTTOMLEFT", list, "BOTTOMRIGHT")
   bar:SetValueStep(1)
   bar:SetObeyStepOnDrag(true)
   local track = bar:CreateTexture(nil, "BACKGROUND")
@@ -311,6 +312,7 @@ local function CreateScrollBar(list)
   thumb:SetSize(SCROLLBAR_W, 28)
   bar:SetThumbTexture(thumb)
   bar:SetScript("OnValueChanged", function(_, value)
+    if list.syncingBar then return end   -- the list moving the bar, not the player
     local offset = math.floor(value + 0.5)
     if offset ~= list.offset then
       list.offset = offset
@@ -525,8 +527,11 @@ local function CreateList(parent, rows)
     self.count:SetText(scrolls and string.format("%d–%d of %d", self.offset + 1, self.offset + size, #data) or "")
     self.scrollBar:SetShown(scrolls)
     if scrolls then
+      -- a shrinking range clamps the bar's old value; that must not move the list
+      self.syncingBar = true
       self.scrollBar:SetMinMaxValues(0, #data - size)
       self.scrollBar:SetValue(self.offset)
+      self.syncingBar = false
     end
   end
   return list
@@ -540,7 +545,7 @@ local WALL_TIP = "The item's real price: the lowest price level that has meaning
 -- cellTip: rows carry a hover text for this column's cells in entry.cellTips.
 local LOW_DATA_TIP = "An orange \" · N d\" after a name: only N days of data, fewer than the \"Days before data is reliable\" setting, so the normal price may be off."
 local WATCH_COLUMNS = {
-  { "Item", 160, nil, "Items you are tracking. Click a row for its chart and live listings. " .. LOW_DATA_TIP },
+  { "Item", 152, nil, "Items you are tracking. Click a row for its chart and live listings. " .. LOW_DATA_TIP },
   { "Wall", 80, "RIGHT", WALL_TIP, money = true },
   { "Lowest", 80, "RIGHT", "The single cheapest listing right now, even if it is only one unit.", money = true, grey = true },
   { "Normal range", 150, "RIGHT", "Where the wall price usually sits: the middle half of its daily history. On an item's first day, today's wall. Hover a cell for the exact range and the item's days of data.", cellTip = true, grey = true },
@@ -1458,7 +1463,7 @@ local function Build()
 
   ui.list = CreateList(f)
   ui.list:SetPoint("TOPLEFT", 0, -CONTENT_TOP)
-  ui.list:SetPoint("RIGHT")
+  ui.list:SetPoint("RIGHT", -SCROLLBAR_W, 0)   -- room for its scrollbar
   ui.list:SetHeight(22 + ROWS * ROW_H)
   ui.list.onClick = function(entry) ui.ShowItem(entry.id) end
   ui.list.onHeader = HeaderClicked
