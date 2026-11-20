@@ -29,7 +29,7 @@ describe("the Market tab's tables", function()
   end)
 
   describe("Snipes", function()
-    local SNIPE = { id = 7, wall = 396, min = 250, units = 4, cost = 1000, profit = 505, discount = 0.37, days = 9 }
+    local SNIPE = { id = 7, wall = 396, min = 250, units = 4, cost = 1000, profit = 505, discount = 0.37, total = 40, days = 9 }
 
     it("reads in buying order, with no Data column", function()
       assert.same({ "Item", "Cheapest", "Units", "Cost", "Sells at (wall)", "Profit", "Under normal" }, Titles(ui.COLUMNS.snipes))
@@ -64,12 +64,17 @@ describe("the Market tab's tables", function()
 
     it("explains an empty list at Enchanting 0", function()
       assert.equal("No disenchant deals in the last full scan.\nYour Enchanting is 0, so only items you can't disenchant yet would show.",
-        Plain(ui.DisenchantEmptyText(0, 0)))
+        Plain(ui.DisenchantEmptyText(0, 0, 0)))
     end)
 
     it("points to the box when deals need more skill", function()
       assert.equal("No deals at your Enchanting skill.\n2 deals in the last scan need more skill; tick the box to see them.",
-        Plain(ui.DisenchantEmptyText(150, 2)))
+        Plain(ui.DisenchantEmptyText(150, 2, 5)))
+    end)
+
+    it("says when the last scan's deals all fall under the thresholds", function()
+      assert.equal("No deals pass these thresholds.\n5 deals in the last full scan; lower the values above to see them.",
+        Plain(ui.DisenchantEmptyText(150, 0, 5)))
     end)
   end)
 

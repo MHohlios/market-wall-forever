@@ -138,8 +138,7 @@ local function AddLoadedGear(id)
   if not price then return end
   loadingGear[id] = nil
   if not next(loadingGear) then scanner:UnregisterEvent("GET_ITEM_INFO_RECEIVED") end
-  local deal = ns.FindDisenchantDeals({ [id] = price }, ns.Cfg("ahCut"), ns.Mobs.GamePrices().deposit,
-    ns.Cfg("minDisenchantProfit"), ns.Cfg("minDisenchantPct"))[1]
+  local deal = ns.FindDisenchantDeals({ [id] = price }, ns.Cfg("ahCut"), ns.Mobs.GamePrices().deposit)[1]
   if not deal then return end
   local at = #ns.disenchants + 1
   for i, d in ipairs(ns.disenchants) do
@@ -154,8 +153,7 @@ local scannedGear, dealsStale = {}, false
 -- Sets the Disenchant list from gear buyouts at today's walls and fees, and waits for the data
 -- of any gear still loading
 local function FindDeals(gearPrices)
-  ns.disenchants, loadingGear = ns.FindDisenchantDeals(gearPrices, ns.Cfg("ahCut"), ns.Mobs.GamePrices().deposit,
-    ns.Cfg("minDisenchantProfit"), ns.Cfg("minDisenchantPct"))
+  ns.disenchants, loadingGear = ns.FindDisenchantDeals(gearPrices, ns.Cfg("ahCut"), ns.Mobs.GamePrices().deposit)
   if next(loadingGear) then
     scanner:RegisterEvent("GET_ITEM_INFO_RECEIVED")
   else
@@ -350,11 +348,9 @@ local function Finalize(maps, names, stamp)
         if r.watch[id] then
           ns.ladders[id] = { ladder = ladder, total = total, t = stamp, kind = "scan" }
         end
-        if total >= minSupply then
-          local snipe, dip = ns.FullScanDeals(id, ladder, total, wall, minPrice, stats, cut)
-          if snipe then snipes[#snipes + 1] = snipe end
-          if dip then dips[#dips + 1] = dip end
-        end
+        local snipe, dip = ns.FullScanDeals(id, ladder, total, wall, minPrice, stats, cut)
+        if snipe then snipes[#snipes + 1] = snipe end
+        if dip then dips[#dips + 1] = dip end
       end
     end
     index = last + 1
@@ -373,9 +369,10 @@ local function Finalize(maps, names, stamp)
       r.supplied = supplied
       ns.Mobs.Invalidate()
       ns.fullScanRunning = false
-      Status(string.format("Full scan complete: %d items, %d snipes, %d dips", #ids, #snipes, #dips))
-      ns.Print(string.format("Full scan complete: %d items recorded, %d snipes, %d dips.", #ids, #snipes, #dips))
-      if #snipes > 0 and ns.Cfg("sound") and PlaySound then
+      local shownSnipes, shownDips = #ns.Passing(snipes, ns.PassesSnipe), #ns.Passing(dips, ns.PassesDip)
+      Status(string.format("Full scan complete: %d items, %d snipes, %d dips", #ids, shownSnipes, shownDips))
+      ns.Print(string.format("Full scan complete: %d items recorded, %d snipes, %d dips.", #ids, shownSnipes, shownDips))
+      if shownSnipes > 0 and ns.Cfg("sound") and PlaySound then
         PlaySound((SOUNDKIT and SOUNDKIT.READY_CHECK) or 8960, "Master")
       end
       if ns.RefreshUI then ns.RefreshUI() end

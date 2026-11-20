@@ -687,10 +687,10 @@ local function WatchData()
 end
 ui.WatchData = WatchData   -- for specs
 
+-- The lists show the last full scan's candidates that pass the thresholds as they are now
 local function SnipeData()
   local data = {}
-  for i = 1, #ns.snipes do
-    local s = ns.snipes[i]
+  for i, s in ipairs(ns.Passing(ns.snipes, ns.PassesSnipe)) do
     data[i] = { id = s.id,
       cells = { ns.ColorName(s.id), s.min, tostring(s.units), s.cost, s.wall, s.profit, Pct(s.discount) },
       sort = { ns.Name(s.id), s.min, s.units, s.cost, s.wall, s.profit, s.discount },
@@ -703,8 +703,7 @@ ui.SnipeData = SnipeData   -- for specs
 
 local function DipData()
   local data = {}
-  for i = 1, #ns.dips do
-    local d = ns.dips[i]
+  for i, d in ipairs(ns.Passing(ns.dips, ns.PassesDip)) do
     data[i] = { id = d.id,
       cells = { ns.ColorName(d.id), d.wall, d.median, Pct(d.under), tostring(d.total), d.profit },
       sort = { ns.Name(d.id), d.wall, d.median, d.under, d.total, d.profit },
@@ -715,13 +714,13 @@ local function DipData()
 end
 ui.DipData = DipData   -- for specs
 
--- Deals this character can disenchant, or all of them when the box is ticked or the skill is
--- unknown. Also returns the skill and how many deals it hides.
+-- Deals that pass the thresholds and this character can disenchant, or all that pass when the
+-- box is ticked or the skill is unknown. Also returns the skill and how many passing deals it hides.
 local function DisenchantData()
   local skill = ns.EnchantingSkill()
   local showAll = ns.Cfg("disenchantShowAll") or skill == nil
   local data, hidden = {}, 0
-  for _, d in ipairs(ns.DisenchantDeals()) do
+  for _, d in ipairs(ns.Passing(ns.DisenchantDeals(), ns.PassesDisenchant)) do
     if showAll or d.skill <= skill then
       data[#data + 1] = { id = d.id,
         cells = { ns.ColorName(d.id), d.price, d.value, d.profit, Pct(d.pct), d.odds },
@@ -733,6 +732,7 @@ local function DisenchantData()
   end
   return data, skill, hidden
 end
+ui.DisenchantData = DisenchantData   -- for specs
 
 local function ApplySort(view, data)
   local sort = ui.sort[view]
@@ -1132,7 +1132,8 @@ end
 -- Three-way modes as stored, shown as Auto / On / Off
 local MOB_MODES = { { key = "auto", label = "Auto" }, { key = "always", label = "On" }, { key = "never", label = "Off" } }
 local SALVAGER_MODES = { { key = "auto", label = "Auto" }, { key = "on", label = "On" }, { key = "off", label = "Off" } }
-local NEXT_FULL_SCAN = " Applies from the next full scan."
+-- The deal thresholds filter the last full scan's list each time it is shown
+local ON_LAST_SCAN = " Applies to the last full scan right away, and can also be set above its list."
 
 -- Every setting, in named groups laid out in two columns. A label stays short because its
 -- group names the subject; note is the few words beside it, tip the full text on hover.
@@ -1145,21 +1146,21 @@ local SETTING_GROUPS = {
     { key = "minHistoryDays", label = "Days before data is reliable", kind = "int", min = 1, max = ns.cfgDefaults.baselineDays + 1, note = "Fewer days get the orange badge",
       tip = "Items with fewer days of scans than this get an orange low-data flag. It only sets the flag; nothing is hidden. 1 to " .. (ns.cfgDefaults.baselineDays + 1) .. "." },
     { key = "minSupply", label = "Minimum supply", kind = "int", note = "Thinner markets are left out",
-      tip = "Items with fewer units listed than this are left out of Snipes and Dips, because thin markets give unreliable prices." .. NEXT_FULL_SCAN },
+      tip = "Items with fewer units listed than this are left out of Snipes and Dips, because thin markets give unreliable prices." .. ON_LAST_SCAN },
   } },
   { title = "Snipes and Dips", column = 1, settings = {
     { key = "minSnipeProfit", label = "Minimum snipe profit", kind = "money", note = "After the cut",
-      tip = "Snipes with less total profit than this, after the cut, are left out." .. NEXT_FULL_SCAN },
+      tip = "Snipes with less total profit than this, after the cut, are left out." .. ON_LAST_SCAN },
     { key = "minSnipeDiscount", label = "Minimum snipe discount", kind = "pct", note = "Under the normal price",
-      tip = "Snipe units must cost at least this much less than the normal price." .. NEXT_FULL_SCAN },
+      tip = "Snipe units must cost at least this much less than the normal price." .. ON_LAST_SCAN },
     { key = "dipPct", label = "Dip size", kind = "pct", note = "How far the wall must fall",
-      tip = "How far below its normal price the wall must fall to count as a dip." .. NEXT_FULL_SCAN },
+      tip = "How far below its normal price the wall must fall to count as a dip." .. ON_LAST_SCAN },
   } },
   { title = "Disenchant", column = 1, settings = {
     { key = "minDisenchantProfit", label = "Minimum profit", kind = "money", note = "Per item, after cut and deposits",
-      tip = "Disenchant deals with less profit per item than this, after the cut and deposits on the materials, are left out." .. NEXT_FULL_SCAN },
+      tip = "Disenchant deals with less profit per item than this, after the cut and deposits on the materials, are left out." .. ON_LAST_SCAN },
     { key = "minDisenchantPct", label = "Minimum profit %", kind = "pct", note = "Of the item's price",
-      tip = "Disenchant deals must profit at least this share of their price." .. NEXT_FULL_SCAN },
+      tip = "Disenchant deals must profit at least this share of their price." .. ON_LAST_SCAN },
     { key = "salvagerMode", label = "Salvager", kind = "mode", modes = SALVAGER_MODES, note = "Count Salvager's bonus",
       tip = "Count Salvager's disenchant bonus. Auto: while the buff is up. Imported once from Disenchantry, so Reset to defaults keeps it." },
     { key = "salvagerBonus", label = "Salvager bonus", kind = "points", note = "Imported from Disenchantry",
@@ -1262,6 +1263,30 @@ local function TipOnHover(frame, def)
   frame:HookScript("OnLeave", HideTip)
 end
 
+-- A box for one setting, on the Settings page or over a list: it saves what it reads, on Enter
+-- or on leaving the box, shows the stored value again, then calls onSaved if given
+function ui.SettingEdit(parent, def, onSaved)
+  local edit = MakeEdit(parent, SETTING_EDIT_W)
+  local function Save(self)
+    local value = ParseSetting(def, self:GetText() or "")
+    if value ~= nil then SaveSetting(def.key, value) end
+    return value ~= nil
+  end
+  -- Shown only once the typed text is saved, so the rounded display is never saved again
+  local function Show(self, saved)
+    self:SetText(FormatSetting(def))
+    if saved and onSaved then onSaved() end
+  end
+  edit:SetScript("OnEnterPressed", function(self)
+    local saved = Save(self)
+    self:ClearFocus()   -- leaving the box saves the same typed text again
+    Show(self, saved)
+  end)
+  edit:SetScript("OnEditFocusLost", function(self) Show(self, Save(self)) end)
+  TipOnHover(edit, def)
+  return edit
+end
+
 -- The row's control, anchored left at the control column, and its width
 local function SettingControl(row, def, controlX)
   if def.kind == "bool" then
@@ -1280,22 +1305,8 @@ local function SettingControl(row, def, controlX)
     for _, button in ipairs(switch.buttons) do TipOnHover(button, def) end
     return switch, SETTING_SWITCH_W
   end
-  local edit = MakeEdit(row, SETTING_EDIT_W)
+  local edit = ui.SettingEdit(row, def)
   edit:SetPoint("LEFT", controlX + 6, 0)
-  local function Apply(self)
-    local value = ParseSetting(def, self:GetText())
-    if value ~= nil then SaveSetting(def.key, value) end
-  end
-  edit:SetScript("OnEnterPressed", function(self)
-    Apply(self)
-    self:ClearFocus()
-    self:SetText(FormatSetting(def))
-  end)
-  edit:SetScript("OnEditFocusLost", function(self)
-    Apply(self)
-    self:SetText(FormatSetting(def))
-  end)
-  TipOnHover(edit, def)
   return edit, SETTING_EDIT_W + 6
 end
 
@@ -1359,6 +1370,85 @@ local function BuildSettings(parent)
 end
 
 -------------------------------------------------------------------------------
+-- Tune rows: a deal list's thresholds right over it, the same settings as on the Settings page
+-------------------------------------------------------------------------------
+local TUNE_H = 24
+local TUNE_SETTINGS = {
+  snipes = { { key = "minSnipeProfit", label = "Min profit" }, { key = "minSnipeDiscount", label = "Min discount" } },
+  dips = { { key = "dipPct", label = "Dip size" }, { key = "minSupply", label = "Min supply" } },
+  disenchant = { { key = "minDisenchantProfit", label = "Min profit" }, { key = "minDisenchantPct", label = "Min profit %" } },
+}
+
+local function SettingDef(key)
+  for _, group in ipairs(SETTING_GROUPS) do
+    for _, def in ipairs(group.settings) do
+      if def.key == key then return def end
+    end
+  end
+end
+
+-- A threshold changed: the list re-filters the last full scan from its top
+local function Retune()
+  ui.list.offset = 0
+  ns.RefreshUI()
+end
+
+-- Puts a list's thresholds back to their defaults
+function ui.ResetTune(view)
+  for _, setting in ipairs(TUNE_SETTINGS[view]) do MarketWallDB.cfg[setting.key] = nil end
+  Retune()
+end
+
+local function BuildResetLink(row, view)
+  local link = CreateFrame("Button", nil, row)
+  link:SetSize(34, TUNE_H)
+  local text = MakeText(link, "GameFontNormalSmall")
+  text:SetPoint("LEFT")
+  text:SetText("Reset")
+  link:SetScript("OnClick", function() ui.ResetTune(view) end)
+  link:SetScript("OnEnter", function(self)
+    text:SetTextColor(1, 1, 1)
+    ShowTip(self, "Reset", "Puts this screen's values back to their defaults.")
+  end)
+  link:SetScript("OnLeave", function()
+    text:SetTextColor(1, 0.82, 0)
+    HideTip()
+  end)
+  return link
+end
+
+local function BuildTuneRow(parent, view)
+  local row = CreateFrame("Frame", nil, parent)
+  row:SetPoint("TOPLEFT", 0, -CONTENT_TOP)
+  row:SetPoint("RIGHT")
+  row:SetHeight(TUNE_H)
+  row.edits = {}
+  local previous
+  for _, setting in ipairs(TUNE_SETTINGS[view]) do
+    local label = MakeText(row, "GameFontNormalSmall")
+    if previous then label:SetPoint("LEFT", previous, "RIGHT", 18, 0) else label:SetPoint("LEFT", 12, 0) end
+    label:SetText(setting.label)
+    local def = SettingDef(setting.key)
+    local edit = ui.SettingEdit(row, def, Retune)
+    edit:SetPoint("LEFT", label, "RIGHT", 10, 0)
+    row.edits[#row.edits + 1] = { def = def, edit = edit }
+    previous = edit
+  end
+  local note = MakeText(row, "GameFontDisableSmall")
+  note:SetPoint("LEFT", previous, "RIGHT", 18, 0)
+  note:SetText("Applies to the last scan right away ·")
+  BuildResetLink(row, view):SetPoint("LEFT", note, "RIGHT", 4, 0)
+  return row
+end
+
+local function RefreshTune(row)
+  for _, item in ipairs(row.edits) do
+    if not item.edit:HasFocus() then item.edit:SetText(FormatSetting(item.def)) end
+  end
+end
+ui.BuildTuneRow, ui.RefreshTune = BuildTuneRow, RefreshTune   -- for specs
+
+-------------------------------------------------------------------------------
 -- Frame
 -------------------------------------------------------------------------------
 local function AddFromBox()
@@ -1384,8 +1474,11 @@ function ui.Show(view)
   ui.bait:SetShown(isBait)
   ui.crafting:SetShown(isCrafting)
   ui.list:SetShown(isList)
+  for name, row in pairs(ui.tune) do row:SetShown(name == view) end
+  ui.list:ClearAllPoints()
+  ui.list:SetPoint("TOPLEFT", 0, -CONTENT_TOP - (ui.tune[view] and TUNE_H or 0))
+  ui.list:SetPoint("RIGHT", -SCROLLBAR_W, 0)
   ui.footer:SetShown(view == "watch")
-  ui.disenchantFooter:SetShown(view == "disenchant")
   ui.hint:SetShown(isList and view ~= "watch")   -- the watchlist's hint sits in its Add row
   for name, tab in pairs(ui.nav) do
     local backToList = isItem and name == ui.lastList
@@ -1417,6 +1510,19 @@ local function Count(n, noun)
   return n .. " " .. noun .. (n == 1 and "" or "s")
 end
 
+-- A deal list's count for the status line: "41 of 103 snipes", or "103 snipes" when all pass
+function ui.CountOf(shown, total, noun)
+  if shown == total then return Count(total, noun) end
+  return shown .. " of " .. Count(total, noun)
+end
+
+-- An empty deal list's message: that nothing passes the thresholds, or ui.WaitingText's
+local function DealsEmptyText(total, noun, noneText, neverText)
+  if total == 0 then return ui.WaitingText(noneText, neverText) end
+  return EmptyText("No " .. noun .. "s pass these thresholds.",
+    Count(total, noun) .. " in the last full scan; lower the values above to see them.")
+end
+
 -- note: the view's own part of the status line, such as its count
 local function ListView(view, data, emptyText, hint, note)
   ApplySort(view, data)
@@ -1427,40 +1533,34 @@ local function ListView(view, data, emptyText, hint, note)
   ui.statusNote = note
 end
 
--- Why the Disenchant list is empty, and what the box under the message does about it
-function ui.DisenchantEmptyText(skill, hidden)
+-- Why the Disenchant list is empty, and what the controls above it do about it. hidden: deals
+-- that pass the thresholds but need more skill; total: the last full scan's deals before both.
+function ui.DisenchantEmptyText(skill, hidden, total)
   if not ns.lastFullScan then
     return ui.WaitingText(nil, "Run a full scan to look for gear listed under its disenchant value.")
   end
-  local body = {}
+  local title, body = "No disenchant deals in the last full scan.", {}
+  if hidden > 0 then
+    title = "No deals at your Enchanting skill."
+  elseif total > 0 then
+    title = "No deals pass these thresholds."
+    body[1] = Count(total, "deal") .. " in the last full scan; lower the values above to see them."
+  end
   if skill == 0 then body[#body + 1] = "Your Enchanting is 0, so only items you can't disenchant yet would show." end
   if hidden > 0 then body[#body + 1] = string.format("%s in the last scan need more skill; tick the box to see them.", Count(hidden, "deal")) end
-  local title = hidden > 0 and "No deals at your Enchanting skill." or "No disenchant deals in the last full scan."
   return EmptyText(title, #body > 0 and table.concat(body, "\n") or nil)
-end
-
--- The show-all box sits under the empty message, or at the bottom beside a filled list
-local function PlaceShowAll(empty)
-  local footer = ui.disenchantFooter
-  footer:ClearAllPoints()
-  if empty then
-    footer:SetPoint("TOP", ui.list.empty, "BOTTOM", 0, -12)
-    footer:SetWidth(230)
-  else
-    footer:SetPoint("BOTTOMLEFT", 0, 4)
-    footer:SetPoint("BOTTOMRIGHT", 0, 4)
-  end
 end
 
 local function RefreshDisenchant()
   local data, skill, hidden = DisenchantData()
+  local total = #ns.DisenchantDeals()
   -- the status line ends before the scan buttons, so its note stays short; the hint explains
   local skillNote = skill and ("Enchanting " .. ns.COLOR.VALUE .. skill .. "|r") or (WARN .. "Enchanting unknown|r")
   local hint = "Click a row to load live listings before buying."
   if not skill then hint = hint .. " Your Enchanting skill is unknown, so every item is shown." end
-  ListView("disenchant", data, ui.DisenchantEmptyText(skill, hidden), hint, skillNote)
+  ListView("disenchant", data, ui.DisenchantEmptyText(skill, hidden, total), hint,
+    ui.CountOf(#data, total, "deal") .. " · " .. skillNote)
   ui.showAllBox:SetChecked(ns.Cfg("disenchantShowAll") and true or false)
-  PlaceShowAll(#data == 0)
 end
 
 local function RefreshWatch()
@@ -1490,18 +1590,19 @@ function ns.RefreshUI()
   elseif view == "snipes" then
     local data = SnipeData()
     ListView("snipes", data,
-      ui.WaitingText("No snipes in the last full scan.", "Run a full scan to look for listings priced under the wall."),
+      DealsEmptyText(#ns.snipes, "snipe", "No snipes in the last full scan.", "Run a full scan to look for listings priced under the wall."),
       "Click a row to load live listings before buying. " .. WARN .. "Orange days|r: little data, normal price may be off.",
-      Count(#data, "snipe"))
+      ui.CountOf(#data, #ns.snipes, "snipe"))
   elseif view == "dips" then
     local data = DipData()
     ListView("dips", data,
-      ui.WaitingText("No dips in the last full scan.", "Run a full scan. Dips compare today's wall price with each item's own history."),
+      DealsEmptyText(#ns.dips, "dip", "No dips in the last full scan.", "Run a full scan. Dips compare today's wall price with each item's own history."),
       "Items need a day of history before they can dip; items sliding for days are left out.",
-      Count(#data, "dip"))
+      ui.CountOf(#data, #ns.dips, "dip"))
   elseif view == "disenchant" then
     RefreshDisenchant()
   end
+  if ui.tune[view] then RefreshTune(ui.tune[view]) end
   ns.UpdateStatus()
 end
 
@@ -1634,21 +1735,19 @@ local function Build()
   ui.footer.hint:SetPoint("RIGHT", -12, 0)
   ui.footer.hint:SetText("Click a row for its chart and listings.")
 
-  ui.disenchantFooter = CreateFrame("Frame", nil, f)
-  ui.disenchantFooter:SetPoint("BOTTOMLEFT", 0, 4)
-  ui.disenchantFooter:SetPoint("BOTTOMRIGHT", 0, 4)
-  ui.disenchantFooter:SetHeight(26)
-  ui.showAllBox = CreateFrame("CheckButton", nil, ui.disenchantFooter, "UICheckButtonTemplate")
+  ui.tune = {}
+  for view in pairs(TUNE_SETTINGS) do ui.tune[view] = BuildTuneRow(f, view) end
+  -- Disenchant's row ends with its skill filter
+  local showAllLabel = MakeText(ui.tune.disenchant, "GameFontNormalSmall")
+  showAllLabel:SetPoint("RIGHT", -12, 0)
+  showAllLabel:SetText("Show items I can't disenchant yet")
+  ui.showAllBox = CreateFrame("CheckButton", nil, ui.tune.disenchant, "UICheckButtonTemplate")
   ui.showAllBox:SetSize(24, 24)
-  ui.showAllBox:SetPoint("LEFT", 6, 0)
+  ui.showAllBox:SetPoint("RIGHT", showAllLabel, "LEFT", -2, 0)
   ui.showAllBox:SetScript("OnClick", function(self)
     MarketWallDB.cfg.disenchantShowAll = self:GetChecked() and true or false
-    ui.list.offset = 0
-    ns.RefreshUI()
+    Retune()
   end)
-  local showAllLabel = MakeText(ui.disenchantFooter, "GameFontNormalSmall")
-  showAllLabel:SetPoint("LEFT", ui.showAllBox, "RIGHT", 2, 0)
-  showAllLabel:SetText("Show items I can't disenchant yet")
 
   ui.item = BuildItemPage(f)
   ui.item:Hide()

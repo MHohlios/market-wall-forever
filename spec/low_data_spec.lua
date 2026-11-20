@@ -120,7 +120,7 @@ describe("data from an item's first scan", function()
     end)
 
     it("does the same for Snipes and Dips, which have no Data column", function()
-      local deal = { wall = 100, min = 50, median = 120, units = 1, cost = 50, profit = 40, discount = 0.5, under = 0.2, total = 9 }
+      local deal = { wall = 100, min = 50, median = 120, units = 10, cost = 500, profit = 400, discount = 0.5, under = 0.2, total = 90 }
       local function Deal(id, days)
         local copy = { id = id, days = days }
         for k, v in pairs(deal) do copy[k] = v end

@@ -227,9 +227,8 @@ end
 
 -- One disenchant deal: uncommon or better weapons and armor whose net disenchant value, after
 -- the cut and the deposits on reselling the materials (Outlet.Net, as the tooltip shows it),
--- beats the price by both thresholds. Nil otherwise, and true as well while the item's data is
--- still loading.
-local function Deal(id, price, cut, depositOf, minProfit, minPct)
+-- beats the price. Nil otherwise, and true as well while the item's data is still loading.
+local function Deal(id, price, cut, depositOf)
   local _, _, quality, level, _, _, _, _, _, _, _, classID = C_Item.GetItemInfo(id)
   if not quality then return nil, true end
   if not (quality >= UNCOMMON and (classID == WEAPON or classID == ARMOR)) then return nil end
@@ -238,18 +237,18 @@ local function Deal(id, price, cut, depositOf, minProfit, minPct)
   value = ns.Outlet.Net(value, cut, deposits)
   local profit = value - price
   local pct = profit / price
-  if profit <= 0 or profit < minProfit or pct < minPct then return nil end
+  if profit <= 0 then return nil end
   return { id = id, price = price, value = value, profit = profit, pct = pct,
     odds = ODDS_FROM[note] or note or "classic table", skill = ns.DisenchantSkill(level) }
 end
 
 -- prices: { [itemID] = cheapest buyout }; depositOf(materialID): the one-unit deposit to list a
--- material. Returns the deals, most profit first, and the prices of items whose data is still
--- loading, to try again once it arrives.
-function ns.FindDisenchantDeals(prices, cut, depositOf, minProfit, minPct)
+-- material. Returns the deals, most profit first, before the thresholds (ns.PassesDisenchant),
+-- and the prices of items whose data is still loading, to try again once it arrives.
+function ns.FindDisenchantDeals(prices, cut, depositOf)
   local deals, loading = {}, {}
   for id, price in pairs(prices) do
-    local deal, isLoading = Deal(id, price, cut, depositOf, minProfit, minPct)
+    local deal, isLoading = Deal(id, price, cut, depositOf)
     if deal then
       deals[#deals + 1] = deal
     elseif isLoading then
@@ -258,6 +257,11 @@ function ns.FindDisenchantDeals(prices, cut, depositOf, minProfit, minPct)
   end
   table.sort(deals, function(a, b) return a.profit > b.profit end)
   return deals, loading
+end
+
+-- Whether a deal passes the thresholds in Settings, as they are now
+function ns.PassesDisenchant(d)
+  return d.profit >= ns.Cfg("minDisenchantProfit") and d.pct >= ns.Cfg("minDisenchantPct")
 end
 
 -- Each reader returns a profession's rank, or nil and whether it listed the character's skills
