@@ -158,11 +158,13 @@ game once after updating to it.
 A seller posts a unit or two far under the market so others copy that price, then buys
 the copies and relists them. The newest listing at a price sells first.
 
-An item is listed as possibly baited when its cheapest price level sits at least
-`baitMinUnder` under the wall (50% by default, held to 10% to 95%), below the item's own
-normal range, and has stayed at that price for two scans in a row
-(full scans or live searches). Commodities only. On an item's first day its normal range
-is today's wall.
+An item is listed as soon as a scan finds its cheapest price level at least
+`baitMinUnder` under the wall (50% by default, held to 10% to 95%) and below the item's own
+normal range. Commodities only. On an item's first day its normal range is today's wall.
+Until a second scan (a full scan or a live search) sees the same price again, its row is
+dimmed and reads "seen once"; click it to search it live and confirm it. Once confirmed it
+counts as possibly baited. Only confirmed bait can be bought against; the Sell page warns
+about a bait price either way. Each full scan drops every record it did not refresh.
 
 Every number shows from an item's first scan. Until an item has `minHistoryDays` days of
 data (5 by default, "Days before data is reliable"), tooltips, the item window and the Sell page

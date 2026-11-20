@@ -18,13 +18,15 @@ BINDING_HEADER_MARKETWALL = "MarketWall"
 BINDING_NAME_MARKETWALL_BAIT_ACTION = "Bait Detect: search or buy"
 
 local COLUMNS = {
-  { "Item", 112, nil, "Commodities whose cheapest price level looks like bait: thin supply under the wall, below the item's normal range, seen in two scans in a row." },
-  { "Bait", 80, "RIGHT", "The bait price. Hover a cell for how many units were first seen at it.", cellTip = true, money = true },
-  { "Wall", 80, "RIGHT", "The item's real price: the lowest price level with meaningful supply behind it. Hover a cell for the item's days of data.", cellTip = true, money = true, grey = true },
+  { "Item", 112, nil, "Commodities whose cheapest price level looks like bait: thin supply under the wall, below the item's normal range. Dimmed until a second scan or a live search sees it again." },
+  { "Bait", 75, "RIGHT", "The bait price. Hover a cell for how many units were first seen at it.", cellTip = true, money = true },
+  { "Wall", 75, "RIGHT", "The item's real price: the lowest price level with meaningful supply behind it. Hover a cell for the item's days of data.", cellTip = true, money = true, grey = true },
   { "Under", 50, "RIGHT", "How far the bait price is under the wall." },
   { "Copies", 52, "RIGHT", "Units posted at the bait price since it first appeared. Green: copies are piling up; those are the cheap units worth buying.", answer = true },
-  { "Seen", 46, "RIGHT", "How long ago the bait price first appeared.", grey = true },
+  { "Seen", 56, "RIGHT", "How long ago the bait price first appeared, or \"seen once\" until a second sighting confirms it.", grey = true },
 }
+local SEEN_ONCE_HINT = "Seen once: one scan found it. Click to search it live and confirm."
+local COPIES_HINT = "Green copies: units piling up at the bait price, the ones worth buying."
 ns.BaitColumns = COLUMNS   -- for specs
 
 local page
@@ -49,9 +51,11 @@ local function Record(id)
   return ns.R().bait[id]
 end
 
--- Plans come from the item's last live search, never from the saved record a full scan may change
+-- Plans come from the item's last live search, never from the saved record a full scan may change.
+-- Only bait that search confirmed is bought against: without it the plan is empty.
 local function Plan(id)
-  local seen = searched[id] or B.Snapshot({}, nil)
+  local seen = searched[id]
+  if not (seen and seen.bait) then return B.Plan({}, nil) end
   return B.Plan(seen.ladder, thresholds[id], seen.bait, not buyBait[id])
 end
 
@@ -91,6 +95,8 @@ local function OnSearched(id, state, answered)
     B.Unanswered(state)
   elseif held and held.kind == "item" then
     B.Finished(state, "Not a commodity")
+  elseif not (searched[id] and searched[id].bait) then
+    B.Finished(state, "Not confirmed as bait")
   elseif B.Found(state, Plan(id), thresholds[id]) and ns.Cfg("sound") and PlaySound then
     PlaySound((SOUNDKIT and SOUNDKIT.READY_CHECK) or 8960, "Master")
   end
@@ -187,22 +193,25 @@ end
 -------------------------------------------------------------------------------
 -- Drawing
 -------------------------------------------------------------------------------
+-- Every record, confirmed ones first. Rows seen once are dimmed and read "seen once".
 local function ListData()
   local items = {}
   for id, record in pairs(ns.R().bait) do
-    if B.Flagged(record) then items[#items + 1] = { id = id, record = record } end
+    items[#items + 1] = { id = id, record = record }
   end
   table.sort(items, function(a, b) return B.Before(a.record, b.record) end)
   local data = {}
   for i, item in ipairs(items) do
     local r, copies = item.record, B.Copies(item.record)
+    local confirmed = B.Flagged(r)
     local days = ns.DaysOfData(item.id)
     data[i] = {
-      id = item.id, highlight = (item.id == selectedID),
+      id = item.id, highlight = (item.id == selectedID), dim = not confirmed, confirmed = confirmed,
       cells = {
         ns.ColorName(item.id), r.p, r.w, string.format("%d%%", ns.Round(B.Under(r) * 100)),
-        -- the answer is green only while copies pile up
-        copies > 0 and tostring(copies) or ns.COLOR.VALUE .. copies .. "|r", widgets.ShortAge(r.first),
+        -- the answer is green only while copies pile up on confirmed bait
+        (confirmed and copies > 0) and tostring(copies) or ns.COLOR.VALUE .. copies .. "|r",
+        confirmed and widgets.ShortAge(r.first) or "seen once",
       },
       suffixes = { ns.DataSuffix(days) }, itemTip = ns.LowDataTip(days),
       cellTips = { [2] = string.format("%d unit%s first seen at this price.", r.u, r.u == 1 and "" or "s"), [3] = ns.DataBadgeTip(days) },
@@ -214,7 +223,7 @@ ns.BaitListData = ListData   -- for specs
 
 local function EmptyText()
   if not ns.R().lastFull then return widgets.EmptyText("Run a full scan to look for baited items.") end
-  return widgets.EmptyText("Nothing looks baited right now.", string.format("An item shows here when its cheapest level sits at least %d%% under the wall and below its normal range in two scans in a row.",
+  return widgets.EmptyText("Nothing looks baited right now.", string.format("An item shows here when a scan finds its cheapest level at least %d%% under the wall and below its normal range.",
     ns.Round(ns.Bait.MinUnder(ns.Cfg("baitMinUnder")) * 100)))
 end
 
@@ -293,10 +302,24 @@ local function DrawDetail()
   UpdateButton()
 end
 
+-- "1 possibly baited · 2 seen once", leaving out a zero count; nil with no rows at all
+local function StatusNote(confirmed, seenOnce)
+  local parts = {}
+  if confirmed > 0 then parts[#parts + 1] = confirmed .. " possibly baited" end
+  if seenOnce > 0 then parts[#parts + 1] = seenOnce .. " seen once" end
+  return parts[1] and table.concat(parts, " · ") or nil
+end
+
 function ns.RefreshBait()
   if not page then return end
   local data = ListData()
-  ns.ui.statusNote = #data .. " possibly baited"
+  local confirmed = 0
+  for _, row in ipairs(data) do
+    if row.confirmed then confirmed = confirmed + 1 end
+  end
+  local seenOnce = #data - confirmed
+  ns.ui.statusNote = StatusNote(confirmed, seenOnce)
+  page.hint:SetText(seenOnce > 0 and SEEN_ONCE_HINT or COPIES_HINT)
   page.list:SetData(data, EmptyText())
   DrawDetail()
 end
@@ -416,10 +439,10 @@ function ns.BuildBaitPage(parent)
   page.list.empty:SetWidth(LIST_WIDTH - 20)
   page.list.onClick = function(entry) Select(entry.id) end
 
-  local hint = MakeText(page, "GameFontDisableSmall")
-  hint:SetPoint("TOPLEFT", page.list, "BOTTOMLEFT", 8, -2)
-  hint:SetWidth(LIST_WIDTH - 90)   -- leaves the list's "1–15 of N" its room on the right
-  hint:SetText("Green copies: units piling up at the bait price, the ones worth buying.")
+  page.hint = MakeText(page, "GameFontDisableSmall")
+  page.hint:SetPoint("TOPLEFT", page.list, "BOTTOMLEFT", 8, -2)
+  page.hint:SetWidth(LIST_WIDTH - 90)   -- leaves the list's "1–15 of N" its room on the right
+  page.hint:SetText(COPIES_HINT)
 
   page.pick = MakeText(page, "GameFontDisable", "CENTER")
   page.pick:SetPoint("TOPLEFT", RIGHT_X, -160)

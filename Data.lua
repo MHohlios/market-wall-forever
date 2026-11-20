@@ -358,6 +358,15 @@ function ns.UpdateBait(id, ladder, wall, stats, t, isCommodity)
   r.bait[id] = B.Update(r.bait[id], ladder, wall, stats, minUnder, t)
 end
 
+-- After a full scan: drop every record that scan did not refresh, such as an item no longer
+-- listed or one kept while its info was uncached, so no record outlives the scan's settings.
+function ns.ClearStaleBait(stamp)
+  local bait = ns.R().bait
+  for id, record in pairs(bait) do
+    if record.last < stamp then bait[id] = nil end
+  end
+end
+
 -- One item's snipe and dip in a full scan, each nil when it is not one. Call after ns.Record, with
 -- ns.StatsFor: on an item's first scan, snipes resell at today's wall and nothing can dip yet.
 function ns.FullScanDeals(id, ladder, total, wall, minPrice, stats, cut)
