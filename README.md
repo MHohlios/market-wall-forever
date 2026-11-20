@@ -13,8 +13,9 @@ A World of Warcraft (Forever) auction house addon. It adds a Market tab with:
   the price history beside them. The price starts at the lowest
   listing, skipping flagged bait. The page answers what the auction house pays after the
   cut and deposit, against a vendor, and notes anything that looks like a mistake above the
-  bags. It asks Yes or No before a post only when the price is more than 25% under the low
-  end of the item's normal range ("Ask before posting" in Settings) or matches a bait price.
+  bags. It asks Yes or No before a post only when the price is far under the low end of the
+  item's normal range (more than 30% under up to 1g, sliding toward 70% under for dearer
+  items, as Auctionator does) or matches a bait price.
 - **Item search**: an MW button on the minimap opens a window, anywhere in the world,
   to look up any item MarketWall has seen. See below.
 - **Tooltips**: what one unit nets through a vendor, the market and disenchanting, after

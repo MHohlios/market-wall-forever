@@ -196,7 +196,6 @@ local function Post(confirmed)
       price = price,
       stats = ns.StatsFor(item.id),
       bait = ns.R().bait[item.id],
-      askUnder = ns.Cfg("postAskUnder"),
     })
     if #reasons > 0 then
       StaticPopup_Show("MARKETWALL_CONFIRM_POST", table.concat(reasons, "\n"))

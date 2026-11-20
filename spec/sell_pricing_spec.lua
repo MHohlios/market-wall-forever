@@ -168,15 +168,10 @@ describe("Sell page pricing", function()
     local bait = { p = 20, u = 2, q = 2, w = 205, seen = 2 }
 
     local function Ask(f)
-      f.askUnder = f.askUnder or ns.cfgDefaults.postAskUnder
       local out = {}
       for i, line in ipairs(P.AskFirst(f)) do out[i] = Plain(line) end
       return out
     end
-
-    it("asks 25% under the low end of the range by default", function()
-      assert.equal(0.25, ns.cfgDefaults.postAskUnder)
-    end)
 
     it("does not ask a little under the range, though the page warns", function()
       assert.same({}, Ask({ price = 219, stats = range }))   -- 4% under
@@ -188,14 +183,21 @@ describe("Sell page pricing", function()
         Ask({ price = 137, stats = range }))
     end)
 
-    it("asks only past the cutoff", function()
-      assert.same({}, Ask({ price = 172, stats = range }))   -- 24.9% under
-      assert.equal(1, #Ask({ price = 171, stats = range }))   -- 25.3% under
+    it("asks only past 30% under for an item up to 1g", function()
+      assert.same({}, Ask({ price = 161, stats = range }))   -- the cutoff is 160.3c
+      assert.equal(1, #Ask({ price = 160, stats = range }))
+      local gold = { n = 9, p25 = 10000, p75 = 12000, median = 11000 }
+      assert.same({}, Ask({ price = 7010, stats = gold }))   -- the cutoff is 7,000c
+      assert.equal(1, #Ask({ price = 6990, stats = gold }))
     end)
 
-    it("moves its cutoff with the setting", function()
-      assert.equal(1, #Ask({ price = 219, stats = range, askUnder = 0.02 }))
-      assert.same({}, Ask({ price = 137, stats = range, askUnder = 0.5 }))
+    it("slides toward 70% under as the item gets dearer", function()
+      local tenGold = { n = 9, p25 = 100000, p75 = 120000, median = 110000 }   -- the cutoff is 34% of it
+      assert.same({}, Ask({ price = 34010, stats = tenGold }))
+      assert.same({ "3g 39s 90c is 66% under this item's normal range (10g - 12g)." }, Ask({ price = 33990, stats = tenGold }))
+      local twentyGold = { n = 9, p25 = 200000, p75 = 220000, median = 210000 }   -- 32%
+      assert.same({}, Ask({ price = 64010, stats = twentyGold }))
+      assert.equal(1, #Ask({ price = 63990, stats = twentyGold }))
     end)
 
     it("does not ask when a vendor pays more, or the market is thin", function()

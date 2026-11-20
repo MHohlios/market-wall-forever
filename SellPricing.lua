@@ -136,13 +136,20 @@ function P.Warnings(f)
   return warnings
 end
 
--- The reasons to ask before posting, each one line: the price is more than f.askUnder (a share,
--- 0.25 for 25%) under the bottom of the item's normal range, or it matches the item's bait.
--- Every other warning is a note on the page only. f: price; stats; bait; askUnder.
+-- The price under which a post is too low to make without asking, for a normal low end of
+-- reference copper: 70% of it up to 1g, sliding down to 30% of it as the reference grows.
+-- The same scale as Auctionator's price warning.
+function P.AskThreshold(reference)
+  return reference * (0.3 + 0.4 * math.min(1, 10000 / reference))
+end
+
+-- The reasons to ask before posting, each one line: the price is under P.AskThreshold of the
+-- bottom of the item's normal range, or it matches the item's bait. Every other warning is a
+-- note on the page only. f: price; stats; bait.
 function P.AskFirst(f)
   local reasons = {}
   local stats = f.stats
-  if stats and stats.n > 0 and f.price < stats.p25 * (1 - f.askUnder) then
+  if stats and stats.n > 0 and f.price < P.AskThreshold(stats.p25) then
     reasons[1] = string.format("%s is %d%% under this item's normal range (%s - %s).",
       ns.Money(f.price), ns.Round((stats.p25 - f.price) / stats.p25 * 100), ns.Money(stats.p25), ns.Money(stats.p75))
   end

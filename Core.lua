@@ -25,7 +25,6 @@ ns.cfgDefaults = {
   autoScan = true,         -- start the daily full scan when the auction house opens
   staleMinutes = 60,       -- watchlist prices older than this are greyed out
   sellDuration = 2,        -- last auction duration picked on the Sell page: 1 = 12h, 2 = 24h, 3 = 48h
-  postAskUnder = 0.25,     -- the Sell page asks before a post this far under the normal range's low end
   baitSearchGap = 1.0,    -- seconds between Bait Detect searches; never less than 1
   baitConfirmPress = true, -- Bait Detect confirms each purchase with its own press
   baitMinUnder = 0.50,     -- bait must sit at least this far under the wall; held to 10% to 95%
