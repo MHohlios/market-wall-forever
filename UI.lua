@@ -1463,7 +1463,7 @@ local function Build()
 
   ui.list = CreateList(f)
   ui.list:SetPoint("TOPLEFT", 0, -CONTENT_TOP)
-  ui.list:SetPoint("RIGHT", -SCROLLBAR_W, 0)   -- room for its scrollbar
+  ui.list:SetPoint("RIGHT", -SCROLLBAR_W, 0)
   ui.list:SetHeight(22 + ROWS * ROW_H)
   ui.list.onClick = function(entry) ui.ShowItem(entry.id) end
   ui.list.onHeader = HeaderClicked
@@ -1481,7 +1481,6 @@ local function Build()
   ui.addBox = MakeEdit(ui.footer, 360)
   ui.addBox:SetPoint("LEFT", label, "RIGHT", 12, 0)
   ui.addBox:SetScript("OnEnterPressed", AddFromBox)
-  -- grey placeholder text while the box is empty and not being typed in
   local placeholder = MakeText(ui.addBox, "GameFontDisableSmall")
   placeholder:SetPoint("LEFT", 2, 0)
   placeholder:SetText("Type a name or shift-click an item")
