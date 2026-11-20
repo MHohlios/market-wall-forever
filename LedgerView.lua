@@ -105,18 +105,20 @@ function L.UnrecordedText(summary)
     .. ": gold that changed while MarketWall wasn't running.|r"
 end
 
--- Net gold of each day in the period, from the books' raw entries (kept Ledger.KEEP_DAYS):
--- { { day =, net = }, ... } in day order, a day with no change at 0
-function L.Days(books, kind, key)
+-- Net gold of each day in the period, from the books' raw entries: { { day =, net = }, ... } in
+-- day order, a day with no change at 0. Raw entries are kept Ledger.KEEP_DAYS, so a day older
+-- than that has net nil, unknown rather than 0.
+function L.Days(books, kind, key, now)
   local function Midday(period) return ns.DayOf(L.PeriodStart(kind, period) + 43200) end   -- clear of clock changes
   local first = Midday(key)
   local count = Midday(L.Step(kind, key, 1)) - first
+  local kept = ns.DayOf(now) - Ledger.KEEP_DAYS
   local days = {}
-  for i = 1, count do days[i] = { day = first + i - 1, net = 0 } end
+  for i = 1, count do days[i] = { day = first + i - 1, net = first + i - 1 >= kept and 0 or nil } end
   for _, book in ipairs(books) do
     for _, entry in ipairs(book.entries) do
       local day = days[ns.DayOf(entry[1]) - first + 1]
-      if day then day.net = day.net + entry[2] end
+      if day and day.net then day.net = day.net + entry[2] end
     end
   end
   return days
@@ -194,10 +196,18 @@ local function CreateBars(parent, width)
     right:SetPoint("TOPLEFT", bar, "TOPRIGHT", 0, 1) right:SetPoint("BOTTOMLEFT", bar, "BOTTOMRIGHT", 0, -1)
   end
 
-  -- days: L.Days; today: the day to outline; kind: week or month, for the labels
+  bars.note = ns.widgets.MakeText(bars, "GameFontDisableSmall", "CENTER")
+  bars.note:SetPoint("CENTER")
+  bars.note:SetText(string.format("Daily detail is kept for %d days.", Ledger.KEEP_DAYS))
+
+  -- days: L.Days; today: the day to outline; kind: week or month, for the labels. A day with
+  -- no detail left has no bar, and the note says why.
   function bars:Draw(days, today, kind)
-    local most = 0
-    for _, day in ipairs(days) do most = math.max(most, math.abs(day.net)) end
+    local most, unknown = 0, false
+    for _, day in ipairs(days) do
+      if day.net then most = math.max(most, math.abs(day.net)) else unknown = true end
+    end
+    self.note:SetShown(unknown)
     local slot = width / math.max(1, #days)
     local outlined = false
     for i = 1, math.max(#days, #self.bars) do
@@ -208,9 +218,13 @@ local function CreateBars(parent, width)
         label = ns.widgets.MakeText(self, "GameFontDisableSmall", "CENTER")
         self.bars[i], self.labels[i] = bar, label
       end
-      bar:SetShown(day ~= nil)
+      bar:SetShown(day ~= nil and day.net ~= nil)
       label:SetShown(day ~= nil)
-      if day then
+      if day and not day.net then
+        label:ClearAllPoints()
+        label:SetPoint("TOP", self, "BOTTOMLEFT", (i - 0.5) * slot, -3)
+        label:SetText(L.DayLabel(kind, day.day))
+      elseif day then
         local height = most > 0 and math.max(1, math.abs(day.net) / most * (BARS_HEIGHT - 2)) or 1
         if day.net < 0 then bar:SetColorTexture(0.88, 0.38, 0.38, 0.8) else bar:SetColorTexture(0.31, 0.76, 0.42, 0.8) end
         bar:ClearAllPoints()
@@ -323,7 +337,7 @@ function L.Build(parent)
     self.netText:SetText((summary.net < 0 and "-" or "") .. ns.MoneyShort(math.abs(summary.net)))
     self.unrecorded:SetText(L.UnrecordedText(summary) or "")
     self.bars:SetShown(#books > 0)
-    self.bars:Draw(L.Days(books, self.kind, key), ns.DayOf(now), self.kind)
+    self.bars:Draw(L.Days(books, self.kind, key, now),ns.DayOf(now), self.kind)
     Fill(self.income, roll.income, GAIN)
     Fill(self.spending, roll.spending, LOSS)
     self.opening:SetText(#books > 0 and L.OpeningText(books)

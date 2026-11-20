@@ -91,7 +91,7 @@ describe("Ledger view", function()
 
   it("gives each day of the week its net gold, today's included when it is the only one", function()
     local week = L.PeriodOf("week", NOW)
-    local days = L.Days(L.Books(Ledgers(), "Main-Forever", true), "week", week)
+    local days = L.Days(L.Books(Ledgers(), "Main-Forever", true), "week", week, NOW)
     assert.equal(7, #days)
     assert.equal(week, days[1].day)
     local nets = {}
@@ -102,10 +102,25 @@ describe("Ledger view", function()
   end)
 
   it("gives a month a bar per calendar day, labelling the first and every fifth", function()
-    local days = L.Days({ Main() }, "month", 202611)
+    local days = L.Days({ Main() }, "month", 202611, NOW)
     assert.equal(30, #days)
     assert.same({ "1", "", "5" }, { L.DayLabel("month", days[1].day), L.DayLabel("month", days[2].day), L.DayLabel("month", days[5].day) })
     assert.equal(300, days[11].net)   -- Nov 11, a week before NOW: the vendor sale
-    assert.equal(31, #L.Days({ Main() }, "month", 202610))
+    assert.equal(31, #L.Days({ Main() }, "month", 202610, NOW))
+  end)
+
+  it("leaves days whose detail was pruned unknown rather than zero, while the summary keeps their gold", function()
+    local book = Main()
+    local later = NOW + (Ledger.KEEP_DAYS + 10) * DAY
+    Ledger.Prune(book, later)
+    local days = L.Days({ book }, "month", 202610, later)
+    local known = 0
+    for _, day in ipairs(days) do
+      if day.net then known = known + 1 end
+    end
+    assert.equal(0, known)
+    assert.equal(500, L.Summary(L.Roll({ book }, "month", 202610)).net)
+    local recent = L.Days({ book }, "month", L.PeriodOf("month", later), later)
+    assert.equal(0, recent[1].net)   -- within the kept days: no change is a real 0
   end)
 end)
