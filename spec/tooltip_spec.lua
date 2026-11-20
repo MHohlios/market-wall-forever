@@ -639,7 +639,7 @@ describe("item tooltip lines", function()
     end)
 
     it("leaves a tooltip that shows no item alone", function()
-      _G.GameTooltip.GetItem =function() return nil end
+      _G.GameTooltip.GetItem = function() return nil end
       Fire("MODIFIER_STATE_CHANGED", "LSHIFT", 1)
       assert.equal(0, refreshes)
     end)

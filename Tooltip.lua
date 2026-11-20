@@ -119,7 +119,6 @@ local function OutletLines(add, id, count, details)
   return values.auction ~= nil or values.vendor > 0 or disenchant ~= nil or conversion ~= nil or opened ~= nil
 end
 
--- The orange flag while the item's market is low on data
 local function LowDataFlag(add, id)
   if not ns.LatestWall(id) then return end
   local flag = ns.LowDataText(ns.DaysOfData(id))
@@ -190,7 +189,6 @@ local function AddLines(tooltip, id)
   if details then MarketContextLines(add, id) end
 end
 
--- Redraws a shown item tooltip when Shift goes down or up, so its detail follows the key
 local function RedrawOnShift(_, _, key)
   if key ~= "LSHIFT" and key ~= "RSHIFT" then return end
   for _, tooltip in ipairs({ GameTooltip, ItemRefTooltip }) do
@@ -259,4 +257,3 @@ function ns.InitTooltip()
   shift:RegisterEvent("MODIFIER_STATE_CHANGED")
   shift:SetScript("OnEvent", RedrawOnShift)
 end
-
