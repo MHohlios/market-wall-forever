@@ -1,7 +1,9 @@
 -- MarketWall: the Sell page.
--- Top: the item and what you are about to post, with an info line and warnings under it.
--- Left: your bags as an icon grid, grouped by the best outlet for each item (SellBags.lua).
--- Right: the auctions listed right now, or the item's price history, under two bottom tabs.
+-- Top: the item and what you are about to post, with a status line under Price each, and at
+-- the right what the auction house pays against a vendor.
+-- Left: any warnings, then your bags as an icon grid, grouped by the best outlet for each item
+-- (SellBags.lua).
+-- Right: the item's price history, or the auctions listed right now, under two top tabs.
 -- Prices and words come from SellPricing.lua.
 local _, ns = ...
 local P, PV, Outlet = ns.SellPricing, ns.PriceView, ns.Outlet
@@ -12,27 +14,28 @@ local DURATIONS = { { 1, "12h" }, { 2, "24h" }, { 3, "48h" } }
 
 -- The Market tab's page is about 782 x 480 below the navigation row
 local WIDTH = 782
-local STRIP_TOP, STRIP_HEIGHT = -50, 96
-local INFO_Y, WARNINGS_Y, WARNINGS_HEIGHT = -150, -166, 56
-local BODY_TOP, BODY_HEIGHT = -226, 254
+local STRIP_TOP, STRIP_HEIGHT = -50, 120
+local BODY_TOP = STRIP_TOP - STRIP_HEIGHT - 6
+local BODY_HEIGHT = 480 + BODY_TOP
 local LEFT_WIDTH, RIGHT_X = 300, 312
-local POST_X, TOTALS_X, TOTALS_WIDTH = 384, 556, 192   -- the strip's Duration and Post column, and its totals
-local TOTAL_ROW = 13
-local TOTAL_VALUES = { "total", "afterCut", "deposit", "net", "vendor", "beats", "perUnit" }
+local POST_X, POST_WIDTH = 384, 130    -- the strip's Duration and Post column
+local ANSWER_X = POST_X + POST_WIDTH + 12
+local ANSWER_WIDTH = WIDTH - ANSWER_X - 8
+local STATUS_Y = -76                -- the status line, under Price each: up to two lines
+-- the answer's breakdown: a row of its own under the status line, ending under the answer
+local BREAKDOWN_Y, BREAKDOWN_WIDTH = -104, WIDTH - 58 - 8
+local WARNINGS_GAP = 4
 local RIGHT_WIDTH = WIDTH - RIGHT_X
-local LIST_ROWS = 8
+local TAB_LINE = 28                 -- the right panel's tabs stand on a line this far below its top
+local LIST_ROWS = 11
 
 local AUCTION_COLUMNS = {
-  { "Price each", 120, nil, "Each price level listed right now, cheapest first. Click a row to set Price each to it." },
-  { "Units", 70, "RIGHT", "Units listed at this price." },
-  { "Running total", 100, "RIGHT", "Units listed at this price or cheaper." },
-  { "Note", 170, "RIGHT", "Wall: the price level with real supply behind it. Bait?: a few units far under the wall, posted so others copy the price, with the copies posted since. The highlighted row is where your price would sit." },
+  { "Price each", 130, nil, "Each price level listed right now, cheapest first. Click a row to set Price each to it." },
+  { "Units", 80, "RIGHT", "Units listed at this price." },
+  { "Running total", 110, "RIGHT", "Units listed at this price or cheaper." },
+  { "", 150, "RIGHT", cellTip = true },
 }
--- the item search window's grid, under its 7 days / 30 days / All switch
-local HISTORY_CELLS = {
-  "current", "rangeMin", "rangeMax", "rangeAverage", "rangeMedian", "rangeTrend", "rangePoints", "normalRange",
-  "vendor", "disenchant", "limits",
-}
+local NOTE_TIP = "Wall: the price level with real supply behind it. Bait?: a few units far under the wall, posted so others copy the price, with the copies posted since. Your price: the level Price each matches."
 
 local page
 local selectedID
@@ -138,22 +141,27 @@ local function Warnings(item, price, quantity, totals)
   })
 end
 
-local function ShowTotals(t, quantity)
-  local rows = page.totals
-  rows.total:SetText(ns.Money(t.total))
-  rows.afterCutLabel:SetText("After " .. ns.Round(ns.Cfg("ahCut") * 100) .. "% cut")
-  rows.afterCut:SetText(ns.Money(t.afterCut))
-  rows.deposit:SetText("- " .. ns.Money(t.deposit))
-  rows.net:SetText(ns.Money(t.net))
-  if t.vendor then
-    rows.vendorLabel:SetText("Vendor (" .. quantity .. " x " .. ns.Money(t.vendorEach) .. ")")
-    rows.vendor:SetText(ns.Money(t.vendor))
-  else
-    rows.vendorLabel:SetText("Vendor")
-    rows.vendor:SetText("—")
+local function ShowAnswer(answer)
+  page.answer:SetShown(answer ~= nil)
+  if not answer then return end
+  page.net:SetText(answer.net)
+  page.versus:SetText(answer.versus)
+  page.breakdown:SetText(answer.breakdown)
+end
+
+-- Warnings sit above the bags, which give up the room they take
+local function ShowWarnings(warnings)
+  local height = 0
+  if #warnings > 0 then
+    page.warning:SetText(WARN .. "· " .. table.concat(warnings, "\n· ") .. "|r")
+    height = page.warning:GetStringHeight() + 10
+    page.warnings:SetHeight(height)
+    height = height + WARNINGS_GAP
   end
-  rows.beats:SetText(P.BeatsText(t))
-  rows.perUnit:SetText(GREY .. "per unit: AH " .. ns.Money(t.netEach) .. GREY .. " · vendor " .. (t.vendorEach and ns.Money(t.vendorEach) or "—") .. "|r")
+  page.warnings:SetShown(#warnings > 0)
+  page.bags:ClearAllPoints()
+  page.bags:SetPoint("TOPLEFT", 0, BODY_TOP - height)
+  page.bags:SetHeight(BODY_HEIGHT - height)
 end
 
 local function UpdateTotals()
@@ -161,24 +169,22 @@ local function UpdateTotals()
   page.post:SetEnabled(price ~= nil and ns.ahOpen)
   page.post:SetText(quantity and ("Post " .. quantity) or "Post")
   if not price then
-    for _, key in ipairs(TOTAL_VALUES) do page.totals[key]:SetText("") end
+    ShowAnswer(nil)
     page.info:SetText(GREY .. "Enter a price and a quantity from 1 to " .. (page.maxQuantity or 0) .. ".|r")
-    page.warning:SetText("")
-    page.warnings:Hide()
+    ShowWarnings({})
     return
   end
   local totals = Totals(page.item, price, quantity)
-  ShowTotals(totals, quantity)
+  ShowAnswer(P.Answer(totals, quantity, price, ns.Cfg("ahCut")))
 
   local info = P.InfoLine(price, page.start, P.Wall(page.item.id))
-  if page.notes ~= "" then info = (info ~= "" and info .. "  " or "") .. GREY .. page.notes .. "|r" end
-  page.info:SetText(info)
+  if page.notes ~= "" then info = (info ~= "" and info .. "  " or "") .. page.notes end
+  page.info:SetText(GREY .. info .. "|r")
   local warnings = Warnings(page.item, price, quantity, totals)
   -- shown with the warnings, but not one: posting a young item needs no confirmation
   local lowData = ns.LowDataText(ns.DaysOfData(page.item.id))
   if lowData then table.insert(warnings, 1, lowData) end
-  page.warning:SetText(WARN .. "· " .. table.concat(warnings, "\n· ") .. "|r")
-  page.warnings:SetShown(#warnings > 0)
+  ShowWarnings(warnings)
 end
 
 local function Post(confirmed)
@@ -255,10 +261,12 @@ local function RefreshAuctions(id)
     running = running + tier.q
     local here = not marked and price and tier.p >= price
     if here then marked = true end
+    local note = P.AuctionNote(tier, wall, bait, price)
     rows[#rows + 1] = {
       price = tier.p,
       highlight = here,
-      cells = { ns.Money(tier.p), tostring(tier.q), tostring(running), P.AuctionNote(tier, wall, bait) },
+      cells = { ns.Money(tier.p), tostring(tier.q), GREY .. running .. "|r", note },
+      cellTips = note ~= "" and { [4] = NOTE_TIP } or nil,
     }
   end
   local empty
@@ -270,7 +278,6 @@ local function RefreshAuctions(id)
     empty = "No auctions loaded. Press the refresh button."
   end
   page.auctions:SetData(rows, empty)
-  page.listingsTitle:SetText("Current listings · " .. ns.ColorName(id))
   page.listingsAge:SetText(held and (GREY .. (held.kind == "scan" and "full scan, " or "live, ") .. ns.Ago(held.t) .. "|r") or "")
 end
 
@@ -291,11 +298,10 @@ local function RefreshSelected(item)
   page.strip:SetShown(item ~= nil)
   page.info:SetShown(item ~= nil)
   page.pick:SetShown(item == nil)
-  page.listingsTitle:SetShown(item ~= nil and page.tab == "listings")
   page.view:SetShown(item ~= nil and page.tab == "history")
   if not item then
     page.view.id = nil   -- the item left the bags: drop its chart and stats with the listings
-    page.warnings:Hide()
+    ShowWarnings({})
     page.auctions:SetData({}, "Pick an item from your bags.")
     page.listingsAge:SetText("")
     return
@@ -442,7 +448,7 @@ local function BuildPostControls(w, s)
     local duration = def[1]
     local radio = CreateFrame("CheckButton", nil, s, "UIRadioButtonTemplate")
     radio:SetSize(16, 16)
-    radio:SetPoint("TOPLEFT", POST_X - 2 + (i - 1) * 56, -20)
+    radio:SetPoint("TOPLEFT", POST_X - 2 + (i - 1) * 46, -20)
     radio:SetScript("OnClick", function()
       MarketWallDB.cfg.sellDuration = duration
       ns.Mobs.Invalidate()   -- the duration prices the deposits in mob values and disenchant deals
@@ -455,40 +461,35 @@ local function BuildPostControls(w, s)
     page.durations[duration] = radio
   end
 
-  page.post = w.MakeButton(s, "Post", 160)
+  page.post = w.MakeButton(s, "Post", POST_WIDTH)
   page.post:SetHeight(26)
   page.post:SetPoint("TOPLEFT", POST_X, -44)
   page.post:SetScript("OnClick", function() Post(false) end)
 end
 
--- Right of the strip: what a post earns against a vendor, and the refresh button
-local function BuildTotals(w, s)
-  local rows = {}
-  page.totals = rows
-  local function Line(key, text, row)
-    local y = -4 - (row - 1) * TOTAL_ROW
-    rows[key .. "Label"] = Label(s, text, TOTALS_X, y)
-    local value = w.MakeText(s, "GameFontHighlightSmall", "RIGHT")
-    value:SetPoint("TOPRIGHT", s, "TOPLEFT", TOTALS_X + TOTALS_WIDTH, y)
-    value:SetWidth(100)
-    rows[key] = value
-    return value
-  end
-  Line("total", "Total", 1)
-  Line("afterCut", "After cut", 2)
-  Line("deposit", "Deposit", 3)
-  Line("net", "AH net", 4)
-  Line("vendor", "Vendor", 5)
-  Line("beats", "AH beats vendor by", 6)
-  rows.perUnit = w.MakeText(s, "GameFontHighlightSmall")
-  rows.perUnit:SetPoint("TOPLEFT", TOTALS_X, -4 - 6 * TOTAL_ROW)
-  rows.perUnit:SetWidth(TOTALS_WIDTH)
-  rows.perUnit:SetWordWrap(false)
+-- Right of the strip: the answer, what the auction house pays against a vendor, with one line
+-- of how it adds up; and the refresh button
+local function BuildAnswer(w, s)
+  local a = CreateFrame("Frame", nil, s)
+  a:SetPoint("TOPLEFT", ANSWER_X, 0)
+  a:SetSize(ANSWER_WIDTH, STRIP_HEIGHT)
+  page.answer = a
+  Label(a, "You get from the auction house", 0, -4)
+  page.net = w.MakeText(a, "GameFontNormalLarge")
+  page.net:SetPoint("TOPLEFT", 0, -20)
+  page.versus = w.MakeText(a, "GameFontHighlightSmall")
+  page.versus:SetPoint("TOPLEFT", 0, -42)
+  page.versus:SetWidth(ANSWER_WIDTH)   -- a long gold comparison wraps onto a second line
+  -- wider than the answer column, reaching left under the Post column, so the line stays one line
+  page.breakdown = w.MakeText(a, "GameFontHighlightSmall", "RIGHT")
+  page.breakdown:SetPoint("TOPRIGHT", 0, BREAKDOWN_Y)
+  page.breakdown:SetWidth(BREAKDOWN_WIDTH)
+  page.breakdown:SetWordWrap(false)
 
-  -- font strings take no mouse, so a frame over the Deposit row carries its tooltip
-  local depositTip = CreateFrame("Frame", nil, s)
-  depositTip:SetPoint("TOPLEFT", TOTALS_X, -4 - 2 * TOTAL_ROW)
-  depositTip:SetSize(TOTALS_WIDTH, TOTAL_ROW)
+  -- font strings take no mouse, so a frame over the breakdown carries the deposit's tooltip
+  local depositTip = CreateFrame("Frame", nil, a)
+  depositTip:SetPoint("TOPRIGHT", 0, BREAKDOWN_Y + 2)
+  depositTip:SetSize(BREAKDOWN_WIDTH, 16)
   depositTip:EnableMouse(true)
   depositTip:SetScript("OnEnter", function(self)
     w.ShowTip(self, "Deposit", "Counted here as a cost, the worst case. The game refunds the deposit when the auction sells, and keeps it if the auction expires or you cancel it.")
@@ -515,57 +516,61 @@ local function BuildStrip(w)
   page.strip = s
   BuildItemControls(w, s)
   BuildPostControls(w, s)
-  BuildTotals(w, s)
+  BuildAnswer(w, s)
+
+  page.info = w.MakeText(s, "GameFontHighlightSmall")
+  page.info:SetPoint("TOPLEFT", 58, STATUS_Y)
+  page.info:SetSize(ANSWER_X - 58 - 8, STATUS_Y - BREAKDOWN_Y - 2)   -- two lines, above the breakdown
+  page.info:SetJustifyV("TOP")
 
   page.pick = w.MakeText(page, "GameFontDisable", "CENTER")
   page.pick:SetPoint("TOPLEFT", 0, STRIP_TOP - 30)
   page.pick:SetPoint("RIGHT")
   page.pick:SetText("Pick an item from your bags below to price it and post it.")
+end
 
-  page.info = w.MakeText(page, "GameFontHighlightSmall")
-  page.info:SetPoint("TOPLEFT", 8, INFO_Y)
-  page.info:SetWidth(WIDTH - 16)
-  page.info:SetWordWrap(false)
-
-  page.warnings = Panel(page, 0, WARNINGS_Y, WIDTH, WARNINGS_HEIGHT)
+-- Above the bags; ShowWarnings sizes it to its lines
+local function BuildWarnings(w)
+  page.warnings = Panel(page, 0, BODY_TOP, LEFT_WIDTH, 0)
+  page.warnings:Hide()
   local bar = page.warnings:CreateTexture(nil, "BORDER")
   bar:SetColorTexture(1, 0.69, 0.34, 0.8)
   bar:SetPoint("TOPLEFT")
   bar:SetPoint("BOTTOMLEFT")
   bar:SetWidth(3)
   page.warning = w.MakeText(page.warnings, "GameFontHighlightSmall")
-  page.warning:SetPoint("TOPLEFT", 10, -4)
-  page.warning:SetWidth(WIDTH - 20)
+  page.warning:SetPoint("TOPLEFT", 10, -5)
+  page.warning:SetWidth(LEFT_WIDTH - 16)
   page.warning:SetSpacing(2)
 end
 
--- Bottom tabs under the listings: Current listings and Price history
+-- The right panel's top tabs: Price history and Current listings
 local function ShowTab(name)
   page.tab = name
   local listings = name == "listings"
   page.auctions:SetShown(listings)
-  page.listingsTitle:SetShown(listings and page.item ~= nil)
   page.listingsAge:SetShown(listings)
   page.rowHint:SetShown(listings)
   page.view:SetShown(not listings and page.item ~= nil)
-  for key, button in pairs(page.tabs) do
-    if key == name then button:LockHighlight() else button:UnlockHighlight() end
-  end
+  for key, tab in pairs(page.tabs) do ns.widgets.SelectTab(tab, key == name) end
 end
 
 local function BuildListings(w)
   local r = Panel(page, RIGHT_X, BODY_TOP, RIGHT_WIDTH, BODY_HEIGHT)
   page.listings = r
+  page.tabs = w.MakeTabRow(r, 8, TAB_LINE, {
+    { key = "history", label = "Price history" },
+    { key = "listings", label = "Current listings" },
+  }, ShowTab)
+  -- beside the tabs: how fresh the listings are, or the history's range switch
+  local function BesideTabs(region) region:SetPoint("RIGHT", r, "TOPRIGHT", -8, -TAB_LINE / 2 - 2) end
 
-  page.listingsTitle = w.MakeText(r, "GameFontNormal")
-  page.listingsTitle:SetPoint("TOPLEFT", 8, -4)
-  page.listingsTitle:SetWidth(RIGHT_WIDTH - 120)
-  page.listingsTitle:SetWordWrap(false)
   page.listingsAge = w.MakeText(r, "GameFontHighlightSmall", "RIGHT")
-  page.listingsAge:SetPoint("TOPRIGHT", -8, -6)
+  BesideTabs(page.listingsAge)
 
+  local top = -TAB_LINE - 2
   page.auctions = w.CreateList(r, LIST_ROWS)
-  page.auctions:SetPoint("TOPLEFT", 0, -20)
+  page.auctions:SetPoint("TOPLEFT", 0, top)
   page.auctions:SetSize(RIGHT_WIDTH, w.ListHeight(LIST_ROWS))
   page.auctions:SetColumns(AUCTION_COLUMNS)
   page.auctions.empty:SetWidth(RIGHT_WIDTH - 20)
@@ -575,22 +580,11 @@ local function BuildListings(w)
     ns.RefreshUI()
   end
   page.rowHint = w.MakeText(r, "GameFontDisableSmall")
-  page.rowHint:SetPoint("TOPLEFT", 8, -24 - w.ListHeight(LIST_ROWS))
-  page.rowHint:SetText("Click a row to set Price each to that level.")
+  page.rowHint:SetPoint("TOPLEFT", 8, top - 2 - w.ListHeight(LIST_ROWS))
+  page.rowHint:SetText("Click a row to price at that level. Highlighted: where your price would sit.")
 
-  local width = RIGHT_WIDTH - 8
-  page.view = PV.CreateView(r, { width = width, chartHeight = 54, cellWidth = width / 4, cells = HISTORY_CELLS, ranges = true })
-  page.view:SetPoint("TOPLEFT", 4, -2)
-
-  page.tabs = {}
-  local previous
-  for _, def in ipairs({ { "listings", "Current listings" }, { "history", "Price history" } }) do
-    local button = w.MakeButton(r, def[2], 120)
-    if previous then button:SetPoint("LEFT", previous, "RIGHT", 4, 0) else button:SetPoint("BOTTOMLEFT", 8, 2) end
-    button:SetScript("OnClick", function() ShowTab(def[1]) end)
-    page.tabs[def[1]] = button
-    previous = button
-  end
+  page.view = PV.CreateView(r, { width = RIGHT_WIDTH - 12, height = BODY_HEIGHT + top - 4, ranges = true, placeRanges = BesideTabs })
+  page.view:SetPoint("TOPLEFT", 4, top)
 end
 
 function ns.BuildSellPage(parent)
@@ -600,11 +594,12 @@ function ns.BuildSellPage(parent)
   page:SetPoint("BOTTOMRIGHT")
 
   BuildStrip(w)
+  BuildWarnings(w)
   local bags = Panel(page, 0, BODY_TOP, LEFT_WIDTH, BODY_HEIGHT)
   page.bags = bags
   page.grid = ns.SellBags.Grid(bags, LEFT_WIDTH, Select)
   BuildListings(w)
-  ShowTab("listings")
+  ShowTab("history")
 
   -- bags change after posting, selling or looting; the main frame redraws when dirty
   page:RegisterEvent("BAG_UPDATE_DELAYED")

@@ -24,6 +24,13 @@ describe("Sell page bait handling", function()
       assert.equal("", pricing.AuctionNote({ p = 105, q = 140 }, 102, record))
       assert.equal("", pricing.AuctionNote({ p = 30, q = 15 }, 102, nil))
     end)
+
+    it("adds your price on the level Price each matches exactly", function()
+      assert.equal("wall · your price", Plain(pricing.AuctionNote({ p = 102, q = 220 }, 102, record, 102)))
+      assert.equal("bait? (1) + 14 copies · your price", Plain(pricing.AuctionNote({ p = 30, q = 15 }, 102, record, 30)))
+      assert.equal("your price", Plain(pricing.AuctionNote({ p = 105, q = 140 }, 102, record, 105)))
+      assert.equal("", pricing.AuctionNote({ p = 105, q = 140 }, 102, record, 104))
+    end)
   end)
 
   describe("posting warning", function()

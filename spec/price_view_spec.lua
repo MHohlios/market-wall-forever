@@ -107,21 +107,27 @@ describe("price view", function()
     end)
   end)
 
-  describe("stats grid", function()
+  describe("stats block", function()
     local ID = 12359
     local today
+    local SEVEN_DAYS, THIRTY_DAYS, ALL = PV.RANGES[1], PV.RANGES[2], PV.RANGES[3]
 
     -- One recorded day: wall, lowest and highest wall that day, units, lowest listing
     local function Day(ago, wall, low, high)
       ns.R().days[ID][today - ago] = { wall, low or wall, high or wall, 100, wall }
     end
 
-    local function Grid(keys, range)
+    local function Stats()
       local out = {}
-      for _, cell in ipairs(PV.Cells(PV.Facts(ID, time(), range), keys)) do
-        out[#out + 1] = Plain(cell.label) .. ": " .. Plain(cell.value)
+      for _, stat in ipairs(PV.Stats(PV.Facts(ID, time(), SEVEN_DAYS))) do
+        out[#out + 1] = stat.label .. ": " .. Plain(stat.value)
       end
       return out
+    end
+
+    local function RangeLine(range)
+      local line = PV.RangeLine(PV.Facts(ID, time(), range))
+      return line and Plain(line)
     end
 
     before_each(function()
@@ -139,27 +145,66 @@ describe("price view", function()
     end)
     after_each(function() _G.C_Item = nil end)
 
-    describe("for the search window's chart range", function()
-      local RANGE_CELLS = { "rangeMin", "rangeMax", "rangeAverage", "rangeMedian", "rangeTrend", "rangePoints" }
-      local SEVEN_DAYS, THIRTY_DAYS, ALL = PV.RANGES[1], PV.RANGES[2], PV.RANGES[3]
+    it("shows the large stats that have a value, in order, leaving out Disenchant", function()
+      assert.same({
+        "Yesterday: 1s", "Normal range: 1s – 1s 10c", "Median: 1s", "7-day trend: flat", "Vendor: 2c",
+        "Your buy / sell: 90c / 1s 20c",
+      }, Stats())
+    end)
 
+    it("calls a live wall Now", function()
+      ns.ladders[ID] = { ladder = { { p = 95, q = 2 }, { p = 99, q = 200 } }, total = 202, t = time() }
+      assert.equal("Now: 99c", Stats()[1])
+    end)
+
+    it("labels a recorded wall with its day", function()
+      ns.R().days[ID] = {}
+      Day(20, 200)
+      assert.equal("20 days ago: 2s", Stats()[1])
+      Day(0, 150)
+      assert.equal("Today: 1s 50c", Stats()[1])
+    end)
+
+    it("shows Disenchant once it has a value, and hides it while its materials are not scanned", function()
+      ns.DisenchantValue = function() return 340 end
+      assert.equal("Disenchant: 3s 40c", Stats()[6])
+      ns.DisenchantValue = function() return false end
+      assert.equal("Your buy / sell: 90c / 1s 20c", Stats()[6])
+    end)
+
+    it("hides every stat an unseen item lacks", function()
+      _G.C_Item = {}
+      ns.R().days[ID], ns.R().watch[ID] = nil, nil
+      assert.same({}, Stats())
+      assert.is_nil(RangeLine(ALL))
+    end)
+
+    describe("grey range line", function()
       it("summarizes the last 7 days", function()
-        assert.same({ "Min: 90c", "Max: 1s 20c", "Average: 1s 4c", "Median: 1s", "Trend: flat", "Points: 5 over 6 days" },
-          Grid(RANGE_CELLS, SEVEN_DAYS))
+        assert.equal("Min 90c · Max 1s 20c · Average 1s 4c · 5 points over 6 days", RangeLine(SEVEN_DAYS))
       end)
 
       it("summarizes the last 30 days", function()
-        assert.same({ "Min: 90c", "Max: 2s", "Average: 1s 20c", "Median: 1s 5c", "Trend: ▼ 50%", "Points: 6 over 21 days" },
-          Grid(RANGE_CELLS, THIRTY_DAYS))
+        assert.equal("Min 90c · Max 2s · Average 1s 20c · 6 points over 21 days", RangeLine(THIRTY_DAYS))
       end)
 
       it("reaches back into the weekly history for All", function()
         local start = today - 62 - (today - 62 + 3) % 7   -- a Monday about two months back
         ns.R().weeks[ID] = ns.PackWeeks({ { start = start, wall = 260, low = 240, high = 280 } })
         local days = today - (start + 3) + 1   -- the weekly point sits mid-week
-        assert.same({ "Min: 90c", "Max: 2s 60c", "Average: 1s 40c", "Median: 1s 10c", "Trend: ▼ 62%", "Points: 7 over " .. days .. " days" },
-          Grid(RANGE_CELLS, ALL))
-        assert.same({ "Points: 6 over 21 days" }, Grid({ "rangePoints" }, THIRTY_DAYS))
+        assert.equal("Min 90c · Max 2s 60c · Average 1s 40c · 7 points over " .. days .. " days", RangeLine(ALL))
+      end)
+
+      it("counts one point over one day in the singular", function()
+        ns.R().days[ID] = {}
+        Day(0, 150)
+        assert.equal("Min 1s 50c · Max 1s 50c · Average 1s 50c · 1 point over 1 day", RangeLine(SEVEN_DAYS))
+      end)
+
+      it("is empty for a range with no points", function()
+        ns.R().days[ID] = {}
+        Day(20, 200)
+        assert.is_nil(RangeLine(SEVEN_DAYS))
       end)
 
       it("draws the same points it summarizes", function()
@@ -167,54 +212,6 @@ describe("price view", function()
         assert.same(PV.InRange(ns.Series(ID, true), 7, facts.now), facts.chart)
         assert.equal(#facts.chart, facts.range.n)
       end)
-
-      it("shows the current wall with its age", function()
-        assert.same({ "Current (yesterday): 1s" }, Grid({ "current" }, SEVEN_DAYS))
-        ns.ladders[ID] = { ladder = { { p = 95, q = 2 }, { p = 99, q = 200 } }, total = 202, t = time() }
-        assert.same({ "Current (just now): 99c" }, Grid({ "current" }, SEVEN_DAYS))
-      end)
-
-      it("shows dashes for a range with no points, keeping the current wall", function()
-        ns.R().days[ID] = {}
-        Day(20, 200)
-        assert.same({ "Current (20 days ago): 2s", "Min: -", "Max: -", "Average: -", "Median: -", "Trend: -", "Points: -" },
-          Grid({ "current", "rangeMin", "rangeMax", "rangeAverage", "rangeMedian", "rangeTrend", "rangePoints" }, SEVEN_DAYS))
-      end)
-    end)
-
-    it("fills the search window's other cells from the item's history", function()
-      assert.same({
-        "Normal range: 1s - 1s 10c",
-        "Vendor: 2c",
-        "Disenchant: -",
-        "Your buy / sell: 90c / 1s 20c",
-      }, Grid({ "normalRange", "vendor", "disenchant", "limits" }, PV.RANGES[1]))
-    end)
-
-    it("fills the Sell page's cells from the same facts, with no live listings loaded", function()
-      assert.same({
-        "Wall (last scan): 1s",
-        "Lowest listing: -",
-        "Supply: -",
-        "7-day trend: flat",
-        "7-day average: 1s 4c",
-        "Median (5 days): 1s",
-        "Normal range: 1s - 1s 10c",
-        "Vs median: +0% (normal)",
-      }, Grid({ "wallNow", "lowestListing", "supply", "trend", "average", "median", "normalRange", "versusMedian" }))
-    end)
-
-    it("prefers live listings for the wall, with their age", function()
-      ns.ladders[ID] = { ladder = { { p = 95, q = 2 }, { p = 99, q = 200 } }, total = 202, t = time() }
-      assert.same({ "Wall now (just now): 99c", "Lowest listing: 95c", "Supply: 202 units" },
-        Grid({ "wallNow", "lowestListing", "supply" }))
-    end)
-
-    it("shows a dash for everything an unseen item lacks", function()
-      _G.C_Item = {}
-      ns.R().days[ID], ns.R().watch[ID] = nil, nil
-      assert.same({ "Current: -", "Median (0 days): -", "7-day trend: -", "Min: -", "Points: -", "Vendor: -", "Your buy / sell: -" },
-        Grid({ "current", "median", "trend", "rangeMin", "rangePoints", "vendor", "limits" }, PV.RANGES[3]))
     end)
   end)
 

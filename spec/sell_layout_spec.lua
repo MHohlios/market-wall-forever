@@ -37,17 +37,35 @@ describe("Sell page layout", function()
     end
   end)
 
-  it("lays the strip, warnings, bags and listings out top to bottom without overlap", function()
-    local function Top(region) return -region.points[1][3] end
-    local function Bottom(region) return Top(region) + region.height end
-    assert.is_true(Bottom(page.strip) <= Top(page.warnings))
-    assert.is_true(Bottom(page.warnings) <= Top(page.bags))
+  local function Top(region) return -region.points[1][3] end
+  local function Bottom(region) return Top(region) + region.height end
+
+  it("starts the bags and listings just under the strip, with no band between", function()
+    assert.is_true(Top(page.bags) - Bottom(page.strip) <= 6)
     assert.equal(Top(page.bags), Top(page.listings))
     assert.is_true(page.bags.points[1][2] + page.bags.width <= page.listings.points[1][2])
   end)
 
-  it("ends the Price history view, low-data flag included, above the bottom tabs", function()
-    local TABS_HEIGHT = 2 + 22   -- the tab buttons sit 2 above the panel's bottom edge
-    assert.is_true(-page.view.points[1][3] + page.view.height <= page.listings.height - TABS_HEIGHT)
+  it("gives the answer's breakdown a row of its own under the status line, wide enough for gold amounts", function()
+    local LINE = 13
+    -- "92 × 2s 5c = 1g 88s 60c · 5% cut -9s 43c · deposit -27s 60c" runs about 350 wide in the small font
+    assert.is_true(page.breakdown.width >= 450)
+    assert.is_true(page.info.height >= 2 * LINE - 1)   -- a long status wraps onto a second line
+    assert.is_true(Top(page.info) + page.info.height <= Top(page.breakdown))
+    assert.is_true(Top(page.breakdown) + LINE <= page.strip.height)
+    assert.is_true(page.versus.width >= 240)   -- and wraps rather than cutting a long comparison off
+  end)
+
+  it("keeps the warnings over the bags' column, where the bags make room for them", function()
+    assert.equal(Top(page.bags), Top(page.warnings))
+    assert.equal(page.bags.width, page.warnings.width)
+  end)
+
+  it("fits the Price history view and the listings in the right panel, under its tabs", function()
+    local tabs = Top(page.auctions)
+    assert.is_true(tabs > 0)
+    assert.equal(tabs, Top(page.view))
+    assert.is_true(Bottom(page.view) <= page.listings.height)
+    assert.is_true(Bottom(page.auctions) <= page.listings.height)
   end)
 end)

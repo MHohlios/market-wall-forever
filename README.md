@@ -11,7 +11,8 @@ A World of Warcraft (Forever) auction house addon. It adds a Market tab with:
   Optimal can also value a container at what it opens into), always in the order auction
   house, vendor, disenchant, no reliable price (the first two show even when empty), with the current listings or
   the price history beside them. The price starts at the lowest
-  listing, skipping flagged bait, and warns before a post that looks like a mistake.
+  listing, skipping flagged bait. The page answers what the auction house pays after the
+  cut and deposit, against a vendor, and warns before a post that looks like a mistake.
 - **Item search**: an MW button on the minimap opens a window, anywhere in the world,
   to look up any item MarketWall has seen. See below.
 - **Tooltips**: what one unit nets through a vendor, the market and disenchanting, after
