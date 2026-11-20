@@ -76,6 +76,54 @@ local function MakeTabRow(parent, x, y, defs, onSelect)
   return tabs
 end
 
+-- A small text switch, in place of a row of buttons: the options side by side, the selected one
+-- gold and underlined, the others grey. options: { { key, label } }; onSelect(key) runs when the
+-- player picks another option. The switch is as wide as its labels; anchor it by any point.
+local SWITCH_GAP, SWITCH_HEIGHT = 10, 16
+local function MakeSwitch(parent, options, onSelect)
+  local switch = CreateFrame("Frame", nil, parent)
+  switch:SetHeight(SWITCH_HEIGHT)
+  switch.buttons = {}
+  local x = 0
+  for i, option in ipairs(options) do
+    local button = CreateFrame("Button", nil, switch)
+    button.key, button.label = option.key, option.label
+    button.text = MakeText(button, "GameFontHighlightSmall")
+    button.text:SetPoint("LEFT")
+    button.text:SetText(option.label)
+    local width = button.text:GetStringWidth()
+    button:SetSize(width, SWITCH_HEIGHT)
+    button:SetPoint("LEFT", x, 0)
+    x = x + width + SWITCH_GAP
+    button.underline = button:CreateTexture(nil, "ARTWORK")
+    button.underline:SetColorTexture(1, 0.82, 0, 1)
+    button.underline:SetHeight(1)
+    button.underline:SetPoint("BOTTOMLEFT")
+    button.underline:SetPoint("BOTTOMRIGHT")
+    button:SetScript("OnClick", function(self)
+      if switch.selected == self.key then return end
+      switch:Select(self.key)
+      onSelect(self.key)
+    end)
+    button:SetScript("OnEnter", function(self)
+      if switch.selected ~= self.key then self.text:SetText(self.label) end
+    end)
+    button:SetScript("OnLeave", function() switch:Select(switch.selected) end)
+    switch.buttons[i] = button
+  end
+  switch:SetWidth(math.max(0, x - SWITCH_GAP))
+
+  function switch:Select(key)
+    self.selected = key
+    for _, button in ipairs(self.buttons) do
+      local on = button.key == key
+      button.text:SetText((on and LABEL or GREY) .. button.label .. "|r")
+      button.underline:SetShown(on)
+    end
+  end
+  return switch
+end
+
 local function Pct(x)
   return string.format("%d%%", ns.Round(x * 100))
 end
@@ -715,7 +763,7 @@ local function CreateChart(parent)
 end
 ns.widgets = {
   MakeButton = MakeButton, MakeText = MakeText, MakeEdit = MakeEdit, ShowTip = ShowTip, HideTip = HideTip,
-  OnLinkInsert = OnLinkInsert, CreateList = CreateList, MakeTabRow = MakeTabRow, SelectTab = SelectTab, FitText = FitText, CreateChart = CreateChart, ShowMenu = ShowMenu, Prompt = Prompt, ListHeight = function(rows) return 22 + rows * ROW_H end,
+  OnLinkInsert = OnLinkInsert, CreateList = CreateList, MakeTabRow = MakeTabRow, SelectTab = SelectTab, MakeSwitch = MakeSwitch, FitText = FitText, CreateChart = CreateChart, ShowMenu = ShowMenu, Prompt = Prompt, ListHeight = function(rows) return 22 + rows * ROW_H end,
   CONTENT_DROP = CONTENT_DROP,
 }
 

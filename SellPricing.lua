@@ -6,7 +6,8 @@ local B, Outlet = ns.Bait, ns.Outlet
 local P = {}
 ns.SellPricing = P
 
-local WARN, LABEL, GAIN, LOSS = ns.COLOR.WARN, ns.COLOR.LABEL, ns.COLOR.GAIN, ns.COLOR.LOSS
+local C = ns.COLOR
+local WARN, LABEL, VALUE, GAIN, LOSS, GREY = C.WARN, C.LABEL, C.VALUE, C.GAIN, C.LOSS, C.GREY
 local NONE = "—"
 
 -- The wall to compare a price with: live when listings are loaded, else the last recorded one
@@ -39,7 +40,7 @@ function P.InfoLine(price, start, wall)
   local parts = {}
   if start and price == start.price then
     if start.source == "lowest" then
-      parts[1] = "Price set to the lowest listing, " .. ns.Money(price) .. (start.skipped and " (bait level skipped)" or "") .. "."
+      parts[1] = "Set to the lowest listing, " .. ns.Money(price) .. (start.skipped and " (bait level skipped)" or "") .. "."
     elseif start.skipped then
       parts[1] = "Every level listed is flagged bait, so the price starts at the last recorded wall, " .. ns.Money(price) .. "."
     else
@@ -71,13 +72,30 @@ function P.Totals(price, quantity, deposit, vendorEach, cut)
   return t
 end
 
--- "AH beats vendor by": green with a plus when posting wins, red when the vendor pays as much
--- or more, a dash for an item with no vendor price
-function P.BeatsText(t)
-  if not t.beats then return "—" end
-  local amount = ns.Money(t.beats)
-  if t.beats > 0 then return GAIN .. "+" .. amount .. "|r" end
-  return LOSS .. amount .. "|r"
+-- The answer at the top right of the Sell page, from P.Totals: net is what the auction house pays
+-- after the cut and deposit; versus compares it with a vendor, green when posting wins and red
+-- when the vendor pays as much or more; breakdown is one grey line of how net comes about.
+function P.Answer(t, quantity, price, cut)
+  local net = (t.net > 0 and VALUE or LOSS) .. ns.Money(t.net) .. "|r"
+
+  local versus
+  if not t.beats then
+    versus = GREY .. "A vendor won't buy this.|r"
+  elseif t.beats > 0 then
+    versus = GAIN .. "+" .. ns.Money(t.beats) .. " more than vendor (" .. ns.Money(t.vendor) .. ")|r"
+  elseif t.beats < 0 then
+    versus = LOSS .. ns.Money(-t.beats) .. " less than vendor (" .. ns.Money(t.vendor) .. ")|r"
+  else
+    versus = LOSS .. "The same as vendor (" .. ns.Money(t.vendor) .. ")|r"
+  end
+
+  -- the cut shown is what is left once the deposit and the rounded net are taken off, so the
+  -- line adds up to the net shown above it
+  local shownCut = ns.Round(t.total) - ns.Round(t.deposit) - ns.Round(t.net)
+  local breakdown = GREY .. string.format("%d × %s = %s · %d%% cut -%s · deposit -%s",
+    quantity, ns.MoneyFaded(price), ns.MoneyFaded(t.total), ns.Round(cut * 100),
+    ns.MoneyFaded(shownCut), ns.MoneyFaded(t.deposit)) .. "|r"
+  return { net = net, versus = versus, breakdown = breakdown }
 end
 
 -- The warnings that apply to posting at a price, each one line. f: price; totals (P.Totals);
@@ -121,11 +139,17 @@ function P.OutletLine(v)
   return string.format("AH %s · Vendor %s · Disenchant %s", auction, vendor, disenchant)
 end
 
--- The Note column: the bait level Bait Detect tracks, or the wall
-function P.AuctionNote(tier, wall, bait)
-  if bait and tier.p == bait.p then return WARN .. "bait? " .. B.LevelNote(bait) .. "|r" end
-  if tier.p == wall then return LABEL .. "wall|r" end
-  return ""
+-- A listing row's note: the bait level Bait Detect tracks or the wall, then "your price" on the
+-- level Price each matches exactly
+function P.AuctionNote(tier, wall, bait, price)
+  local note
+  if bait and tier.p == bait.p then
+    note = WARN .. "bait? " .. B.LevelNote(bait) .. "|r"
+  elseif tier.p == wall then
+    note = LABEL .. "wall|r"
+  end
+  if tier.p == price then note = (note and note .. LABEL .. " · " or LABEL) .. "your price|r" end
+  return note or ""
 end
 
 -- The bag group for an item: its best outlet, except that an item a vendor won't buy never goes

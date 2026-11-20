@@ -61,12 +61,12 @@ describe("Sell page pricing", function()
     local start = { price = 198, source = "lowest", skipped = true }
 
     it("says where the price came from and how far under the wall it is", function()
-      assert.equal("Price set to the lowest listing, 1s 98c (bait level skipped). That's 3% under the 2s 5c wall.",
+      assert.equal("Set to the lowest listing, 1s 98c (bait level skipped). That's 3% under the 2s 5c wall.",
         Plain(P.InfoLine(198, start, 205)))
     end)
 
     it("says nothing about the wall at or over it", function()
-      assert.equal("Price set to the lowest listing, 2s 5c.",
+      assert.equal("Set to the lowest listing, 2s 5c.",
         Plain(P.InfoLine(205, { price = 205, source = "lowest" }, 205)))
       assert.equal("", P.InfoLine(210, start, 205))
     end)
@@ -172,26 +172,48 @@ describe("Sell page pricing", function()
       assert.near(15157 / 92, t.netEach, 1e-9)
     end)
 
-    it("shows posting winning in green", function()
-      local text = P.BeatsText(P.Totals(205, 92, 2760, 40, 0.05))
-      assert.truthy(text:find("^|cff4fc36b%+"))
-      assert.equal("+1g 14s 77c", Plain(text))
-    end)
-
-    it("shows a tie or a loss in red", function()
-      local tie = P.BeatsText(P.Totals(50, 10, 75, 40, 0.05))
-      assert.truthy(tie:find("^|cffe06060"))
-      assert.equal("0c", Plain(tie))
-      local loss = P.BeatsText(P.Totals(40, 92, 276, 40, 0.05))
-      assert.truthy(loss:find("^|cffe06060"))
-      assert.equal("-4s 60c", Plain(loss))
-    end)
-
     it("leaves the vendor out for an item with no vendor price", function()
       local t = P.Totals(205, 92, 2760, nil, 0.05)
       assert.same({ nil, nil, nil }, { t.vendor, t.beats, t.vendorEach })
-      assert.equal("—", P.BeatsText(t))
       assert.is_nil(P.Totals(205, 92, 2760, 0, 0.05).beats)
+    end)
+  end)
+
+  describe("answer", function()
+    local function Answer(price, quantity, deposit, vendorEach)
+      local a = P.Answer(P.Totals(price, quantity, deposit, vendorEach, 0.05), quantity, price, 0.05)
+      return { Plain(a.net), Plain(a.versus), Plain(a.breakdown) }, a
+    end
+
+    it("says what the auction house pays and how much more than a vendor, in green", function()
+      -- the mockup's 17 Roasted Boar Meat at 10c, a 20c deposit and 6c at a vendor
+      local text, a = Answer(10, 17, 20, 6)
+      assert.same({ "1s 42c", "+40c more than vendor (1s 2c)", "17 × 10c = 1s 70c · 5% cut -8c · deposit -20c" }, text)
+      assert.truthy(a.versus:find("^|cff4fc36b"))
+    end)
+
+    it("shows exact amounts, and a breakdown that adds up to the rounded net", function()
+      -- 92 at 2s 5c: a cut of 943c, a net of 15157c
+      local text = Answer(205, 92, 2760, 40)
+      assert.same({ "1g 51s 57c", "+1g 14s 77c more than vendor (36s 80c)",
+        "92 × 2s 5c = 1g 88s 60c · 5% cut -9s 43c · deposit -27s 60c" }, text)
+    end)
+
+    it("says in red how much less the auction house pays when a vendor wins", function()
+      local text, a = Answer(40, 92, 276, 40)
+      assert.equal("4s 60c less than vendor (36s 80c)", text[2])
+      assert.truthy(a.versus:find("^|cffe06060"))
+      assert.equal("The same as vendor (4s)", Answer(50, 10, 75, 40)[2])
+    end)
+
+    it("says when a vendor won't buy the item", function()
+      assert.equal("A vendor won't buy this.", Answer(205, 92, 2760, nil)[2])
+    end)
+
+    it("shows a net the deposit eats in red", function()
+      local text, a = Answer(1, 5, 20, nil)
+      assert.equal("-15c", text[1])
+      assert.truthy(a.net:find("^|cffe06060"))
     end)
   end)
 

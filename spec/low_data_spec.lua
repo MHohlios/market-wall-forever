@@ -32,10 +32,10 @@ describe("data from an item's first scan", function()
     return false
   end
 
-  local function Grid(keys)
+  local function Stats()
     local out = {}
-    for _, cell in ipairs(ns.PriceView.Cells(ns.PriceView.Facts(ID, time()), keys)) do
-      out[#out + 1] = Plain(cell.label) .. ": " .. Plain(cell.value)
+    for _, stat in ipairs(ns.PriceView.Stats(ns.PriceView.Facts(ID, time()))) do
+      out[#out + 1] = stat.label .. ": " .. Plain(stat.value)
     end
     return out
   end
@@ -54,9 +54,8 @@ describe("data from an item's first scan", function()
   describe("one scan", function()
     before_each(function() SeedWalls(1000) end)
 
-    it("shows a median, normal range and Against median in the grid", function()
-      assert.same({ "Median (1 day): 10s", "Normal range: 10s - 10s", "Vs median: +0% (normal)" },
-        Grid({ "median", "normalRange", "versusMedian" }))
+    it("shows a normal range and median in the stats, with no trend from one day", function()
+      assert.same({ "Today: 10s", "Normal range: 10s – 10s", "Median: 10s" }, Stats())
     end)
 
     it("flags the tooltip just under the heading, and the trend reads n/a", function()

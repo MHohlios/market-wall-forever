@@ -16,6 +16,8 @@ local function NewFrame(frames, parent)
     if type(x) ~= "table" then self.points[#self.points + 1] = { point, x or 0, y or 0 } end
   end
   function frame:SetScript(name, fn) self.scripts[name] = fn end
+  function frame.GetStringWidth() return 0 end
+  frame.GetStringHeight = frame.GetStringWidth
   function frame:RegisterEvent(event) self.events[event] = true end
   frame.RegisterUnitEvent = frame.RegisterEvent
   function frame.CreateTexture() return NewFrame(frames) end
@@ -42,6 +44,7 @@ function M.Load()
   _G.strtrim = function(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
   _G.SlashCmdList = {}
   _G.StaticPopupDialogs = {}
+  _G.PanelTemplates_TabResize, _G.PanelTemplates_SelectTab, _G.PanelTemplates_DeselectTab = noop, noop, noop
   _G.MarketWallDB = nil   -- SavedVariables arrive empty on a first login
 
   local ns = {}

@@ -1,5 +1,6 @@
--- MarketWall: an item's price chart and stats grid, shared by the Sell page and the search window.
--- Each page picks its grid cells by name, and whether its chart gets the 7 days / 30 days / all switch.
+-- MarketWall: an item's price chart and stats block, shared by the Sell page and the search window.
+-- Under the chart: a row of large stats, each shown only when it has a value, and one grey line
+-- summarizing the range the chart's 7 days / 30 days / All switch picks.
 local _, ns = ...
 local W = ns.Wall
 
@@ -8,7 +9,7 @@ ns.PriceView = PV
 
 local DAY = 86400
 PV.FLAT = 0.03   -- moves within 3% count as flat
-local WARN, GREY = ns.COLOR.WARN, ns.COLOR.GREY
+local WARN, GREY, LABEL = ns.COLOR.WARN, ns.COLOR.GREY, ns.COLOR.LABEL
 -- Trend arrows as icons: the game's fonts have no arrow characters
 PV.UP, PV.DOWN = "|TInterface\\Buttons\\Arrow-Up-Up:0:0|t", "|TInterface\\Buttons\\Arrow-Down-Up:0:0|t"
 
@@ -59,14 +60,14 @@ function PV.LiveWall(id)
   return W.Compute(held.ladder, held.total, ns.Cfg("wallShare"), ns.Cfg("wallMinUnits"))
 end
 
--- Everything the grid cells read about one item. With a chart range (an entry of PV.RANGES),
+-- Everything the stats read about one item. With a chart range (an entry of PV.RANGES),
 -- `chart` holds the full history's points in that range and `range` summarizes them.
 function PV.Facts(id, now, range)
-  local live, lowest = PV.LiveWall(id)
+  local live = PV.LiveWall(id)
   local last, lastDay = ns.LatestWall(id)
   local series = ns.Series(id)
   local facts = {
-    id = id, now = now, held = ns.ladders[id], live = live, lowest = lowest, last = last, lastDay = lastDay,
+    id = id, now = now, held = ns.ladders[id], live = live, last = last, lastDay = lastDay,
     stats = ns.StatsFor(id), series = series, week = PV.Summary(PV.InRange(series, 7, now)), entry = ns.R().watch[id],
   }
   if range then
@@ -76,129 +77,143 @@ function PV.Facts(id, now, range)
   return facts
 end
 
+-- "Today", "Yesterday" or "3 days ago"
 local function DaysAgo(day)
   local age = ns.Today() - day
-  return (age == 0 and "today") or (age == 1 and "yesterday") or (age .. " days ago")
+  return (age == 0 and "Today") or (age == 1 and "Yesterday") or (age .. " days ago")
 end
 
--- Grid cells by name: each returns its label and its value, nil when there is nothing to show
-PV.CELLS = {
-  wallNow = function(f)
-    if f.live then return "Wall now (" .. ns.Ago(f.held.t) .. ")", ns.Money(f.live) end
-    return "Wall (last scan)", f.last and ns.Money(f.last)
+local function Plural(n, word) return n .. " " .. word .. (n == 1 and "" or "s") end
+
+-- The large stats in order: each returns its label and its value, nil when it has no value
+local STATS = {
+  -- the live wall, else the last recorded one labeled with its day
+  function(f)
+    if f.live then return "Now", ns.Money(f.live) end
+    if f.last then return DaysAgo(f.lastDay), ns.Money(f.last) end
   end,
-  current = function(f)
-    if f.live then return "Current (" .. ns.Ago(f.held.t) .. ")", ns.Money(f.live) end
-    if f.last then return "Current (" .. DaysAgo(f.lastDay) .. ")", ns.Money(f.last) end
-    return "Current", nil
+  -- compact, so a gold range fits
+  function(f)
+    if f.stats.n > 0 then return "Normal range", ns.MoneyShort(f.stats.p25) .. " – " .. ns.MoneyShort(f.stats.p75) end
   end,
-  lowestListing = function(f) return "Lowest listing", f.lowest and ns.Money(f.lowest) end,
-  supply = function(f) return "Supply", f.held and f.held.total > 0 and (f.held.total .. " units") or nil end,
-  trend = function(f) return "7-day trend", f.week and f.week.trend and PV.TrendText(f.week.trend) end,
-  average = function(f) return "7-day average", f.week and ns.Money(f.week.average) end,
-  median = function(f)
-    local n = f.stats.n
-    return "Median (" .. n .. (n == 1 and " day)" or " days)"), n > 0 and ns.Money(f.stats.median) or nil
+  function(f)
+    if f.stats.n > 0 then return "Median", ns.Money(f.stats.median) end
   end,
-  normalRange = function(f)
-    return "Normal range", f.stats.n > 0 and (ns.Money(f.stats.p25) .. " - " .. ns.Money(f.stats.p75)) or nil
+  function(f)
+    if f.week and f.week.trend then return "7-day trend", PV.TrendText(f.week.trend) end
   end,
-  versusMedian = function(f)
-    local diff, word = ns.Versus(f.live or f.last, f.stats)
-    return "Vs median", diff and ns.VersusText(diff, word)
-  end,
-  -- the chart's selected range, from the points it draws
-  rangeMin = function(f) return "Min", f.range and ns.Money(f.range.low) end,
-  rangeMax = function(f) return "Max", f.range and ns.Money(f.range.high) end,
-  rangeAverage = function(f) return "Average", f.range and ns.Money(f.range.average) end,
-  rangeMedian = function(f) return "Median", f.range and ns.Money(f.range.median) end,
-  rangeTrend = function(f) return "Trend", f.range and f.range.trend and PV.TrendText(f.range.trend) end,
-  rangePoints = function(f)
-    local days = f.range and ns.DayOf(f.now) - ns.DayOf(f.range.from) + 1
-    return "Points", f.range and (f.range.n .. " over " .. days .. (days == 1 and " day" or " days"))
-  end,
-  vendor = function(f)
+  function(f)
     local vendor = C_Item.GetItemInfo and select(11, C_Item.GetItemInfo(f.id))
-    return "Vendor", vendor and vendor > 0 and ns.Money(vendor) or nil
+    if vendor and vendor > 0 then return "Vendor", ns.Money(vendor) end
   end,
-  disenchant = function(f)
+  function(f)
     local value = ns.DisenchantValue(f.id)
     if value == false then return "Disenchant", GREY .. "not scanned|r" end
-    return "Disenchant", value and ns.Money(value)
+    if value then return "Disenchant", ns.Money(value) end
   end,
-  limits = function(f)
+  function(f)
     local e = f.entry
-    return "Your buy / sell", e and (e.buy or e.sell) and (ns.Money(e.buy) .. " / " .. ns.Money(e.sell)) or nil
+    if e and (e.buy or e.sell) then return "Your buy / sell", ns.Money(e.buy) .. " / " .. ns.Money(e.sell) end
   end,
 }
 
--- Label and value text for each named cell
-function PV.Cells(facts, keys)
+-- The large stats that have a value: { label, value }, in a fixed order
+function PV.Stats(facts)
   local out = {}
-  for i, key in ipairs(keys) do
-    local label, value = PV.CELLS[key](facts)
-    out[i] = { label = GREY .. label .. "|r", value = value or GREY .. "-|r" }
+  for _, stat in ipairs(STATS) do
+    local label, value = stat(facts)
+    if label then out[#out + 1] = { label = label, value = value } end
   end
   return out
+end
+
+-- One grey line about the chart's range: "Min · Max · Average · N points over N days", or nil
+-- for a range with no points
+function PV.RangeLine(facts)
+  local r = facts.range
+  if not r then return nil end
+  local days = ns.DayOf(facts.now) - ns.DayOf(r.from) + 1
+  return GREY .. string.format("Min %s · Max %s · Average %s · %s over %s",
+    ns.MoneyFaded(r.low), ns.MoneyFaded(r.high), ns.MoneyFaded(r.average), Plural(r.n, "point"), Plural(days, "day")) .. "|r"
 end
 
 -------------------------------------------------------------------------------
 -- Widget
 -------------------------------------------------------------------------------
 
-local GUTTER, COLUMNS, ROW_HEIGHT, FLAG_HEIGHT = 66, 4, 34, 16
+local GUTTER = 66                   -- the chart's price labels, left of it
+local AXIS_HEIGHT = 22              -- the chart's date labels, under it
+local FLAG_HEIGHT, STAT_HEIGHT, STAT_GAP, LINE_HEIGHT = 16, 34, 18, 16
 
--- layout: width, chartHeight, cellWidth, cells (names), ranges (true adds the range switch)
+-- Lays the stats out left to right in container, starting a new row when one would pass width.
+-- cells grows to hold them; the unused ones hide. Returns the number of rows.
+local function PlaceStats(container, cells, stats, width)
+  local x, row = 0, 0
+  for i, stat in ipairs(stats) do
+    local cell = cells[i]
+    if not cell then
+      cell = { label = ns.widgets.MakeText(container, "GameFontNormalSmall"), value = ns.widgets.MakeText(container, "GameFontHighlight") }
+      cell.value:SetPoint("TOPLEFT", cell.label, "BOTTOMLEFT", 0, -3)
+      cells[i] = cell
+    end
+    cell.label:SetText(LABEL .. stat.label .. "|r")
+    cell.value:SetText(stat.value)
+    local cellWidth = math.max(cell.label:GetStringWidth(), cell.value:GetStringWidth())
+    if x > 0 and x + cellWidth > width then x, row = 0, row + 1 end
+    cell.label:ClearAllPoints()
+    cell.label:SetPoint("TOPLEFT", x, -row * STAT_HEIGHT)
+    cell.label:Show()
+    cell.value:Show()
+    x = x + cellWidth + STAT_GAP
+  end
+  for i = #stats + 1, #cells do
+    cells[i].label:Hide()
+    cells[i].value:Hide()
+  end
+  return #stats > 0 and row + 1 or 0
+end
+
+-- layout: width; chartHeight for a fixed chart, the view's height then following the stats, or
+-- height for a fixed view whose chart takes what the stats leave; ranges (true adds the range
+-- switch); placeRanges(switch), to anchor the switch outside the view rather than over the chart
 function PV.CreateView(parent, layout)
   local w = ns.widgets
   local view = CreateFrame("Frame", nil, parent)
-  view:SetWidth(layout.width)
+  view:SetSize(layout.width, layout.height or 1)
   view.range = PV.RANGES[1]
 
   local chartTop = -6
   if layout.ranges then
-    chartTop = -34
-    view.rangeButtons = {}
-    local previous
-    for i = #PV.RANGES, 1, -1 do
-      local range = PV.RANGES[i]
-      local button = w.MakeButton(view, range.label, 64)
-      if previous then button:SetPoint("RIGHT", previous, "LEFT", -4, 0) else button:SetPoint("TOPRIGHT", 0, -2) end
-      button:SetScript("OnClick", function()
-        view.range = range
-        view:Redraw()
-      end)
-      view.rangeButtons[i] = button
-      previous = button
+    local options = {}
+    for i, range in ipairs(PV.RANGES) do options[i] = { key = i, label = range.label } end
+    view.ranges = w.MakeSwitch(view, options, function(i)
+      view.range = PV.RANGES[i]
+      view:Redraw()
+    end)
+    view.ranges:Select(1)
+    if layout.placeRanges then
+      layout.placeRanges(view.ranges)
+    else
+      view.ranges:SetPoint("TOPRIGHT", 0, -2)
+      chartTop = -24
     end
   end
 
   view.chart = w.CreateChart(view)
-  view.chart:SetSize(layout.width - GUTTER, layout.chartHeight)
+  view.chart:SetSize(layout.width - GUTTER, layout.chartHeight or 1)
   view.chart:SetPoint("TOPLEFT", GUTTER, chartTop)
   view.chart.legend:Hide()   -- too wide here; the numbers below describe the lines
 
-  -- the low-data flag sits on its own line between the chart and the grid
-  local flagTop = chartTop - layout.chartHeight - 22
   view.flag = w.MakeText(view, "GameFontHighlightSmall")
-  view.flag:SetPoint("TOPLEFT", 0, flagTop)
   view.flag:SetWidth(layout.width)
   view.flag:SetWordWrap(false)
-  local gridTop = flagTop - FLAG_HEIGHT
+  local statsWidth = layout.width - GUTTER
+  view.stats = CreateFrame("Frame", nil, view)
+  view.stats:SetSize(statsWidth, 1)
   view.cells = {}
-  for i = 1, #layout.cells do
-    local col, row = (i - 1) % COLUMNS, math.floor((i - 1) / COLUMNS)
-    local label = w.MakeText(view, "GameFontHighlightSmall")
-    label:SetPoint("TOPLEFT", col * layout.cellWidth, gridTop - row * ROW_HEIGHT)
-    label:SetWidth(layout.cellWidth - 4)
-    label:SetWordWrap(false)
-    local value = w.MakeText(view, "GameFontHighlight")
-    value:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -2)
-    value:SetWidth(layout.cellWidth - 4)
-    value:SetWordWrap(false)
-    view.cells[i] = { label = label, value = value }
-  end
-  view:SetHeight(-gridTop + math.ceil(#layout.cells / COLUMNS) * ROW_HEIGHT)
+  view.rangeLine = w.MakeText(view, "GameFontHighlightSmall")
+  view.rangeLine:SetWidth(statsWidth)
+  view.rangeLine:SetWordWrap(false)
 
   -- Draw an item, with optional buy and sell lines on the chart
   function view:SetItem(id, buy, sell)
@@ -206,21 +221,34 @@ function PV.CreateView(parent, layout)
     self:Redraw()
   end
 
+  -- Stack the chart, the low-data flag, the stats rows and the range line from the top
+  local function Arrange(self, flagShown, rows)
+    local below = AXIS_HEIGHT + (flagShown and FLAG_HEIGHT or 0) + rows * STAT_HEIGHT + LINE_HEIGHT
+    local chartHeight = layout.chartHeight or (layout.height + chartTop - below)
+    self.chart:SetHeight(chartHeight)
+    local y = chartTop - chartHeight - AXIS_HEIGHT
+    self.flag:ClearAllPoints()
+    self.flag:SetPoint("TOPLEFT", 0, y)
+    if flagShown then y = y - FLAG_HEIGHT end
+    self.stats:ClearAllPoints()
+    self.stats:SetPoint("TOPLEFT", GUTTER, y)
+    y = y - rows * STAT_HEIGHT
+    self.rangeLine:ClearAllPoints()
+    self.rangeLine:SetPoint("TOPLEFT", GUTTER, y)
+    if not layout.height then self:SetHeight(-y + LINE_HEIGHT) end
+  end
+  Arrange(view, false, 1)
+
   function view:Redraw()
     if not self.id then return end
     -- the range switch reaches back past the snapshots into the daily and weekly history
     local facts = PV.Facts(self.id, time(), layout.ranges and self.range)
-    local points = facts.chart or PV.InRange(facts.series, self.range.days, facts.now)
-    self.chart:Draw(points, self.buy, self.sell, facts.stats)
     local flag = ns.LowDataText(ns.DaysOfData(self.id))
     self.flag:SetText(flag and WARN .. flag .. "|r" or "")
-    for i, cell in ipairs(PV.Cells(facts, layout.cells)) do
-      self.cells[i].label:SetText(cell.label)
-      self.cells[i].value:SetText(cell.value)
-    end
-    for i, button in pairs(self.rangeButtons or {}) do
-      if PV.RANGES[i] == self.range then button:LockHighlight() else button:UnlockHighlight() end
-    end
+    self.rangeLine:SetText(PV.RangeLine(facts) or "")
+    Arrange(self, flag ~= nil, PlaceStats(self.stats, self.cells, PV.Stats(facts), statsWidth))
+    -- after Arrange, which sizes the chart the drawing fills
+    self.chart:Draw(facts.chart or PV.InRange(facts.series, self.range.days, facts.now), self.buy, self.sell, facts.stats)
   end
 
   return view
