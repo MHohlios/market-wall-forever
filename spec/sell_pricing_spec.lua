@@ -72,8 +72,8 @@ describe("Sell page pricing", function()
     end)
 
     it("describes a price the player typed against the wall", function()
-      assert.equal("This price is 50% under the 2s 0c wall.", Plain(P.InfoLine(100, start, 200)))
-      assert.equal("This price is just under the 20g 0s 0c wall.", Plain(P.InfoLine(199999, start, 200000)))
+      assert.equal("This price is 50% under the 2s wall.", Plain(P.InfoLine(100, start, 200)))
+      assert.equal("This price is just under the 20g wall.", Plain(P.InfoLine(199999, start, 200000)))
     end)
 
     it("names the wall fallback", function()
@@ -103,14 +103,14 @@ describe("Sell page pricing", function()
     end)
 
     it("warns below the low end of the normal range, not at it", function()
-      assert.same({ "Below expected: 1s 98c is under this item's normal range (1s 99c - 2s 0c)." },
+      assert.same({ "Below expected: 1s 98c is under this item's normal range (1s 99c - 2s)." },
         Warnings({ price = 198, stats = stats }))
       assert.same({}, Warnings({ price = 199, stats = stats }))
     end)
 
     it("warns from an item's first scan, against today's wall", function()
       local firstScan = W.Stats({}, 200)
-      assert.same({ "Below expected: 1s 99c is under this item's normal range (2s 0c - 2s 0c)." },
+      assert.same({ "Below expected: 1s 99c is under this item's normal range (2s - 2s)." },
         Warnings({ price = 199, stats = firstScan }))
     end)
 
@@ -142,10 +142,10 @@ describe("Sell page pricing", function()
 
     it("names a better outlet than the auction house", function()
       local de = O.Values({ vendor = 100, wall = 1000, supplied = true, disenchant = 2000, cut = 0.05 })
-      assert.same({ "Best outlet is disenchanting: 19s 0c each after fees, more than the auction house or a vendor." },
+      assert.same({ "Best outlet is disenchanting: 19s each after fees, more than the auction house or a vendor." },
         Warnings({ price = 1000, outlet = de }))
       local vendor = O.Values({ vendor = 100, wall = 100, supplied = true, cut = 0.05 })
-      assert.same({ "Best outlet is a vendor: 1s 0c each, at least what the auction house pays after fees." },
+      assert.same({ "Best outlet is a vendor: 1s each, at least what the auction house pays after fees." },
         Warnings({ price = 1000, outlet = vendor }))
       local thin = O.Values({ vendor = 10, wall = 1000, supplied = false, cut = 0.05 })
       assert.same({ "Best outlet is a vendor: the market is too thin to trust." }, Warnings({ price = 1000, outlet = thin }))

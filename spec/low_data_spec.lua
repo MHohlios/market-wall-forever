@@ -55,7 +55,7 @@ describe("data from an item's first scan", function()
     before_each(function() SeedWalls(1000) end)
 
     it("shows a median, normal range and Against median in the grid", function()
-      assert.same({ "Median (1 day): 10s 0c", "Normal range: 10s 0c - 10s 0c", "Vs median: +0% (normal)" },
+      assert.same({ "Median (1 day): 10s", "Normal range: 10s - 10s", "Vs median: +0% (normal)" },
         Grid({ "median", "normalRange", "versusMedian" }))
     end)
 

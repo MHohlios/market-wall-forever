@@ -143,12 +143,12 @@ describe("price view", function()
       local SEVEN_DAYS, THIRTY_DAYS, ALL = PV.RANGES[1], PV.RANGES[2], PV.RANGES[3]
 
       it("summarizes the last 7 days", function()
-        assert.same({ "Min: 90c", "Max: 1s 20c", "Average: 1s 4c", "Median: 1s 0c", "Trend: flat", "Points: 5 over 6 days" },
+        assert.same({ "Min: 90c", "Max: 1s 20c", "Average: 1s 4c", "Median: 1s", "Trend: flat", "Points: 5 over 6 days" },
           Grid(RANGE_CELLS, SEVEN_DAYS))
       end)
 
       it("summarizes the last 30 days", function()
-        assert.same({ "Min: 90c", "Max: 2s 0c", "Average: 1s 20c", "Median: 1s 5c", "Trend: down 50%", "Points: 6 over 21 days" },
+        assert.same({ "Min: 90c", "Max: 2s", "Average: 1s 20c", "Median: 1s 5c", "Trend: down 50%", "Points: 6 over 21 days" },
           Grid(RANGE_CELLS, THIRTY_DAYS))
       end)
 
@@ -168,7 +168,7 @@ describe("price view", function()
       end)
 
       it("shows the current wall with its age", function()
-        assert.same({ "Current (yesterday): 1s 0c" }, Grid({ "current" }, SEVEN_DAYS))
+        assert.same({ "Current (yesterday): 1s" }, Grid({ "current" }, SEVEN_DAYS))
         ns.ladders[ID] = { ladder = { { p = 95, q = 2 }, { p = 99, q = 200 } }, total = 202, t = time() }
         assert.same({ "Current (just now): 99c" }, Grid({ "current" }, SEVEN_DAYS))
       end)
@@ -176,14 +176,14 @@ describe("price view", function()
       it("shows dashes for a range with no points, keeping the current wall", function()
         ns.R().days[ID] = {}
         Day(20, 200)
-        assert.same({ "Current (20 days ago): 2s 0c", "Min: -", "Max: -", "Average: -", "Median: -", "Trend: -", "Points: -" },
+        assert.same({ "Current (20 days ago): 2s", "Min: -", "Max: -", "Average: -", "Median: -", "Trend: -", "Points: -" },
           Grid({ "current", "rangeMin", "rangeMax", "rangeAverage", "rangeMedian", "rangeTrend", "rangePoints" }, SEVEN_DAYS))
       end)
     end)
 
     it("fills the search window's other cells from the item's history", function()
       assert.same({
-        "Normal range: 1s 0c - 1s 10c",
+        "Normal range: 1s - 1s 10c",
         "Vendor: 2c",
         "Disenchant: -",
         "Your buy / sell: 90c / 1s 20c",
@@ -192,13 +192,13 @@ describe("price view", function()
 
     it("fills the Sell page's cells from the same facts, with no live listings loaded", function()
       assert.same({
-        "Wall (last scan): 1s 0c",
+        "Wall (last scan): 1s",
         "Lowest listing: -",
         "Supply: -",
         "7-day trend: flat",
         "7-day average: 1s 4c",
-        "Median (5 days): 1s 0c",
-        "Normal range: 1s 0c - 1s 10c",
+        "Median (5 days): 1s",
+        "Normal range: 1s - 1s 10c",
         "Vs median: +0% (normal)",
       }, Grid({ "wallNow", "lowestListing", "supply", "trend", "average", "median", "normalRange", "versusMedian" }))
     end)
