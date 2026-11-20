@@ -32,7 +32,7 @@ Ledger.LABELS = {
   training = "Training",
   flight = "Flights",
   other = "Other",
-  offline = "Other (while offline or unrecorded)",
+  offline = "Unrecorded",   -- gold that changed while MarketWall wasn't running
 }
 
 -- contexts[name] is true while its window is open, or the time it closed or was last seen

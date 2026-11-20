@@ -67,42 +67,45 @@ describe("Ledger view", function()
     assert.equal("October 2026", L.PeriodText("month", 202610, NOW))
   end)
 
-  it("lists each side largest first, then Other always and offline changes, then the total", function()
+  it("lists each side largest first, then Other and Unrecorded, then the total, leaving out empty sources", function()
     local function Labels(rows)
       local out = {}
       for i, row in ipairs(rows) do out[i] = row.label .. " " .. row.copper end
       return out
     end
-    assert.same({ "Vendor sales 300", "Loot coins 200", "Other 0", "Total 500" },
-      Labels(L.Rows({ loot = 200, vendor_sale = 300 })))
-    assert.same({ "Repairs 50", "Other 5", "Other (while offline or unrecorded) 20", "Total 75" },
+    assert.same({ "Vendor sales 300", "Loot coins 200", "Total 500" },
+      Labels(L.Rows({ loot = 200, vendor_sale = 300, other = 0 })))
+    assert.same({ "Repairs 50", "Other 5", "Unrecorded 20", "Total 75" },
       Labels(L.Rows({ repair = 50, offline = 20, other = 5 })))
-    assert.same({ "Other 0", "Total 0" }, Labels(L.Rows({})))
+    assert.same({ "Total 0" }, Labels(L.Rows({})))
   end)
 
-  it("charts gold at the end of each period, counting each character from its opening", function()
-    local ledger = Ledgers()
-    local month = L.Balance(L.Books(ledger, "Main-Forever", false), "month", NOW)
-    assert.same({ 1500, 1930 }, { month[1].w, month[2].w })
-    assert.equal(os.time({ year = 2026, month = 11, day = 1, hour = 0 }), month[1].t)
-    assert.equal(NOW, month[2].t)
-    local weeks = L.Balance(L.Books(ledger, "Main-Forever", true), "week", NOW)
-    local balances = {}
-    for i, point in ipairs(weeks) do balances[i] = point.w end
-    assert.same({ 1500, 1800 + 400, 1930 + 500 }, balances)
+  it("sums up income, spending and net, and says how much spending is unrecorded", function()
+    local main = L.Books(Ledgers(), "Main-Forever", false)
+    local summary = L.Summary(L.Roll(main, "week", L.PeriodOf("week", NOW)))
+    assert.same({ income = 200, spending = 70, net = 130, unrecorded = 20 }, summary)
+    assert.equal("20c of spending is unrecorded: gold that changed while MarketWall wasn't running.",
+      addon.Plain(L.UnrecordedText(summary)))
+    assert.is_nil(L.UnrecordedText(L.Summary({ income = { loot = 5 }, spending = { repair = 5 } })))
   end)
 
-  it("counts a character opened after the last change, with no changes of its own", function()
-    local main = Ledger.NewBook(1000, OCTOBER - DAY)
-    Ledger.Record(main, 1500, OCTOBER, "loot")
-    local alt = Ledger.NewBook(400, NOW - 60)
-    local series = L.Balance({ main, alt }, "month", NOW)
-    assert.same({ 1500, 1900 }, { series[1].w, series[2].w })
-    assert.equal(NOW, series[2].t)
+  it("gives each day of the week its net gold, today's included when it is the only one", function()
+    local week = L.PeriodOf("week", NOW)
+    local days = L.Days(L.Books(Ledgers(), "Main-Forever", true), "week", week)
+    assert.equal(7, #days)
+    assert.equal(week, days[1].day)
+    local nets = {}
+    for i, day in ipairs(days) do nets[i] = day.net end
+    assert.same({ 0, 0, 200 - 50 - 20 + 100, 0, 0, 0, 0 }, nets)   -- all on Wednesday
+    assert.equal(ns.DayOf(NOW), days[3].day)
+    assert.same({ "Mon", "Wed" }, { L.DayLabel("week", days[1].day), L.DayLabel("week", days[3].day) })
   end)
 
-  it("charts the opening gold alone before any change", function()
-    local book = Ledger.NewBook(700, NOW - 60)
-    assert.same({ { t = NOW, w = 700 } }, L.Balance({ book }, "week", NOW))
+  it("gives a month a bar per calendar day, labelling the first and every fifth", function()
+    local days = L.Days({ Main() }, "month", 202611)
+    assert.equal(30, #days)
+    assert.same({ "1", "", "5" }, { L.DayLabel("month", days[1].day), L.DayLabel("month", days[2].day), L.DayLabel("month", days[5].day) })
+    assert.equal(300, days[11].net)   -- Nov 11, a week before NOW: the vendor sale
+    assert.equal(31, #L.Days({ Main() }, "month", 202610))
   end)
 end)
