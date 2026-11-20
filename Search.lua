@@ -2,7 +2,7 @@
 -- Items view, left: the search box, matching names and recent searches. Right: the item's chart
 -- and stats. The Mobs, Ledger, Sessions and Crafting views (MobsView.lua, LedgerView.lua,
 -- SessionsView.lua, CraftingView.lua) share the window behind an Items | Mobs | Ledger | Sessions |
--- Crafting switch.
+-- Crafting tabs.
 local _, ns = ...
 local PV = ns.PriceView
 

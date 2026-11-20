@@ -97,9 +97,14 @@ describe("Crafting view", function()
   describe("cells", function()
     it("sign profit and margin, red for a loss", function()
       assert.equal("+1s 20c", Plain(V.Profit(120)))
-      assert.equal("|cffff5555", V.Profit(-7):sub(1, 10))
+      assert.equal(ns.COLOR.LOSS, V.Profit(-7):sub(1, 10))
       assert.equal("-7c", Plain(V.Profit(-7)))
       assert.equal("-23%", Plain(V.Margin(-0.23)))
+    end)
+
+    it("give the profit cell its exact amount on hover only when the cell rounds it", function()
+      assert.equal("+1g 2s 34c", Plain(V.CellTips({ profit = 10234 })[5]))
+      assert.is_nil(V.CellTips({ profit = 120 }))
     end)
 
     it("colour the skill, red above your rank", function()
@@ -114,7 +119,9 @@ describe("Crafting view", function()
 
     it("tag a product that pays most disenchanted", function()
       local p = { buy = { [THREAD] = 10 }, walls = { [CLOTH] = { 100, true }, [SHIRT] = { 500, true } }, disenchant = { [SHIRT] = 900 } }
-      assert.equal("9s 0c DE", Plain(V.Cells(Evaluate(Recipe({}), p), "known")[4]))
+      local evaluation = Evaluate(Recipe({}), p)
+      assert.equal(900, V.Cells(evaluation, "known")[4])
+      assert.equal(" DE", Plain(V.Suffixes(evaluation)[4]))
     end)
 
     it("fit the search window's 736-pixel list in every mode", function()
@@ -128,9 +135,10 @@ describe("Crafting view", function()
     it("mark disenchanting best for a product never listed when it pays more than a vendor", function()
       local p = { buy = { [THREAD] = 10 }, vendor = { [SHIRT] = 100 }, walls = { [CLOTH] = { 100, true } }, disenchant = { [SHIRT] = 900 } }
       local evaluation = Evaluate(Recipe({}), p)
-      assert.equal("9s 0c DE", Plain(V.Cells(evaluation, "known")[4]))
+      assert.equal(900, V.Cells(evaluation, "known")[4])
+      assert.equal(" DE", Plain(V.Suffixes(evaluation)[4]))
       local product = V.Breakdown(evaluation, { name = tostring, bags = function() return 0 end })[2]
-      assert.same({ "1s 0c", "9s 0c" }, { Plain(product.rows[1][2]), Plain(product.rows[3][2]):match("[%d].*") })
+      assert.same({ "1s", "9s" }, { Plain(product.rows[1][2]), Plain(product.rows[3][2]):match("[%d].*") })
       assert.matches("^best", Plain(product.rows[3][2]))
     end)
 
@@ -209,7 +217,7 @@ describe("Crafting view", function()
 
     it("lists each reagent with its source and bag count, and the total", function()
       local mats = V.Breakdown(Evaluate(Recipe({}), PRICED), INFO)[1]
-      assert.same({ "1 x Coarse Thread  vendor, 0 in bags = 10c", "2 x Linen Cloth  wall, 5 in bags = 2s 0c", "Cost = 2s 10c" }, Rows(mats))
+      assert.same({ "1 x Coarse Thread  vendor, 0 in bags = 10c", "2 x Linen Cloth  wall, 5 in bags = 2s", "Cost = 2s 10c" }, Rows(mats))
     end)
 
     it("leaves the cost unknown when a reagent has no price", function()
@@ -221,12 +229,12 @@ describe("Crafting view", function()
       local p = { buy = { [THREAD] = 10 }, vendor = { [SHIRT] = 100 }, walls = { [CLOTH] = { 100, true }, [SHIRT] = { 500, true } } }
       local product = V.Breakdown(Evaluate(Recipe({ made = 2 }), p), INFO)[2]
       assert.equal("Product, 2 per craft, after the cut and deposit", product.title)
-      assert.same({ "Vendor = 2s 0c", "Market (net) = best  10s 0c", "Disenchant (net) = no data", "Profit per craft = +7s 90c" }, Rows(product))
+      assert.same({ "Vendor = 2s", "Market (net) = best  10s", "Disenchant (net) = no data", "Profit per craft = +7s 90c" }, Rows(product))
     end)
 
     it("shows the market's listings, days seen and trend", function()
       local market = V.Breakdown(Evaluate(Recipe({}), PRICED), { name = INFO.name, bags = INFO.bags, trend = -0.04 })[3]
-      assert.same({ "Listed, latest scan = 12", "Seen in scans, last 7 days = 2 of 7 days", "Wall, 7-day trend = down 4%" }, Rows(market))
+      assert.same({ "Listed, latest scan = 12", "Seen in scans, last 7 days = 2 of 7 days", "Wall, 7-day trend = ▼ 4%" }, Rows(market))
       market = V.Breakdown(Evaluate(Recipe({}), {}), INFO)[3]
       assert.same({ "Listed, latest scan = no data", "Seen in scans, last 7 days = 0 of 7 days", "Wall, 7-day trend = no data" }, Rows(market))
     end)

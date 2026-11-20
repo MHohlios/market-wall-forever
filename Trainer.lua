@@ -11,7 +11,7 @@ local Crafting, Professions = ns.Crafting, ns.Professions
 local Trainer = {}
 ns.Trainer = Trainer
 
-local GREY, GOLD, RED = "|cffa3acac", "|cfff5c518", "|cffe0524a"
+local GREY, BRAND, LOSS = ns.COLOR.GREY, ns.COLOR.BRAND, ns.COLOR.LOSS
 local TRAINER_UI = "Blizzard_TrainerUI"   -- load-on-demand, loaded on the first trainer visit
 
 local TRAINER_API = {
@@ -79,7 +79,7 @@ function Trainer.RowText(index)
   local _, serviceType = ServiceInfo(index)
   if serviceType == "used" then return GREY .. "known|r · " .. profit end
   local _, skillRank, hasSkill = GetTrainerServiceSkillReq(index)
-  local first = (not hasSkill and skillRank) and RED .. "needs " .. skillRank .. "|r" or ns.Money(cost)
+  local first = (not hasSkill and skillRank) and LOSS .. "needs " .. skillRank .. "|r" or ns.Money(cost)
   return first .. " · " .. profit .. " · " .. ns.CraftingText.Payback(Crafting.Payback(cost, evaluation.profit))
 end
 
@@ -119,7 +119,7 @@ local function ShowBreakdown(button)
     GameTooltip:AddLine((GetTrainerServiceInfo(button:GetID())))
   end
   GameTooltip:AddLine(" ")
-  GameTooltip:AddLine(GOLD .. "MarketWall|r")
+  GameTooltip:AddLine(BRAND .. "MarketWall|r")
   for _, line in ipairs(lines) do GameTooltip:AddDoubleLine(line[1], line[2], 1, 1, 1, 1, 1, 1) end
   GameTooltip:Show()
 end

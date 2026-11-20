@@ -1,7 +1,7 @@
 -- MarketWall: market, vendor and disenchant prices on item tooltips
 local _, ns = ...
 
-local GREY, GOLD, GREEN, ORANGE = "|cffa3acac", "|cfff5c518", "|cff4fc36b", "|cffffb057"
+local GREY, GOLD, ORANGE = "|cffa3acac", "|cfff5c518", "|cffffb057"
 -- The item block: the best outlet bright, every other row faded, Shift's detail dimmer still
 local HEADING, HINT = "|cff2fa39d", "|cff5d6464"
 local BRIGHT, WHITE, FADED, DIM = "|cff3fe6d6", "|cffffffff", "|cff868d8d", "|cff6f7676"
@@ -154,7 +154,7 @@ end
 
 -- Crafting ----------------------------------------------------------------------------------
 
-local RED = "|cffe0524a"
+local GAIN, LOSS = ns.COLOR.GAIN, ns.COLOR.LOSS
 local MARKET_WORDS = { deep = "Deep", steady = "Steady", thin = "Thin", nodata = "No data" }
 
 -- Crafting numbers as tooltip text, shared with the trainer rows (Trainer.lua)
@@ -162,8 +162,8 @@ local CraftingText = {}
 
 function CraftingText.Profit(profit)
   if not profit then return GREY .. "no data|r" end
-  if profit > 0 then return GREEN .. "+" .. ns.Money(profit) .. "|r" end
-  return RED .. ns.Money(profit) .. "|r"
+  if profit > 0 then return GAIN .. "+" .. ns.Money(profit) .. "|r" end
+  return LOSS .. ns.Money(profit) .. "|r"
 end
 
 function CraftingText.Market(market)
@@ -173,7 +173,7 @@ function CraftingText.Market(market)
 end
 
 function CraftingText.Payback(payback)
-  if payback == ns.Crafting.NEVER then return RED .. "never|r" end
+  if payback == ns.Crafting.NEVER then return LOSS .. "never|r" end
   if not payback then return GREY .. "no data|r" end
   return payback .. (payback == 1 and " craft" or " crafts")
 end
@@ -194,7 +194,7 @@ local function PatternLines(tooltip, add, id)
     local at = evaluation.learnCost and " at " .. ns.MoneyFaded(evaluation.learnCost) or ""
     row("Pays back" .. at, CraftingText.Payback(evaluation.payback))
   end
-  row("You", recipe.known and GREEN .. "Known|r" or "Not known")
+  row("You", recipe.known and GAIN .. "Known|r" or "Not known")
 end
 
 -- Size of the stack the tooltip is for, read from the bag slot that owns it.

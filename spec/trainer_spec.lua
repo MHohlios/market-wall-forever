@@ -108,7 +108,7 @@ describe("trainer", function()
 
     it("shows the training cost, profit and payback", function()
       local text = addon.Plain(ns.Trainer.RowText(3))
-      assert.truthy(text:find("^1g 50s 0c · %+%d+s %d+c · %d+ crafts$"), text)
+      assert.truthy(text:find("^1g 50s · %+%d+s · %d+ crafts$"), text)
     end)
 
     it("shows the skill a recipe still needs instead of its cost", function()
@@ -132,7 +132,7 @@ describe("trainer", function()
       for i, line in ipairs(lines) do left[i] = addon.Plain(line[1]) end
       assert.equal("Mats: 3 item:" .. BOLT .. ", 1 item:14341", left[1])
       assert.same({ "Sells for (net)", "Profit per craft", "Market" }, { left[2], left[3], left[4] })
-      assert.equal("80s 0c", addon.Plain(lines[1][2]))   -- 3 × 10s wall + 50s vendor thread
+      assert.equal("80s", addon.Plain(lines[1][2]))   -- 3 × 10s wall + 50s vendor thread
       assert.truthy(left[5]:find("^Training pays back in %d+ crafts$"))
     end)
   end)
@@ -163,7 +163,7 @@ describe("trainer", function()
       Stub("ClassTrainerFrame_InitServiceButton", function() end)
       fire("ADDON_LOADED", "Blizzard_TrainerUI")
       hooks.ClassTrainerFrame_InitServiceButton(button, {})
-      assert.truthy(addon.Plain(button.text.value):find("^1g 50s 0c · "))
+      assert.truthy(addon.Plain(button.text.value):find("^1g 50s · "))
       assert.is_function(button.scripts.OnEnter)
 
       button.id = 4   -- the pooled button reused for a service that teaches no recipe

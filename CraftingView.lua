@@ -1,6 +1,6 @@
 -- MarketWall: the crafting guide. Every recipe of a profession at saved wall prices (Professions.Guide),
 -- most profit first, with a breakdown of the selected one. One panel, built in two places: the
--- search window's Crafting switch and the Market tab's Crafting page. It only recommends: buying a
+-- search window's Crafting tab and the Market tab's Crafting tab. It only recommends: buying a
 -- pattern is the item page's own manual flow.
 local _, ns = ...
 local Crafting, Outlet, PV = ns.Crafting, ns.Outlet, ns.PriceView
@@ -11,7 +11,8 @@ ns.CraftingView = V
 V.MODES = { { key = "known", label = "Known" }, { key = "learnable", label = "Learnable" }, { key = "all", label = "All" } }
 
 local LIST_ROWS = 10
-local GREY, GREEN, RED, ORANGE, GOLD, BLUE, PURPLE = "|cffa3acac", "|cff40c040", "|cffff5555", "|cffffb057", "|cfff5c518", "|cff7cc0ff", "|cffc08cff"
+local GREY, GAIN, LOSS, WARN, LABEL = ns.COLOR.GREY, ns.COLOR.GAIN, ns.COLOR.LOSS, ns.COLOR.WARN, ns.COLOR.LABEL
+local PURPLE = "|cffc08cff"   -- the Forever tag, which the palette has no job for
 local NO_DATA = GREY .. "no data|r"
 
 -- The profession window's difficulty colours
@@ -20,7 +21,7 @@ local SKILL_COLOURS = {
   [Crafting.GREEN] = "|cff40bf40", [Crafting.GREY] = "|cff808080",
 }
 local MARKET_TEXT = {
-  [Crafting.DEEP] = GREEN .. "Deep", [Crafting.STEADY] = "Steady", [Crafting.THIN] = ORANGE .. "Thin",
+  [Crafting.DEEP] = GAIN .. "Deep", [Crafting.STEADY] = "Steady", [Crafting.THIN] = WARN .. "Thin",
 }
 local MARKET_ORDER = { [Crafting.DEEP] = 3, [Crafting.STEADY] = 2, [Crafting.THIN] = 1 }
 local LEARN_FROM = { trainer = "Trainer", vendor = "Vendor", drop = "Pattern drop", quest = "Quest" }
@@ -28,9 +29,9 @@ local LEARN_FROM = { trainer = "Trainer", vendor = "Vendor", drop = "Pattern dro
 local RECIPE_TIP = "Click a recipe for its breakdown. The item's quality colour; Forever: an item only WoW Forever has."
 local COMMON_COLUMNS = {
   { "Skill", 48, "RIGHT", "The skill the recipe needs, in its skill-up colour at your skill. Red: above your skill." },
-  { "Mats cost", 74, "RIGHT", "One craft's reagents: each at its vendor price when a vendor sells it, otherwise its wall. No data when any reagent has no price." },
-  { "Sells for", 80, "RIGHT", "What one craft sells for through its best outlet, after the cut and deposit, as the item tooltip shows it. DE: disenchanting pays most." },
-  { "Profit", 74, "RIGHT", "Sells for minus mats cost, per craft." },
+  { "Mats cost", 74, "RIGHT", "One craft's reagents: each at its vendor price when a vendor sells it, otherwise its wall. No data when any reagent has no price.", money = true },
+  { "Sells for", 80, "RIGHT", "What one craft sells for through its best outlet, after the cut and deposit, as the item tooltip shows it. DE: disenchanting pays most.", money = true },
+  { "Profit", 74, "RIGHT", "Sells for minus mats cost, per craft.", cellTip = true },
 }
 local MARKET_COLUMN = { "Market", 100, nil, "How easy the product is to sell, from your scans: units listed on its latest day. Deep: 40 or more listed on 5 of the last 7 days. Thin: too little supply to trust its wall. The auction house reports no sales." }
 
@@ -50,7 +51,7 @@ local LEARNABLE_COLUMNS = Columns(
   { { "Recipe", 136, nil, RECIPE_TIP } }, COMMON_COLUMNS,
   { MARKET_COLUMN,
     { "Learn from", 100, nil, "Where the recipe is learned. On the AH: its pattern was listed in your scans." },
-    { "Pattern cost", 68, "RIGHT", "The pattern's wall when it is listed, else its vendor or trainer price." },
+    { "Pattern cost", 68, "RIGHT", "The pattern's wall when it is listed, else its vendor or trainer price.", money = true },
     { "Pays back", 56, "RIGHT", "Crafts until the profit pays for the pattern, rounded up. Never: a craft makes no profit." } })
 
 -------------------------------------------------------------------------------
@@ -85,19 +86,27 @@ end
 
 -- Formatting --------------------------------------------------------------------------------
 
+-- An exact amount, for the breakdown
 function V.Money(copper)
-  return copper and ns.MoneyShort(copper) or NO_DATA
+  return copper and ns.Money(copper) or NO_DATA
 end
 
-function V.Profit(copper)
+-- A list's money cell: copper for the list to show compact, with the exact amount on hover
+local function MoneyCell(copper)
+  return copper or NO_DATA
+end
+
+-- Signed profit, green or red; compact unless exact, as a list cell is
+function V.Profit(copper, exact)
   if not copper then return NO_DATA end
-  if copper < 0 then return RED .. ns.MoneyShort(copper) .. "|r" end
-  return GREEN .. "+" .. ns.MoneyShort(copper) .. "|r"
+  local money = (exact and ns.Money or ns.MoneyShort)(copper)
+  if copper < 0 then return LOSS .. money .. "|r" end
+  return GAIN .. "+" .. money .. "|r"
 end
 
 function V.Margin(share)
   if not share then return NO_DATA end
-  return (share < 0 and RED or GREEN) .. string.format("%d%%", ns.Round(share * 100)) .. "|r"
+  return (share < 0 and LOSS or GAIN) .. string.format("%d%%", ns.Round(share * 100)) .. "|r"
 end
 
 function V.Skill(skill, colour)
@@ -123,7 +132,7 @@ function V.LearnFrom(evaluation)
 end
 
 function V.Payback(payback)
-  if payback == Crafting.NEVER then return RED .. "never|r" end
+  if payback == Crafting.NEVER then return LOSS .. "never|r" end
   if not payback then return NO_DATA end
   return payback == 1 and "1 craft" or (payback .. " crafts")
 end
@@ -136,10 +145,6 @@ local function BestOutlet(outlet)
   return Outlet.VENDOR
 end
 
-local function SellsFor(evaluation)
-  local tag = evaluation.net and BestOutlet(evaluation.outlet) == Outlet.DISENCHANT and (" " .. BLUE .. "DE|r") or ""
-  return V.Money(evaluation.net) .. tag
-end
 
 -- The product's name in its quality colour, or the recipe's name until the game has the item
 local function RecipeCell(recipe)
@@ -151,8 +156,8 @@ end
 -- Display cells for one recipe under a mode's columns
 function V.Cells(evaluation, mode)
   local recipe = evaluation.recipe
-  local cells = { RecipeCell(recipe), V.Skill(recipe.skill, evaluation.colour), V.Money(evaluation.cost),
-    SellsFor(evaluation), V.Profit(evaluation.profit) }
+  local cells = { RecipeCell(recipe), V.Skill(recipe.skill, evaluation.colour), MoneyCell(evaluation.cost),
+    MoneyCell(evaluation.net), V.Profit(evaluation.profit) }
   if mode == "known" then
     cells[#cells + 1] = V.Margin(evaluation.margin)
     cells[#cells + 1] = V.Market(evaluation.market)
@@ -160,10 +165,25 @@ function V.Cells(evaluation, mode)
   else
     cells[#cells + 1] = V.Market(evaluation.market)
     cells[#cells + 1] = V.LearnFrom(evaluation)
-    cells[#cells + 1] = V.Money(evaluation.learnCost)
+    cells[#cells + 1] = MoneyCell(evaluation.learnCost)
     cells[#cells + 1] = V.Payback(evaluation.payback)
   end
   return cells
+end
+
+-- Text after a cell, by column: the Forever tag after the name, and DE after Sells for when
+-- disenchanting pays most
+function V.Suffixes(evaluation)
+  local suffixes = {}
+  if evaluation.recipe.forever then suffixes[1] = " " .. PURPLE .. "Forever|r" end
+  if evaluation.net and BestOutlet(evaluation.outlet) == Outlet.DISENCHANT then suffixes[4] = " " .. GREY .. "DE|r" end
+  return suffixes
+end
+
+-- The Profit cell's hover: its exact amount when the cell rounds it
+function V.CellTips(evaluation)
+  local profit = evaluation.profit
+  if profit and ns.Money(profit) ~= ns.MoneyShort(profit) then return { [5] = V.Profit(profit, true) } end
 end
 
 -- Raw values per column, for sorting by a header; unknown values are nil and sort last
@@ -201,9 +221,9 @@ function V.StatusText(profession, rank, known, lastFull)
     local n = Count(known.recipes)
     recipes = string.format("%d %s known (read from your profession window %s)", n, n == 1 and "recipe" or "recipes", ns.Ago(known.t))
   else
-    recipes = ORANGE .. "Open your profession window once to read your recipes.|r"
+    recipes = WARN .. "Open your profession window once to read your recipes.|r"
   end
-  local prices = lastFull and ("prices from the full scan " .. ns.Ago(lastFull)) or (ORANGE .. "no full scan yet|r")
+  local prices = lastFull and ("prices from the full scan " .. ns.Ago(lastFull)) or (WARN .. "no full scan yet|r")
   return head .. " · " .. recipes .. " · " .. prices
 end
 
@@ -223,8 +243,8 @@ function V.Breakdown(evaluation, info)
   local best = BestOutlet(outlet)
   local function PerCraft(key, value)
     if not value then return NO_DATA end
-    local text = ns.MoneyShort(value * made)
-    if evaluation.net and key == best then text = GOLD .. "best|r  " .. text end
+    local text = ns.Money(value * made)
+    if evaluation.net and key == best then text = LABEL .. "best|r  " .. text end
     return text
   end
   local product = {
@@ -233,7 +253,7 @@ function V.Breakdown(evaluation, info)
       { "Vendor", PerCraft(Outlet.VENDOR, outlet.vendor > 0 and outlet.vendor or nil) },
       { outlet.thin and "Market (net), thin" or "Market (net)", PerCraft(Outlet.AUCTION, outlet.auction) },
       { "Disenchant (net)", PerCraft(Outlet.DISENCHANT, outlet.disenchant) },
-      { "Profit per craft", V.Profit(evaluation.profit) },
+      { "Profit per craft", V.Profit(evaluation.profit, true) },
     },
   }
 
@@ -460,7 +480,7 @@ function V.Build(parent, layout)
       local recipe = evaluation.recipe
       data[i] = {
         id = recipe.product, evaluation = evaluation, cells = V.Cells(evaluation, mode), sort = V.SortValues(evaluation, mode),
-        suffixes = recipe.forever and { " " .. PURPLE .. "Forever|r" } or nil,
+        suffixes = V.Suffixes(evaluation), cellTips = V.CellTips(evaluation),
         dim = evaluation.market.level == Crafting.THIN, highlight = recipe.product == self.selected,
       }
       if recipe.product == self.selected then selected = evaluation end

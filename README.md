@@ -119,7 +119,7 @@ after updating to them.
 
 ## Crafting guide
 
-The search window's **Crafting** switch, and the **Crafting** button on the Market tab, list
+The **Crafting** tab in the search window and on the Market tab lists
 a profession's recipes at your saved wall prices, most profit per craft first. Pick the
 profession, then **Known** (your recipes), **Learnable** (recipes you don't know yet, from a
 bundled Classic table) or **All**. Hide thin markets, hide losses, or filter by name; click a
@@ -130,8 +130,8 @@ mats cost (vendor-sold reagents at the vendor's price, the rest at their wall), 
 sells for after the cut and deposit through its best outlet (DE when disenchanting pays most),
 the profit and margin, and the market: Deep, Steady or Thin by the units listed in your scans,
 since the auction house reports no sales. Learnable adds where the recipe is learned, the
-pattern's cost and the crafts it takes to pay for it. A value MarketWall has no price for
-shows "no data", never 0. Clicking a recipe shows its breakdown: each reagent with its price,
+pattern's cost and the crafts it takes to pay for it. Money cells are compact, with the exact
+amount on hover. A value MarketWall has no price for shows "no data", never 0. Clicking a recipe shows its breakdown: each reagent with its price,
 source and the count in your bags; the product's vendor, market and disenchant values with
 the best marked; and its listings, days seen in the last week and its 7-day trend.
 
