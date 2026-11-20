@@ -1,5 +1,5 @@
--- MarketWall: crafting profit at a profession trainer. Each recipe row of the Classic trainer
--- window shows its training cost, profit per craft and payback; hovering one adds the breakdown to
+-- MarketWall: crafting profit at a profession trainer. Each recipe row of the trainer window
+-- (Forever's or Classic's) shows its training cost, profit per craft and payback; hovering one adds the breakdown to
 -- the game's tooltip. Each recipe's training cost is saved for the crafting guide's payback.
 --
 -- Only reads: it never trains. It hooks Blizzard's trainer with hooksecurefunc and HookScript and
@@ -32,12 +32,21 @@ local function ByProduct(profession, product)
   end
 end
 
+local SERVICE_TYPES = { available = true, unavailable = true, used = true, header = true }
+
+-- A service's name and type ("available", "unavailable", "used" or "header"). Forever returns
+-- name, type, texture, ...; Classic returns name, subText, type, isExpanded.
+local function ServiceInfo(index)
+  local name, second, third = GetTrainerServiceInfo(index)
+  return name, SERVICE_TYPES[second] and second or third
+end
+
 -- The recipe a trainer service teaches and its profession, nil for anything else: by the product
 -- its item link names, else by its name within the profession its skill requirement names.
 function Trainer.Recipe(index)
-  local name, _, category = GetTrainerServiceInfo(index)
+  local name, serviceType = ServiceInfo(index)
   local profession = GetTrainerServiceSkillReq(index)
-  if category == "header" or type(profession) ~= "string" then return nil end
+  if serviceType == "header" or type(profession) ~= "string" then return nil end
   local product = ns.ItemID(GetTrainerServiceItemLink(index))
   local recipe = product and ByProduct(profession, product) or Professions.ByName(profession, name)
   if recipe then return recipe, profession end
@@ -67,8 +76,8 @@ function Trainer.RowText(index)
   local evaluation, cost = Evaluate(index)
   if not evaluation then return nil end
   local profit = ns.CraftingText.Profit(evaluation.profit)
-  local _, _, category = GetTrainerServiceInfo(index)
-  if category == "used" then return GREY .. "known|r · " .. profit end
+  local _, serviceType = ServiceInfo(index)
+  if serviceType == "used" then return GREY .. "known|r · " .. profit end
   local _, skillRank, hasSkill = GetTrainerServiceSkillReq(index)
   local first = (not hasSkill and skillRank) and RED .. "needs " .. skillRank .. "|r" or ns.Money(cost)
   return first .. " · " .. profit .. " · " .. ns.CraftingText.Payback(Crafting.Payback(cost, evaluation.profit))
@@ -102,16 +111,6 @@ end
 
 -- Trainer window ----------------------------------------------------------------------------
 
-local function Annotate(button)
-  if not button.marketWallText then
-    local text = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    text:SetPoint("RIGHT", button, "RIGHT", -4, 0)
-    text:SetJustifyH("RIGHT")
-    button.marketWallText = text
-  end
-  button.marketWallText:SetText(Trainer.RowText(button:GetID()) or "")
-end
-
 local function ShowBreakdown(button)
   local lines = Trainer.Breakdown(button:GetID())
   if not lines then return end
@@ -129,12 +128,25 @@ local function HideBreakdown(button)
   if GameTooltip:IsOwned(button) then GameTooltip:Hide() end
 end
 
--- The trainer window's recipe buttons, ClassTrainerSkillButton1 onward; each one's ID is the
--- service index it shows
-local function SkillButtons()
+-- Writes a row button's text for the service its ID names, giving the button its text and hover
+-- breakdown the first time
+local function Annotate(button)
+  if not button.marketWallText then
+    local text = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    text:SetPoint("RIGHT", button, "RIGHT", -4, 0)
+    text:SetJustifyH("RIGHT")
+    button.marketWallText = text
+    button:HookScript("OnEnter", function(self) pcall(ShowBreakdown, self) end)
+    button:HookScript("OnLeave", HideBreakdown)
+  end
+  button.marketWallText:SetText(Trainer.RowText(button:GetID()) or "")
+end
+
+-- Classic's fixed rows, ClassTrainerSkill1 onward
+local function ClassicRows()
   local buttons, i = {}, 1
-  while _G["ClassTrainerSkillButton" .. i] do
-    buttons[i] = _G["ClassTrainerSkillButton" .. i]
+  while _G["ClassTrainerSkill" .. i] do
+    buttons[i] = _G["ClassTrainerSkill" .. i]
     i = i + 1
   end
   return buttons
@@ -142,17 +154,20 @@ end
 
 local hooked = false
 
--- Hooks the trainer window once it has loaded; nothing when the client lacks it or a trainer call
+-- Hooks the trainer window once it has loaded; nothing when the client lacks it or a trainer call.
+-- Both windows set each row button's ID to the service index it shows.
 function Trainer.HookWindow()
-  if hooked or not (Trainer.HasAPI() and type(_G.ClassTrainerFrame_Update) == "function") then return end
-  hooked = true
-  local buttons = SkillButtons()
-  hooksecurefunc("ClassTrainerFrame_Update", function()
-    for _, button in ipairs(buttons) do pcall(Annotate, button) end
-  end)
-  for _, button in ipairs(buttons) do
-    button:HookScript("OnEnter", function(self) pcall(ShowBreakdown, self) end)
-    button:HookScript("OnLeave", HideBreakdown)
+  if hooked or not Trainer.HasAPI() then return end
+  if type(_G.ClassTrainerFrame_InitServiceButton) == "function" then
+    -- Forever: a scroll box reuses row buttons, each set up here for the service it now shows
+    hooked = true
+    hooksecurefunc("ClassTrainerFrame_InitServiceButton", function(button) pcall(Annotate, button) end)
+  elseif type(_G.ClassTrainerFrame_Update) == "function" and _G.ClassTrainerSkill1 then
+    hooked = true
+    local buttons = ClassicRows()
+    hooksecurefunc("ClassTrainerFrame_Update", function()
+      for _, button in ipairs(buttons) do pcall(Annotate, button) end
+    end)
   end
 end
 

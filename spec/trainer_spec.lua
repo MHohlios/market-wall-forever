@@ -13,12 +13,15 @@ describe("trainer", function()
     _G[name] = value
   end
 
-  -- A trainer over services: { name, category, profession, rank, hasSkill, product, cost }
-  local function OpenTrainer()
+  -- A trainer over services: { name, type, profession, rank, hasSkill, product, cost }, whose
+  -- GetTrainerServiceInfo returns Forever's tuple, or Classic's when classic is set
+  local function OpenTrainer(classic)
     Stub("GetNumTrainerServices", function() return #services end)
     Stub("GetTrainerServiceInfo", function(i)
       local s = services[i]
-      if s then return s.name, "", s.category or "available" end
+      if not s then return nil end
+      if classic then return s.name, "", s.type or "available", false end
+      return s.name, s.type or "available", 12345, 1, "", nil
     end)
     Stub("GetTrainerServiceSkillReq", function(i)
       local s = services[i]
@@ -42,7 +45,7 @@ describe("trainer", function()
     globals = {}
     Stub("C_Item", {})
     services = {
-      { name = "Tailoring", category = "header" },
+      { name = "Tailoring", type = "header" },
       { name = "Bolt of Runecloth (old name)", profession = "Tailoring", rank = 250, product = BOLT, cost = 10000 },
       { name = "runecloth belt", profession = "Tailoring", rank = 255, cost = 15000 },
       { name = "Artisan Tailoring", profession = "Tailoring", rank = 200, cost = 500000 },
@@ -114,7 +117,7 @@ describe("trainer", function()
     end)
 
     it("shows known and profit for a learned recipe", function()
-      services[3].category = "used"
+      services[3].type = "used"
       assert.truthy(addon.Plain(ns.Trainer.RowText(3)):find("^known · %+"))
     end)
 
@@ -151,24 +154,34 @@ describe("trainer", function()
         end,
       }
       button.text = text
-      Stub("ClassTrainerSkillButton1", button)
       Stub("ClassTrainerFrame_Update", function() end)
-    end)
-
-    it("annotates the recipe rows once the trainer window loads", function()
       Wall(BOLT, 1000)
       Wall(BELT, 10000)
+    end)
+
+    it("annotates each of Forever's pooled rows as the scroll box sets it up", function()
+      Stub("ClassTrainerFrame_InitServiceButton", function() end)
       fire("ADDON_LOADED", "Blizzard_TrainerUI")
-      hooks.ClassTrainerFrame_Update()
+      hooks.ClassTrainerFrame_InitServiceButton(button, {})
       assert.truthy(addon.Plain(button.text.value):find("^1g 50s 0c · "))
       assert.is_function(button.scripts.OnEnter)
 
-      button.id = 4
-      hooks.ClassTrainerFrame_Update()
+      button.id = 4   -- the pooled button reused for a service that teaches no recipe
+      hooks.ClassTrainerFrame_InitServiceButton(button, {})
       assert.equal("", button.text.value)
     end)
 
+    it("annotates Classic's fixed rows on each update", function()
+      OpenTrainer(true)
+      services[3].type = "used"
+      Stub("ClassTrainerSkill1", button)
+      fire("ADDON_LOADED", "Blizzard_TrainerUI")
+      hooks.ClassTrainerFrame_Update()
+      assert.truthy(addon.Plain(button.text.value):find("^known · %+"))
+    end)
+
     it("does nothing when the client lacks a trainer call", function()
+      Stub("ClassTrainerFrame_InitServiceButton", function() end)
       Stub("GetTrainerServiceItemLink", nil)
       fire("ADDON_LOADED", "Blizzard_TrainerUI")
       fire("TRAINER_SHOW")
