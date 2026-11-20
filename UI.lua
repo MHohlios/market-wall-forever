@@ -1068,54 +1068,92 @@ end
 -------------------------------------------------------------------------------
 -- Settings page
 -------------------------------------------------------------------------------
-local SETTINGS = {
-  { key = "ahCut", label = "Auction house cut", kind = "pct", tip = "The share of each sale the auction house keeps. Used for every profit and break-even number." },
-  { key = "wallShare", label = "Wall share", kind = "pct", tip = "How much of an item's total supply a price level must reach, counting up from the cheapest, to be the wall. Higher ignores bigger cheap batches." },
-  { key = "minHistoryDays", label = "Days before data is reliable", kind = "int", min = 1, max = ns.cfgDefaults.baselineDays + 1,
-    tip = "Items with fewer days of scans than this get an orange low-data flag. It only sets the flag; nothing is hidden. 1 to " .. (ns.cfgDefaults.baselineDays + 1) .. "." },
-  { key = "minSnipeProfit", label = "Minimum snipe profit", kind = "money", tip = "Snipes with less total profit than this, after the cut, are left out." },
-  { key = "minSnipeDiscount", label = "Minimum snipe discount", kind = "pct", tip = "Snipe units must cost at least this much less than the normal price." },
-  { key = "minDisenchantProfit", label = "Minimum disenchant profit", kind = "money", tip = "Disenchant deals with less profit per item than this, after the cut and deposits on the materials, are left out." },
-  { key = "minDisenchantPct", label = "Minimum disenchant profit %", kind = "pct", tip = "Disenchant deals must profit at least this share of their price." },
-  { key = "dipPct", label = "Dip size", kind = "pct", tip = "How far below its normal price the wall must fall to count as a dip." },
-  { key = "minSupply", label = "Minimum supply", kind = "int", tip = "Items with fewer units listed than this are left out of Snipes and Dips, because thin markets give unreliable prices." },
-  { key = "staleMinutes", label = "Grey out after (minutes)", kind = "int", tip = "Watchlist rows are greyed out when their last scan is older than this." },
-  { key = "autoScan", label = "Daily full scan on open", kind = "bool", tip = "Start a full scan when you open the auction house, if none has run today." },
-  { key = "sound", label = "Sound on deals", kind = "bool", tip = "Play a sound when a scan finds units under your buy price or new snipes." },
-  { key = "baitSearchGap", label = "Bait search gap (seconds)", kind = "secs", tip = "Bait Detect waits at least this long between searches. Never less than 1 second." },
-  { key = "baitMinUnder", label = "Bait: min % under wall", kind = "pct", min = ns.Bait.MIN_UNDER, max = ns.Bait.MAX_UNDER, tip = "Bait Detect flags a cheapest level only when it sits at least this far under the wall. Ordinary undercutting stays close to the wall. 10% to 95%." },
-  { key = "baitConfirmPress", label = "Bait confirm press", kind = "bool", tip = "Bait Detect confirms each purchase with its own press of the button. Untick to confirm straight after the price quote." },
-  { key = "minimapButton", label = "Minimap button", kind = "bool", tip = "Show the MW button on the minimap, which opens the item search window. /mw minimap does the same." },
-  { key = "mobDisenchant", label = "Mob value: disenchanting", kind = "mode", tip = "Include disenchanting in a mob's Optimal value. Auto: when this character has Enchanting. Always suits an enchanter alt." },
-  { key = "mobSkinning", label = "Mob value: skinning", kind = "mode", tip = "Include skinning in a mob's Optimal value. Auto: when this character has Skinning." },
-  { key = "mobRareShare", label = "Rare drop threshold", kind = "pct", tip = "Drops seen in fewer kills than this count as rare, and are left out of the values without rare drops." },
-  { key = "mobMinKills", label = "Kills before values are reliable", kind = "int", tip = "A mob's values show from its first kill with loot seen. Under this many, an orange kill count after its name flags the values as rough." },
-  { key = "salvagerMode", label = "Salvager mode", kind = "mode", modes = { "auto", "on", "off" }, tip = "Count Salvager's disenchant bonus. Auto: while the buff is up. Imported once from Disenchantry, so Reset to defaults keeps it." },
-  { key = "salvagerBonus", label = "Salvager bonus %", kind = "points", tip = "Extra materials Salvager gives, in percent. Imported once from Disenchantry, so Reset to defaults keeps it." },
+-- Three-way modes as stored, shown as Auto / On / Off
+local MOB_MODES = { { key = "auto", label = "Auto" }, { key = "always", label = "On" }, { key = "never", label = "Off" } }
+local SALVAGER_MODES = { { key = "auto", label = "Auto" }, { key = "on", label = "On" }, { key = "off", label = "Off" } }
+local NEXT_FULL_SCAN = " Applies from the next full scan."
+
+-- Every setting, in named groups laid out in two columns. A label stays short because its
+-- group names the subject; note is the few words beside it, tip the full text on hover.
+local SETTING_GROUPS = {
+  { title = "Prices and data", column = 1, settings = {
+    { key = "ahCut", label = "Auction house cut", kind = "pct", note = "Used in every profit number",
+      tip = "The share of each sale the auction house keeps. Used for every profit and break-even number." },
+    { key = "wallShare", label = "Wall share", kind = "pct", note = "Supply a level needs to be the wall",
+      tip = "How much of an item's total supply a price level must reach, counting up from the cheapest, to be the wall. Higher ignores bigger cheap batches." },
+    { key = "minHistoryDays", label = "Days before data is reliable", kind = "int", min = 1, max = ns.cfgDefaults.baselineDays + 1, note = "Fewer days get the orange badge",
+      tip = "Items with fewer days of scans than this get an orange low-data flag. It only sets the flag; nothing is hidden. 1 to " .. (ns.cfgDefaults.baselineDays + 1) .. "." },
+    { key = "minSupply", label = "Minimum supply", kind = "int", note = "Thinner markets are left out",
+      tip = "Items with fewer units listed than this are left out of Snipes and Dips, because thin markets give unreliable prices." .. NEXT_FULL_SCAN },
+  } },
+  { title = "Snipes and Dips", column = 1, settings = {
+    { key = "minSnipeProfit", label = "Minimum snipe profit", kind = "money", note = "After the cut",
+      tip = "Snipes with less total profit than this, after the cut, are left out." .. NEXT_FULL_SCAN },
+    { key = "minSnipeDiscount", label = "Minimum snipe discount", kind = "pct", note = "Under the normal price",
+      tip = "Snipe units must cost at least this much less than the normal price." .. NEXT_FULL_SCAN },
+    { key = "dipPct", label = "Dip size", kind = "pct", note = "How far the wall must fall",
+      tip = "How far below its normal price the wall must fall to count as a dip." .. NEXT_FULL_SCAN },
+  } },
+  { title = "Disenchant", column = 1, settings = {
+    { key = "minDisenchantProfit", label = "Minimum profit", kind = "money", note = "Per item, after cut and deposits",
+      tip = "Disenchant deals with less profit per item than this, after the cut and deposits on the materials, are left out." .. NEXT_FULL_SCAN },
+    { key = "minDisenchantPct", label = "Minimum profit %", kind = "pct", note = "Of the item's price",
+      tip = "Disenchant deals must profit at least this share of their price." .. NEXT_FULL_SCAN },
+    { key = "salvagerMode", label = "Salvager", kind = "mode", modes = SALVAGER_MODES, note = "Count Salvager's bonus",
+      tip = "Count Salvager's disenchant bonus. Auto: while the buff is up. Imported once from Disenchantry, so Reset to defaults keeps it." },
+    { key = "salvagerBonus", label = "Salvager bonus", kind = "points", note = "Imported from Disenchantry",
+      tip = "Extra materials Salvager gives, in percent. Imported once from Disenchantry, so Reset to defaults keeps it." },
+  } },
+  { title = "Scanning and alerts", column = 2, settings = {
+    { key = "autoScan", label = "Daily full scan on open", kind = "bool", note = "If none has run today",
+      tip = "Start a full scan when you open the auction house, if none has run today." },
+    { key = "sound", label = "Sound on deals", kind = "bool", note = "Buys and new snipes",
+      tip = "Play a sound when a scan finds units under your buy price or new snipes." },
+    { key = "staleMinutes", label = "Grey out watchlist after", kind = "int", unit = "min", note = "Since its last scan",
+      tip = "Watchlist rows are greyed out when their last scan is older than this many minutes." },
+  } },
+  { title = "Bait Detect", column = 2, settings = {
+    { key = "baitSearchGap", label = "Search gap", kind = "secs", unit = "s", note = "Never less than 1 second",
+      tip = "Bait Detect waits at least this many seconds between searches. Never less than 1 second." },
+    { key = "baitMinUnder", label = "Minimum under the wall", kind = "pct", min = ns.Bait.MIN_UNDER, max = ns.Bait.MAX_UNDER, note = "10% to 95%",
+      tip = "Bait Detect flags a cheapest level only when it sits at least this far under the wall. Ordinary undercutting stays close to the wall. 10% to 95%." },
+    { key = "baitConfirmPress", label = "Confirm each purchase", kind = "bool", note = "With its own button press",
+      tip = "Bait Detect confirms each purchase with its own press of the button. Untick to confirm straight after the price quote." },
+  } },
+  { title = "Mob values", column = 2, settings = {
+    { key = "mobDisenchant", label = "Disenchanting", kind = "mode", modes = MOB_MODES, note = "In Optimal value",
+      tip = "Include disenchanting in a mob's Optimal value. Auto: when this character has Enchanting. On suits an enchanter alt." },
+    { key = "mobSkinning", label = "Skinning", kind = "mode", modes = MOB_MODES, note = "In Optimal value",
+      tip = "Include skinning in a mob's Optimal value. Auto: when this character has Skinning." },
+    { key = "mobRareShare", label = "Rare drop threshold", kind = "pct", note = "Rarer drops are left out",
+      tip = "Drops seen in fewer kills than this count as rare, and are left out of the values without rare drops." },
+    { key = "mobMinKills", label = "Kills before reliable", kind = "int", note = "Fewer kills get the badge",
+      tip = "A mob's values show from its first kill with loot seen. Under this many, an orange kill count after its name flags the values as rough." },
+  } },
+  { title = "Interface", column = 2, settings = {
+    { key = "minimapButton", label = "Minimap button", kind = "bool", note = "Or type /mw",
+      tip = "Show the MW button on the minimap, which opens the item search window. /mw minimap does the same." },
+  } },
 }
+ui.settingGroups = SETTING_GROUPS
 
--- Rows scroll above Reset: they no longer all fit in the frame at this height
-local SETTING_ROW_H = 25
-local MODES = { "auto", "always", "never" }   -- each click moves to the next; a row's own modes replace these
-local MODE_TEXT = { auto = "Auto", always = "Always", never = "Never", on = "On", off = "Off" }
-
-local function NextMode(modes, value)
-  for i, mode in ipairs(modes) do
-    if mode == value then return modes[i % #modes + 1] end
-  end
-  return modes[1]
-end
+-- Two columns that fit without scrolling: each one a stack of group titles and rows
+local SETTING_COLUMN_X, SETTING_COLUMN_W = { 12, 400 }, 380
+local SETTING_TITLE_H, SETTING_ROW_H = 24, 23
+local SETTING_CONTROL_X, SETTING_EDIT_W, SETTING_NOTE_GAP = 164, 56, 8
+local SETTING_SWITCH_W = 80   -- room for the Auto / On / Off switch, which is as wide as its labels
 
 local function FormatSetting(def)
   local value = ns.Cfg(def.key)
-  if def.kind == "mode" then return MODE_TEXT[value] end
   if def.kind == "pct" then return ns.Round(value * 1000) / 10 .. "%" end
   if def.kind == "points" then return value .. "%" end
   if def.kind == "money" then return ns.MoneyText(value) end
+  if def.unit then return value .. " " .. def.unit end
   return tostring(value)
 end
 
 local function ParseSetting(def, text)
+  if def.unit then text = text:gsub("%s*" .. def.unit .. "%s*$", "") end
   if def.kind == "pct" then
     local n = tonumber((text:gsub("%%", "")))
     n = n and n / 100
@@ -1136,12 +1174,15 @@ local function ParseSetting(def, text)
   end
   return nil
 end
+ui.ParseSetting = ParseSetting
 
 local function RefreshSettings()
   for _, row in ipairs(ui.settings.rows) do
     if row.def.kind == "bool" then
       row.control:SetChecked(ns.Cfg(row.def.key) and true or false)
-    elseif row.def.kind == "mode" or not row.control:HasFocus() then
+    elseif row.def.kind == "mode" then
+      row.control:Select(ns.Cfg(row.def.key))
+    elseif not row.control:HasFocus() then
       row.control:SetText(FormatSetting(row.def))
     end
   end
@@ -1152,70 +1193,105 @@ local function SaveSetting(key, value)
   ns.Mobs.Invalidate()   -- prices, the cut and the mob settings all feed mob values
 end
 
+-- The full tip shows while the pointer is anywhere on the row, its control included. Hooked,
+-- so a control's own hover behavior (the switch's) keeps running.
+local function TipOnHover(frame, def)
+  frame:HookScript("OnEnter", function() ShowTip(frame, def.label, def.tip) end)
+  frame:HookScript("OnLeave", HideTip)
+end
+
+-- The row's control, anchored left at the control column, and its width
+local function SettingControl(row, def)
+  if def.kind == "bool" then
+    local box = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
+    box:SetSize(24, 24)
+    box:SetPoint("LEFT", SETTING_CONTROL_X - 4, 0)
+    box:SetScript("OnClick", function(self)
+      SaveSetting(def.key, self:GetChecked() and true or false)
+      ns.UpdateMinimapButton()
+    end)
+    TipOnHover(box, def)
+    return box, 20
+  elseif def.kind == "mode" then
+    local switch = MakeSwitch(row, def.modes, function(value) SaveSetting(def.key, value) end)
+    switch:SetPoint("LEFT", SETTING_CONTROL_X, 0)
+    for _, button in ipairs(switch.buttons) do TipOnHover(button, def) end
+    return switch, SETTING_SWITCH_W
+  end
+  local edit = MakeEdit(row, SETTING_EDIT_W)
+  edit:SetPoint("LEFT", SETTING_CONTROL_X + 6, 0)
+  local function Apply(self)
+    local value = ParseSetting(def, self:GetText())
+    if value ~= nil then SaveSetting(def.key, value) end
+  end
+  edit:SetScript("OnEnterPressed", function(self)
+    Apply(self)
+    self:ClearFocus()
+    self:SetText(FormatSetting(def))
+  end)
+  edit:SetScript("OnEditFocusLost", function(self)
+    Apply(self)
+    self:SetText(FormatSetting(def))
+  end)
+  TipOnHover(edit, def)
+  return edit, SETTING_EDIT_W + 6
+end
+
+local function BuildSettingRow(page, def, x, y)
+  local row = CreateFrame("Frame", nil, page)
+  row:SetSize(SETTING_COLUMN_W, SETTING_ROW_H)
+  row:SetPoint("TOPLEFT", x, y)
+  row:EnableMouse(true)
+  TipOnHover(row, def)
+  local label = MakeText(row, "GameFontHighlight")
+  label:SetPoint("LEFT", 0, 0)
+  label:SetText(def.label)
+  local control, controlWidth = SettingControl(row, def)
+  local note = MakeText(row, "GameFontDisableSmall")
+  note:SetPoint("LEFT", SETTING_CONTROL_X + controlWidth + SETTING_NOTE_GAP, 0)
+  note:SetWidth(SETTING_COLUMN_W - SETTING_CONTROL_X - controlWidth - SETTING_NOTE_GAP)
+  note:SetWordWrap(false)
+  note:SetText(def.note)
+  return { def = def, control = control }
+end
+
+local function BuildSettingGroupTitle(page, title, x, y)
+  local text = MakeText(page, "GameFontHighlight")
+  text:SetPoint("TOPLEFT", x, y - 4)
+  text:SetText(LABEL .. title .. "|r")
+  local rule = page:CreateTexture(nil, "ARTWORK")
+  rule:SetColorTexture(TAB_LINE[1], TAB_LINE[2], TAB_LINE[3], TAB_LINE[4])
+  rule:SetSize(SETTING_COLUMN_W, 1)
+  rule:SetPoint("TOPLEFT", x, y - SETTING_TITLE_H + 3)
+end
+
 local function BuildSettings(parent)
   local page = CreateFrame("Frame", nil, parent)
   page:SetAllPoints()
-  local scroll = CreateFrame("ScrollFrame", nil, page, "UIPanelScrollFrameTemplate")
-  scroll:SetPoint("TOPLEFT", 0, -56)
-  scroll:SetPoint("BOTTOMRIGHT", -28, 40)
-  local rows = CreateFrame("Frame", nil, scroll)
-  rows:SetSize(760, #SETTINGS * SETTING_ROW_H + 6)
-  scroll:SetScrollChild(rows)
   page.rows = {}
-  for i, def in ipairs(SETTINGS) do
-    local y = -6 - (i - 1) * SETTING_ROW_H
-    local label = MakeText(rows, "GameFontNormal")
-    label:SetPoint("TOPLEFT", 20, y)
-    label:SetText(def.label)
-    local control
-    if def.kind == "bool" then
-      control = CreateFrame("CheckButton", nil, rows, "UICheckButtonTemplate")
-      control:SetSize(24, 24)
-      control:SetPoint("TOPLEFT", 216, y + 5)
-      control:SetScript("OnClick", function(self)
-        SaveSetting(def.key, self:GetChecked() and true or false)
-        ns.UpdateMinimapButton()
-      end)
-    elseif def.kind == "mode" then
-      control = MakeButton(rows, "", 80)
-      control:SetPoint("TOPLEFT", 216, y + 4)
-      control:SetScript("OnClick", function(self)
-        SaveSetting(def.key, NextMode(def.modes or MODES, ns.Cfg(def.key)))
-        self:SetText(FormatSetting(def))
-      end)
-    else
-      control = MakeEdit(rows, 80)
-      control:SetPoint("TOPLEFT", 222, y + 3)
-      local function Save(self)
-        local value = ParseSetting(def, self:GetText())
-        if value ~= nil then SaveSetting(def.key, value) end
-        self:ClearFocus()
-        self:SetText(FormatSetting(def))
-      end
-      control:SetScript("OnEnterPressed", Save)
-      control:SetScript("OnEditFocusLost", function(self)
-        local value = ParseSetting(def, self:GetText())
-        if value ~= nil then SaveSetting(def.key, value) end
-        self:SetText(FormatSetting(def))
-      end)
+  local columnY = { -CONTENT_TOP, -CONTENT_TOP }
+  for _, group in ipairs(SETTING_GROUPS) do
+    local x, y = SETTING_COLUMN_X[group.column], columnY[group.column]
+    BuildSettingGroupTitle(page, group.title, x, y)
+    y = y - SETTING_TITLE_H
+    for _, def in ipairs(group.settings) do
+      page.rows[#page.rows + 1] = BuildSettingRow(page, def, x, y)
+      y = y - SETTING_ROW_H
     end
-    local help = MakeText(rows, "GameFontDisableSmall")
-    help:SetPoint("TOPLEFT", 320, y + 2)
-    help:SetWidth(430)
-    help:SetText(def.tip)
-    page.rows[i] = { def = def, control = control }
+    columnY[group.column] = y
   end
+
   local reset = MakeButton(page, "Reset to defaults", 140)
-  reset:SetPoint("BOTTOMLEFT", 20, 10)
+  reset:SetPoint("BOTTOMLEFT", SETTING_COLUMN_X[1], 10)
   reset:SetScript("OnClick", function()
     ns.ResetSettings(MarketWallDB.cfg)
     ns.Mobs.Invalidate()
     RefreshSettings()
     ns.UpdateMinimapButton()
   end)
-  local note = MakeText(page, "GameFontDisableSmall")
-  note:SetPoint("LEFT", reset, "RIGHT", 12, 0)
-  note:SetText("Press Enter after typing a value. Scroll for the mob value and Salvager settings. Changes to Snipes, Dips and Disenchant apply on the next full scan.")
+  local hint = MakeText(page, "GameFontDisableSmall", "RIGHT")
+  hint:SetPoint("BOTTOMRIGHT", -16, 16)
+  hint:SetText("Hover a setting for its full description. Press Enter to apply a typed value.")
   return page
 end
 

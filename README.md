@@ -79,9 +79,9 @@ MarketWall records each kill you, your pet or your party make and what it droppe
 Hovering a mob adds three lines to the tooltip: its worth per kill under Optimal (the
 median); a grey line with the Average and the kill count; and the top drop. The Vendor and
 Market comparison lives in the Mobs view's switch. Values show from the first looted kill.
-Under **Kills before values are reliable**, the kill count turns orange and reads "3 kills,
-rough", and the Mobs view keeps the kill count a plain number and adds an orange "· N kills"
-after the mob's name.
+Under **Kills before reliable** (a Mob values setting), the kill count turns orange and
+reads "3 kills, rough", and the Mobs view keeps the kill count a plain number and adds an
+orange "· N kills" after the mob's name.
 
 A container a mob drops, such as a clam, counts in Optimal at what it opens into on
 average, once you have opened some, when that beats selling it unopened. Hovering such a
@@ -90,8 +90,8 @@ counting a container at its sell value, since they count its contents when you o
 
 The search window's **Mobs** switch lists every recorded mob, sorted by median per kill
 under the Optimal, Market or Vendor lens, with a name filter. Click a mob for its drop
-table. Settings has the mob rows: disenchanting and skinning in Optimal (Auto, Always,
-Never), the rare drop threshold and the kills before values are reliable. The Mobs view added
+table. Settings has a Mob values group: disenchanting and skinning in Optimal (Auto, On,
+Off), the rare drop threshold and the kills before values are reliable. The Mobs view added
 `MobsView.lua`, so restart the game once after updating to it.
 
 ## Farm sessions and the ledger
@@ -111,8 +111,8 @@ apply to every session.
 
 The **Ledger** view charts your gold and lists income and spending by source for a week
 or a month, for this character or all of them. Gold changes it can't attribute go to
-Other, so it always matches your gold. Settings has the Salvager mode and bonus rows;
-Reset to defaults keeps them, as they were imported once from Disenchantry.
+Other, so it always matches your gold. Settings has the Salvager and Salvager bonus rows
+under Disenchant; Reset to defaults keeps them, as they were imported once from Disenchantry.
 
 These views added `LedgerView.lua`, `SessionsView.lua` and `SessionTracker.lua`, and the
 recording added `Ledger.lua`, `Quests.lua` and `Sessions.lua`, so restart the game once
@@ -174,8 +174,8 @@ nothing. A sound plays when a search finds units to buy.
   if no unit is over your price, otherwise it cancels and says why on the button. With
   Leave bait it also cancels unless every unit is at the bait price, since any other
   quote means the supply changed and the purchase could take the bait.
-- By default the confirm is its own press. Untick **Bait confirm press** in Settings to
-  confirm right after the quote, if the game allows that without a key press.
+- By default the confirm is its own press. Untick **Confirm each purchase** under Bait Detect in
+  Settings to confirm right after the quote, if the game allows that without a key press.
 - Every purchase through MarketWall is logged with its time, item, units, unit price
   and total.
 
