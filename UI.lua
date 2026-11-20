@@ -1310,8 +1310,11 @@ end
 
 local function RefreshDisenchant()
   local data, skill, hidden = DisenchantData()
-  local skillNote = skill and ("Enchanting " .. ns.COLOR.VALUE .. skill .. "|r") or (WARN .. "Enchanting skill unknown, so every item is shown|r")
-  ListView("disenchant", data, ui.DisenchantEmptyText(skill, hidden), "Click a row to load live listings before buying.", skillNote)
+  -- the status line ends before the scan buttons, so its note stays short; the hint explains
+  local skillNote = skill and ("Enchanting " .. ns.COLOR.VALUE .. skill .. "|r") or (WARN .. "Enchanting unknown|r")
+  local hint = "Click a row to load live listings before buying."
+  if not skill then hint = hint .. " Your Enchanting skill is unknown, so every item is shown." end
+  ListView("disenchant", data, ui.DisenchantEmptyText(skill, hidden), hint, skillNote)
   ui.showAllBox:SetChecked(ns.Cfg("disenchantShowAll") and true or false)
   PlaceShowAll(#data == 0)
 end
