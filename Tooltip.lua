@@ -121,6 +121,48 @@ local function MarketContextLines(add, id)
   end
 end
 
+-- Crafting ----------------------------------------------------------------------------------
+
+local RED = "|cffe0524a"
+local MARKET_WORDS = { deep = "Deep", steady = "Steady", thin = "Thin", nodata = "No data" }
+
+-- Crafting numbers as tooltip text, shared with the trainer rows (Trainer.lua)
+local CraftingText = {}
+
+function CraftingText.Profit(profit)
+  if not profit then return GREY .. "no data|r" end
+  if profit > 0 then return GREEN .. "+" .. ns.Money(profit) .. "|r" end
+  return RED .. ns.Money(profit) .. "|r"
+end
+
+function CraftingText.Market(market)
+  local word = MARKET_WORDS[market.level]
+  if market.level == ns.Crafting.NO_DATA then return GREY .. word .. "|r" end
+  return word .. " · " .. market.units .. " listed"
+end
+
+function CraftingText.Payback(payback)
+  if payback == ns.Crafting.NEVER then return RED .. "never|r" end
+  if not payback then return GREY .. "no data|r" end
+  return payback .. (payback == 1 and " craft" or " crafts")
+end
+
+-- What a pattern teaches and earns. Payback is left out once this character knows the recipe.
+local function PatternLines(add, id)
+  local recipe, profession = ns.Professions.ByPattern(id)
+  if not recipe then return end
+  local evaluation = ns.Professions.Evaluate(recipe, ns.Professions.Context(profession))
+  add(GOLD .. "Crafting|r", "")
+  add(GREY .. "Teaches|r", recipe.name .. (recipe.skill and " (" .. recipe.skill .. ")" or ""))
+  add(GREY .. "Profit per craft|r", CraftingText.Profit(evaluation.profit))
+  add(GREY .. "Market|r", CraftingText.Market(evaluation.market))
+  if not recipe.known then
+    local at = evaluation.learnCost and " at " .. ns.Money(evaluation.learnCost) or ""
+    add(GREY .. "Pays back" .. at .. "|r", CraftingText.Payback(evaluation.payback))
+  end
+  add(GREY .. "You|r", recipe.known and GREEN .. "Known|r" or "Not known")
+end
+
 -- Size of the stack the tooltip is for, read from the bag slot that owns it.
 -- Nil when the tooltip has no bag slot owner or the slot holds a different item.
 local function StackCount(tooltip, id)
@@ -152,6 +194,8 @@ local function AddLines(tooltip, id)
 
   if OutletLines(add, id, StackCount(tooltip, id)) then gap = true end
   MarketContextLines(add, id)
+  gap = true
+  PatternLines(add, id)
 end
 
 -- Mob tooltips -------------------------------------------------------------------------------
@@ -199,6 +243,7 @@ local function AddMobLines(tooltip)
   for _, line in ipairs(lines) do tooltip:AddDoubleLine(line[1], line[2], 1, 1, 1, 1, 1, 1) end
 end
 
+ns.CraftingText = CraftingText
 ns.TooltipLines = { Add = AddLines, StackCount = StackCount, Mob = MobLines }   -- exposed for tests
 
 function ns.InitTooltip()
