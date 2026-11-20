@@ -58,6 +58,20 @@ chart with a 7 days / 30 days / All switch, the item's numbers, and Add to watch
 Live listings load only while the auction house is open. The window moves by dragging,
 remembers where you left it, and closes with Escape.
 
+## Crafting at the trainer and on patterns
+
+A pattern's tooltip adds a Crafting block: the recipe it teaches and its skill, profit per
+craft, the product's market (Deep, Steady, Thin or No data, with the units listed), how many
+crafts pay back the pattern at its wall (or its vendor price when it isn't listed), and
+whether this character knows the recipe. Known recipes come from your profession window, so
+open it once per character. Tailoring patterns only for now.
+
+At a profession trainer, each recipe row shows its training cost, profit per craft and
+payback, and hovering a row adds the mats, sale value, profit, market and payback to the
+tooltip. MarketWall remembers each recipe's training cost, so the payback of trainer recipes
+fills in elsewhere after one visit. It never trains anything. This added `Trainer.lua`, so
+restart the game once after updating to it.
+
 ## Mob values
 
 MarketWall records each kill you, your pet or your party make and what it dropped.
@@ -102,6 +116,30 @@ Reset to defaults keeps them, as they were imported once from Disenchantry.
 These views added `LedgerView.lua`, `SessionsView.lua` and `SessionTracker.lua`, and the
 recording added `Ledger.lua`, `Quests.lua` and `Sessions.lua`, so restart the game once
 after updating to them.
+
+## Crafting guide
+
+The **Crafting** tab in the search window and on the Market tab lists
+a profession's recipes at your saved wall prices, most profit per craft first. Pick the
+profession, then **Known** (your recipes), **Learnable** (recipes you don't know yet, from a
+bundled Classic table) or **All**. Hide thin markets, hide losses, or filter by name; click a
+column title to sort by it.
+
+Each row has the skill it needs in its skill-up colour at your skill (red when above it), the
+mats cost (vendor-sold reagents at the vendor's price, the rest at their wall), what a craft
+sells for after the cut and deposit through its best outlet (DE when disenchanting pays most),
+the profit and margin, and the market: Deep, Steady or Thin by the units listed in your scans,
+since the auction house reports no sales. Learnable adds where the recipe is learned, the
+pattern's cost and the crafts it takes to pay for it. Money cells are compact, with the exact
+amount on hover. A value MarketWall has no price for shows "no data", never 0. Clicking a recipe shows its breakdown: each reagent with its price,
+source and the count in your bags; the product's vendor, market and disenchant values with
+the best marked; and its listings, days seen in the last week and its 7-day trend.
+
+Open your profession window once on each character so MarketWall can read its recipes; it
+reads them again whenever the window updates. On the Market tab, clicking a learnable recipe
+taught by a pattern opens the pattern's item page, which loads its live listings. Buying
+it is your own press, as everywhere else. The guide added `CraftingView.lua`, so restart the
+game once after updating to it.
 
 ## Bait Detect
 

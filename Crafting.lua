@@ -166,8 +166,9 @@ end
 
 -- This character's known recipes ([product] = recipe) with a bundled table's (a list), one entry
 -- per product. A known recipe's own fields win; the table fills in the rest (skill, skillUp,
--- pattern, source). Each entry is a copy flagged known and forever.
-function Crafting.Merge(known, bundled)
+-- pattern, source). Each entry is a copy flagged known and forever. trainerCosts ([product] =
+-- copper, as a trainer last charged) makes a recipe's source that trainer at that cost.
+function Crafting.Merge(known, bundled, trainerCosts)
   local byProduct, list = {}, {}
   for _, recipe in ipairs(bundled or {}) do
     local entry = Copy(recipe)
@@ -184,6 +185,10 @@ function Crafting.Merge(known, bundled)
     for k, v in pairs(recipe) do entry[k] = v end
     entry.product, entry.known = product, true
   end
-  for _, entry in ipairs(list) do entry.forever = entry.product >= Crafting.FIRST_FOREVER_ITEM end
+  for _, entry in ipairs(list) do
+    entry.forever = entry.product >= Crafting.FIRST_FOREVER_ITEM
+    local trainerCost = trainerCosts and trainerCosts[entry.product]
+    if trainerCost then entry.source = { kind = "trainer", cost = trainerCost } end
+  end
   return list
 end

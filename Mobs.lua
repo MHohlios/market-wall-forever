@@ -297,8 +297,13 @@ function Mobs.For(npc)
   return stats
 end
 
+-- Counts Invalidate calls, so other caches of values at game prices (the crafting guide's) can
+-- tell when theirs is stale
+Mobs.pricesVersion = 0
+
 function Mobs.Invalidate()
   cache = {}
+  Mobs.pricesVersion = Mobs.pricesVersion + 1
 end
 
 -- Stats for every recorded mob, each with its npc ID

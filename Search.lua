@@ -1,7 +1,8 @@
 -- MarketWall: the item search window. Opens from the minimap button, anywhere in the world.
 -- Items view, left: the search box, matching names and recent searches. Right: the item's chart
--- and stats. The Mobs, Ledger and Sessions views (MobsView.lua, LedgerView.lua, SessionsView.lua)
--- share the window behind an Items | Mobs | Ledger | Sessions switch.
+-- and stats. The Mobs, Ledger, Sessions and Crafting views (MobsView.lua, LedgerView.lua,
+-- SessionsView.lua, CraftingView.lua) share the window behind an Items | Mobs | Ledger | Sessions |
+-- Crafting tabs.
 local _, ns = ...
 local PV = ns.PriceView
 
@@ -10,6 +11,7 @@ local TABS = {
   { key = "mobs", label = "Mobs", view = ns.MobsView },
   { key = "ledger", label = "Ledger", view = ns.LedgerView },
   { key = "sessions", label = "Sessions", view = ns.SessionsView },
+  { key = "crafting", label = "Crafting", view = ns.CraftingView },
 }
 
 local S = {}
@@ -240,7 +242,7 @@ local function Build()
   local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
   close:SetPoint("TOPRIGHT", 2, 2)
 
-  -- Items | Mobs | Ledger | Sessions tabs after the heading, their bottoms on a line above the views
+  -- Items | Mobs | Ledger | Sessions | Crafting tabs after the heading, their bottoms on a line above the views
   f.mode = "items"
   f.tabButtons = w.MakeTabRow(f, TABS_X, TABS_BOTTOM, TABS, function(key) f.mode = key ns.RefreshSearch() end)
   f.views = {}

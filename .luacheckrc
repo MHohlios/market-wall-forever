@@ -27,11 +27,13 @@ read_globals = {
   -- Functions
   "CreateFrame", "GetBindingKey", "GetBuildInfo", "GetItemInfo", "GetMoney", "GetNormalizedRealmName", "GetRealmName",
   "GetProfessions", "GetProfessionInfo", "GetNumSkillLines", "GetSkillLineInfo", "GetSpellInfo",
-  "GetCursorPosition", "GetTime", "IsShiftKeyDown", "PlaySound", "UnitGUID", "UnitName", "UnitCreatureFamily", "CanLootUnit", "IsFishingLoot",
+  "GetCursorPosition", "GetItemCount", "GetTime", "IsShiftKeyDown", "PlaySound", "UnitGUID", "UnitName", "UnitCreatureFamily", "CanLootUnit", "IsFishingLoot",
   "GetNumLootItems", "GetLootSlotInfo", "GetLootSlotLink", "GetLootSlotType", "GetLootSourceInfo",
   "StaticPopup_Show", "hooksecurefunc", "ChatEdit_InsertLink",
   "GetTradeSkillLine", "GetNumTradeSkills", "GetTradeSkillInfo", "GetTradeSkillItemLink", "GetTradeSkillNumMade",
   "GetTradeSkillNumReagents", "GetTradeSkillReagentInfo", "GetTradeSkillReagentItemLink",
+  "GetNumTrainerServices", "GetTrainerServiceInfo", "GetTrainerServiceCost", "GetTrainerServiceSkillReq",
+  "GetTrainerServiceItemLink",
   "PanelTemplates_DeselectTab", "PanelTemplates_SelectTab", "PanelTemplates_TabResize", "GameFontNormalSmall",
   -- Frames and constants
   "LibStub",                -- only to find Auctionator's tabs, when it is installed
