@@ -12,7 +12,10 @@ A World of Warcraft (Forever) auction house addon. It adds a Market tab with:
   house, vendor, disenchant, no reliable price (the first two show even when empty), with the current listings or
   the price history beside them. The price starts at the lowest
   listing, skipping flagged bait. The page answers what the auction house pays after the
-  cut and deposit, against a vendor, and warns before a post that looks like a mistake.
+  cut and deposit, against a vendor, and notes anything that looks like a mistake above the
+  bags. It asks Yes or No before a post only when the price is far under the low end of the
+  item's normal range (more than 30% under up to 1g, sliding toward 70% under for dearer
+  items, as Auctionator does) or matches a bait price.
 - **Item search**: an MW button on the minimap opens a window, anywhere in the world,
   to look up any item MarketWall has seen. See below.
 - **Tooltips**: what one unit nets through a vendor, the market and disenchanting, after
@@ -176,7 +179,7 @@ normal range. Commodities only. On an item's first day its normal range is today
 Until a second scan (a full scan or a live search) sees the same price again, its row is
 dimmed and reads "seen once"; click it to search it live and confirm it. Once confirmed it
 counts as possibly baited. Only confirmed bait can be bought against; the Sell page warns
-about a bait price either way. Each full scan drops every record it did not refresh.
+and asks before posting at a bait price either way. Each full scan drops every record it did not refresh.
 
 Every number shows from an item's first scan. Until an item has `minHistoryDays` days of
 data (5 by default, "Days before data is reliable"), tooltips, the item window and the Sell page

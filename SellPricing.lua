@@ -98,6 +98,12 @@ function P.Answer(t, quantity, price, cut)
   return { net = net, versus = versus, breakdown = breakdown }
 end
 
+-- The line for a price that matches the item's bait, nil when it does not
+function P.BaitMatch(f)
+  local bait = B.PostWarning(f.bait, f.price, ns.PriceView.FLAT)
+  return bait and "Matches a bait price: " .. bait
+end
+
 -- The warnings that apply to posting at a price, each one line. f: price; totals (P.Totals);
 -- stats (ns.StatsFor); bait (the Bait Detect record); outlet (Outlet.Values for the item).
 function P.Warnings(f)
@@ -113,8 +119,8 @@ function P.Warnings(f)
     add(string.format("A vendor pays %s: %s each, against %s after the cut and deposit.",
       totals.beats < 0 and "more" or "as much", ns.Money(totals.vendorEach), ns.Money(totals.netEach)))
   end
-  local bait = B.PostWarning(f.bait, f.price, ns.PriceView.FLAT)
-  if bait then add("Matches a bait price: " .. bait) end
+  local bait = P.BaitMatch(f)
+  if bait then add(bait) end
   local outlet = f.outlet
   local group = outlet and P.Group(outlet)
   if group == Outlet.NO_DATA and outlet.auction then
@@ -128,6 +134,28 @@ function P.Warnings(f)
       or string.format("Best outlet is a vendor: %s each, at least what the auction house pays after fees.", ns.Money(outlet.vendor)))
   end
   return warnings
+end
+
+-- The price under which a post is too low to make without asking, for a normal low end of
+-- reference copper: 70% of it up to 1g, sliding down to 30% of it as the reference grows.
+-- The same scale as Auctionator's price warning.
+function P.AskThreshold(reference)
+  return reference * (0.3 + 0.4 * math.min(1, 10000 / reference))
+end
+
+-- The reasons to ask before posting, each one line: the price is under P.AskThreshold of the
+-- bottom of the item's normal range, or it matches the item's bait. Every other warning is a
+-- note on the page only. f: price; stats; bait.
+function P.AskFirst(f)
+  local reasons = {}
+  local stats = f.stats
+  if stats and stats.n > 0 and f.price < P.AskThreshold(stats.p25) then
+    reasons[1] = string.format("%s is %d%% under this item's normal range (%s - %s).",
+      ns.Money(f.price), ns.Round((stats.p25 - f.price) / stats.p25 * 100), ns.Money(stats.p25), ns.Money(stats.p75))
+  end
+  local bait = P.BaitMatch(f)
+  if bait then reasons[#reasons + 1] = bait end
+  return reasons
 end
 
 -- One unit through each outlet, for the bag grid's tooltip

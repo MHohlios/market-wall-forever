@@ -193,9 +193,13 @@ local function Post(confirmed)
   local item = page.item
   if not price or not ns.CanTrade() then return end
   if not confirmed then
-    local warnings = Warnings(item, price, quantity)
-    if #warnings > 0 then
-      StaticPopup_Show("MARKETWALL_CONFIRM_POST", table.concat(warnings, "\n"))
+    local reasons = P.AskFirst({
+      price = price,
+      stats = ns.StatsFor(item.id),
+      bait = ns.R().bait[item.id],
+    })
+    if #reasons > 0 then
+      StaticPopup_Show("MARKETWALL_CONFIRM_POST", table.concat(reasons, "\n"))
       return
     end
   end

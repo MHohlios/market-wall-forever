@@ -163,6 +163,67 @@ describe("Sell page pricing", function()
     end)
   end)
 
+  describe("asking before a post", function()
+    local range = { n = 9, p25 = 229, p75 = 279, median = 250 }   -- 2s 29c to 2s 79c
+    local bait = { p = 20, u = 2, q = 2, w = 205, seen = 2 }
+
+    local function Ask(f)
+      local out = {}
+      for i, line in ipairs(P.AskFirst(f)) do out[i] = Plain(line) end
+      return out
+    end
+
+    it("does not ask a little under the range, though the page warns", function()
+      assert.same({}, Ask({ price = 219, stats = range }))   -- 4% under
+      assert.equal(1, #P.Warnings({ price = 219, stats = range, outlet = { outlet = "auction" } }))
+    end)
+
+    it("asks well under the range, saying how far", function()
+      assert.same({ "1s 37c is 40% under this item's normal range (2s 29c - 2s 79c)." },
+        Ask({ price = 137, stats = range }))
+    end)
+
+    it("asks only past 30% under for an item up to 1g", function()
+      assert.same({}, Ask({ price = 161, stats = range }))   -- the cutoff is 160.3c
+      assert.equal(1, #Ask({ price = 160, stats = range }))
+      local gold = { n = 9, p25 = 10000, p75 = 12000, median = 11000 }
+      assert.same({}, Ask({ price = 7010, stats = gold }))   -- the cutoff is 7,000c
+      assert.equal(1, #Ask({ price = 6990, stats = gold }))
+    end)
+
+    it("slides toward 70% under as the item gets dearer", function()
+      local tenGold = { n = 9, p25 = 100000, p75 = 120000, median = 110000 }   -- the cutoff is 34% of it
+      assert.same({}, Ask({ price = 34010, stats = tenGold }))
+      assert.same({ "3g 39s 90c is 66% under this item's normal range (10g - 12g)." }, Ask({ price = 33990, stats = tenGold }))
+      local twentyGold = { n = 9, p25 = 200000, p75 = 220000, median = 210000 }   -- 32%
+      assert.same({}, Ask({ price = 64010, stats = twentyGold }))
+      assert.equal(1, #Ask({ price = 63990, stats = twentyGold }))
+    end)
+
+    it("does not ask when a vendor pays more, or the market is thin", function()
+      local totals = P.Totals(229, 92, 276, 400, 0.05)
+      assert.is_true(totals.beats < 0)
+      assert.same({}, Ask({ price = 229, stats = range, totals = totals }))
+      assert.same({}, Ask({ price = 229, stats = range, outlet = O.Values({ vendor = 10, wall = 1000, supplied = false, cut = 0.05 }) }))
+    end)
+
+    it("has no percentage to ask without a normal range", function()
+      assert.same({}, Ask({ price = 1 }))
+      assert.same({}, Ask({ price = 1, stats = { n = 0 } }))
+    end)
+
+    it("asks at a bait price, even with no range or one seen once", function()
+      local line = "Matches a bait price: 2 units at 20c sits 90% under the 2s 5c wall. Likely bait; don't match it."
+      assert.same({ line }, Ask({ price = 20, bait = bait }))
+      assert.equal(1, #Ask({ price = 20, bait = { p = 20, u = 2, q = 2, w = 205, seen = 1 } }))
+      assert.same({}, Ask({ price = 198, bait = bait }))
+    end)
+
+    it("lists both reasons when both apply", function()
+      assert.equal(2, #Ask({ price = 20, stats = range, bait = bait }))
+    end)
+  end)
+
   describe("totals", function()
     it("takes the cut, then the deposit as a cost, and compares with the vendor", function()
       -- the mockup's 92 Silk Cloth at 2s 5c, a 27s 60c deposit and 40c at a vendor
