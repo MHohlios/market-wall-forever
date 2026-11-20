@@ -117,6 +117,23 @@ describe("Crafting view", function()
       assert.equal("9s 0c DE", Plain(V.Cells(Evaluate(Recipe({}), p), "known")[4]))
     end)
 
+    it("fit the search window's 736-pixel list in every mode", function()
+      for _, mode in ipairs(V.MODES) do
+        local width = 0
+        for _, column in ipairs(V.Columns(mode.key)) do width = width + column[2] end
+        assert.is_true(width <= 736, mode.key .. " columns are " .. width .. " wide")
+      end
+    end)
+
+    it("mark disenchanting best for a product never listed when it pays more than a vendor", function()
+      local p = { buy = { [THREAD] = 10 }, vendor = { [SHIRT] = 100 }, walls = { [CLOTH] = { 100, true } }, disenchant = { [SHIRT] = 900 } }
+      local evaluation = Evaluate(Recipe({}), p)
+      assert.equal("9s 0c DE", Plain(V.Cells(evaluation, "known")[4]))
+      local product = V.Breakdown(evaluation, { name = tostring, bags = function() return 0 end })[2]
+      assert.same({ "1s 0c", "9s 0c" }, { Plain(product.rows[1][2]), Plain(product.rows[3][2]):match("[%d].*") })
+      assert.matches("^best", Plain(product.rows[3][2]))
+    end)
+
     it("say where a recipe is learned and whether its pattern is listed", function()
       local function LearnFrom(fields, p) return Plain(V.LearnFrom(Evaluate(Recipe(fields), p or {}))) end
       assert.equal("Known", LearnFrom({}))
@@ -239,6 +256,25 @@ describe("Crafting view", function()
       local data = Learnable(panel)
       assert.is_true(#data > 100)
       assert.is_true(data[1].highlight)
+    end)
+
+    it("evaluates the guide again after each profession window event, even within a second", function()
+      local loaded, fire = addon.Load()   -- a load of its own, to fire events at its frames
+      _G.MarketWallDB = { version = 1, cfg = {}, realms = {}, mobs = {}, depositRate = {}, crafting = {} }
+      local evaluated = 0
+      local guide = loaded.Professions.Guide
+      loaded.Professions.Guide = function(profession)
+        evaluated = evaluated + 1
+        return guide(profession)
+      end
+      local panel = loaded.CraftingView.Build(CreateFrame("Frame"))
+      panel:Refresh()
+      panel:Refresh()
+      assert.equal(1, evaluated)
+      fire("TRADE_SKILL_UPDATE")
+      fire("TRADE_SKILL_UPDATE")
+      panel:Refresh()
+      assert.equal(2, evaluated)
     end)
 
     it("opens a learnable recipe's pattern only where a pattern opener is given", function()

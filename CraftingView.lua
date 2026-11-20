@@ -45,12 +45,13 @@ end
 local KNOWN_COLUMNS = Columns(
   { { "Recipe", 230, nil, RECIPE_TIP } }, COMMON_COLUMNS,
   { { "Margin", 56, "RIGHT", "Profit as a share of the mats cost." }, MARKET_COLUMN, { "Learn", 74, nil, "Whether this character knows it." } })
+-- Both column sets add up to 736 pixels, the search window's list width
 local LEARNABLE_COLUMNS = Columns(
-  { { "Recipe", 150, nil, RECIPE_TIP } }, COMMON_COLUMNS,
+  { { "Recipe", 136, nil, RECIPE_TIP } }, COMMON_COLUMNS,
   { MARKET_COLUMN,
-    { "Learn from", 112, nil, "Where the recipe is learned. On the AH: its pattern was listed in your scans." },
-    { "Pattern cost", 74, "RIGHT", "The pattern's wall when it is listed, else its vendor or trainer price." },
-    { "Pays back", 62, "RIGHT", "Crafts until the profit pays for the pattern, rounded up. Never: a craft makes no profit." } })
+    { "Learn from", 100, nil, "Where the recipe is learned. On the AH: its pattern was listed in your scans." },
+    { "Pattern cost", 68, "RIGHT", "The pattern's wall when it is listed, else its vendor or trainer price." },
+    { "Pays back", 56, "RIGHT", "Crafts until the profit pays for the pattern, rounded up. Never: a craft makes no profit." } })
 
 -------------------------------------------------------------------------------
 -- Data
@@ -127,8 +128,16 @@ function V.Payback(payback)
   return payback == 1 and "1 craft" or (payback .. " crafts")
 end
 
+-- The outlet that pays most. Outlet.Values says no data for a product never seen listed, yet
+-- still prices its vendor and disenchant values, so the better of those two pays most then.
+local function BestOutlet(outlet)
+  if outlet.outlet ~= Outlet.NO_DATA then return outlet.outlet end
+  if outlet.disenchant and outlet.disenchant > outlet.vendor then return Outlet.DISENCHANT end
+  return Outlet.VENDOR
+end
+
 local function SellsFor(evaluation)
-  local tag = evaluation.net and evaluation.outlet.outlet == Outlet.DISENCHANT and (" " .. BLUE .. "DE|r") or ""
+  local tag = evaluation.net and BestOutlet(evaluation.outlet) == Outlet.DISENCHANT and (" " .. BLUE .. "DE|r") or ""
   return V.Money(evaluation.net) .. tag
 end
 
@@ -211,7 +220,7 @@ function V.Breakdown(evaluation, info)
   mats.rows[#mats.rows + 1] = { "Cost", V.Money(evaluation.cost) }
 
   local outlet = evaluation.outlet
-  local best = outlet.outlet == Outlet.NO_DATA and Outlet.VENDOR or outlet.outlet
+  local best = BestOutlet(outlet)
   local function PerCraft(key, value)
     if not value then return NO_DATA end
     local text = ns.MoneyShort(value * made)
@@ -243,10 +252,10 @@ end
 
 -- The guide for a profession, evaluated again only after a profession read or a price change
 local cached = {}
+local reads = 0   -- profession window events seen, each of which may read recipes or a new rank
 
 local function Guide(profession)
-  local known = ns.Professions.Known(profession)
-  local stamp = table.concat({ profession, tostring(known and known.t), ns.Mobs.pricesVersion }, ":")
+  local stamp = table.concat({ profession, reads, ns.Mobs.pricesVersion }, ":")
   if cached.stamp ~= stamp then cached = { stamp = stamp, evaluations = ns.Professions.Guide(profession) } end
   return cached.evaluations
 end
@@ -474,9 +483,11 @@ function V.Build(parent, layout)
   return panel
 end
 
--- A profession read changes the guide: redraw whichever copy is on screen, batched like item names
+-- A profession read changes the guide: evaluate it again and redraw whichever copy is on screen,
+-- batched like item names, so after Professions.Read has handled the same event
 local events = CreateFrame("Frame")
 events:SetScript("OnEvent", function()
+  reads = reads + 1
   ns.SearchChanged()
   ns.ui.dirty = true
 end)
