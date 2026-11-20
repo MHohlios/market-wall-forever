@@ -111,12 +111,24 @@ describe("Mobs view", function()
     assert.equal("Young Panther", V.Rows(all, "optimal", "")[1].name)
   end)
 
-  it("counts unpriced drops and shows no values for a mob with no seen kill", function()
+  it("shows Mob, Kills, Per kill, Average and Top drop, and no values for a mob with no seen kill", function()
     local rows = V.Rows(All(), "optimal", "")
-    local lashtail = V.MobCells(rows[3])
-    assert.same({ "Lashtail Raptor", "58", 80, 160, 120, "item:7 31%", "1" }, lashtail)
-    assert.same({ "Jungle Stalker", GREY .. "0|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", "" },
-      V.MobCells(rows[4]))
+    assert.same({ "Lashtail Raptor", "58", 80, 160, "item:7" }, V.MobCells(rows[3]))
+    assert.same({ "Jungle Stalker", GREY .. "0|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r" }, V.MobCells(rows[4]))
+  end)
+
+  it("follows the top drop with its share and an orange count of unpriced drops", function()
+    local rows = V.Rows(All(), "optimal", "")
+    assert.equal(" " .. GREY .. "31%|r" .. ORANGE .. " · 1 unpriced|r", V.TopSuffix(rows[3]))
+    assert.is_nil(V.TopSuffix(rows[4]))
+    rows[3].unpriced = 0
+    assert.equal(" " .. GREY .. "31%|r", V.TopSuffix(rows[3]))
+  end)
+
+  it("moves the average without rare drops into the Per kill hover", function()
+    local row = V.Rows(All(), "optimal", "Stranglethorn")[1]
+    assert.equal("Average without rare drops: " .. ns.Money(142.5), V.PerKillTip(row))
+    assert.is_nil(V.PerKillTip(V.Rows(All(), "optimal", "Jungle")[1]))
   end)
 
   it("gives no rough-values hover to a mob with no seen kill", function()
