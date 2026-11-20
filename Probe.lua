@@ -1,6 +1,8 @@
 -- MarketWall: a temporary, read-only probe of what Forever exposes for kills, loot and money.
 -- Off until "/mw probe start". It records only counts, types, secret-ness, spell and item IDs
--- and creature IDs into MarketWallDB.probe, never chat text, names or other players' GUIDs.
+-- and creature IDs into MarketWallDB.probe, never chat text, names or other players' GUIDs. At a
+-- trainer it also records what the trainer API returns for each service, recipe names included,
+-- for the crafting guide's trainer rows.
 -- Delete this file, its TOC line and the "probe" slash command once Phase 5 is designed.
 local _, ns = ...
 
@@ -10,6 +12,7 @@ local PARTY_SECONDS = 10  -- how often party1 is probed
 local MAX_SAMPLES, MAX_SIGNATURES = 3, 5
 local MAX_LOOTS, MAX_MONEY, MAX_DEATHS, MAX_SPELLS, MAX_SLOTS = 100, 200, 100, 100, 20
 local MAX_ERROR = 160
+local MAX_TRAINERS, MAX_SERVICES, MAX_REAGENTS = 10, 80, 8
 local SAMPLE_ITEM = 2589  -- Linen Cloth, for the item-info checks
 
 local EVENTS = {
@@ -17,7 +20,7 @@ local EVENTS = {
   "LOOT_READY", "LOOT_OPENED", "LOOT_SLOT_CLEARED", "LOOT_CLOSED", "CHAT_MSG_LOOT", "CHAT_MSG_MONEY",
   "UNIT_SPELLCAST_SUCCEEDED", "COMBAT_LOG_EVENT_UNFILTERED",
   "PLAYER_MONEY", "MERCHANT_SHOW", "MERCHANT_CLOSED", "MAIL_SHOW", "MAIL_CLOSED", "MAIL_INBOX_UPDATE",
-  "TAXIMAP_OPENED", "TAXIMAP_CLOSED", "TRAINER_SHOW", "TRAINER_CLOSED", "QUEST_TURNED_IN",
+  "TAXIMAP_OPENED", "TAXIMAP_CLOSED", "TRAINER_SHOW", "TRAINER_UPDATE", "TRAINER_CLOSED", "QUEST_TURNED_IN",
   "TRADE_SHOW", "TRADE_CLOSED", "TRADE_ACCEPT_UPDATE", "CHAT_MSG_SYSTEM",
 }
 
@@ -66,6 +69,7 @@ local frame         -- created on the first start, so a probe never started regi
 local running = false
 local clockStart
 local target, open, seen, lastMoney, lastKillGUID, looting   -- in memory only, never saved
+local trainerVisit   -- the open trainer's entry in log.trainers
 
 local function Now()
   return math.floor((GetTime() - clockStart) * 10 + 0.5) / 10
@@ -290,6 +294,65 @@ local function RecordSpell(unit, _, spellID)
   end
 end
 
+local function ItemIn(link)
+  return ReadableString(link) and ns.ItemID(link) or nil
+end
+
+local function Readable(v)
+  return ReadableString(v) and v or nil
+end
+
+-- One trainer service: what each trainer call returns for it
+local function ReadService(i)
+  local name, subText, category = Call("GetTrainerServiceInfo", "GetTrainerServiceInfo", i)
+  local skill, skillRank, hasSkill = Call("GetTrainerServiceSkillReq", "GetTrainerServiceSkillReq", i)
+  local service = {
+    name = Readable(name), subText = Readable(subText), category = Readable(category),
+    cost = Plain(Call("GetTrainerServiceCost", "GetTrainerServiceCost", i)),
+    skill = Readable(skill), skillRank = Plain(skillRank), hasSkill = Plain(hasSkill),
+    level = Plain(Call("GetTrainerServiceLevelReq", "GetTrainerServiceLevelReq", i)),
+    item = ItemIn(Call("GetTrainerServiceItemLink", "GetTrainerServiceItemLink", i)),
+    abilities = Plain(Call("GetTrainerServiceNumAbilityReq", "GetTrainerServiceNumAbilityReq", i)),
+    reagentCount = Plain(Call("GetTrainerServiceNumReagents", "GetTrainerServiceNumReagents", i)),
+  }
+  if type(service.abilities) == "number" and service.abilities > 0 then
+    Call("GetTrainerServiceAbilityReq", "GetTrainerServiceAbilityReq", i, 1)
+  end
+  if type(service.reagentCount) == "number" then
+    service.reagents = {}
+    for r = 1, math.min(service.reagentCount, MAX_REAGENTS) do
+      local _, _, count = Call("GetTrainerServiceReagentInfo", "GetTrainerServiceReagentInfo", i, r)
+      local item = ItemIn(Call("GetTrainerServiceReagentItemLink", "GetTrainerServiceReagentItemLink", i, r))
+      service.reagents[r] = { item = item, count = Plain(count) }
+    end
+  end
+  return service
+end
+
+-- Reads every service of the open trainer into a visit
+local function ReadTrainer(visit)
+  local count = Call("GetNumTrainerServices", "GetNumTrainerServices")
+  visit.n = Plain(count)
+  visit.tradeskill = Plain(Call("IsTradeskillTrainer", "IsTradeskillTrainer"))
+  visit.filters = {}
+  for _, filter in ipairs({ "available", "unavailable", "used" }) do
+    visit.filters[filter] = Plain(Call("GetTrainerServiceTypeFilter", "GetTrainerServiceTypeFilter", filter))
+  end
+  visit.services = {}
+  local services = (type(count) == "number" and not Secret(count)) and math.min(count, MAX_SERVICES) or 0
+  for i = 1, services do visit.services[i] = ReadService(i) end
+  visit.reads = (visit.reads or 0) + 1
+end
+
+-- A visit per trainer opened, read again on each update while it stays open (a filter change)
+local function RecordTrainer(event)
+  if event == "TRAINER_SHOW" then
+    trainerVisit = { t = Now() }
+    Append(log.trainers, trainerVisit, MAX_TRAINERS, "trainers")
+  end
+  if trainerVisit then ReadTrainer(trainerVisit) end
+end
+
 local HANDLERS = {
   PLAYER_TARGET_CHANGED = ReadTarget,
   UPDATE_MOUSEOVER_UNIT = function()
@@ -302,6 +365,9 @@ local HANDLERS = {
   LOOT_OPENED = function() if not looting then looting = true RecordLoot("LOOT_OPENED") end end,
   LOOT_CLOSED = function() looting = false end,
   PLAYER_MONEY = RecordMoney,
+  TRAINER_SHOW = function() RecordTrainer("TRAINER_SHOW") end,
+  TRAINER_UPDATE = function() RecordTrainer("TRAINER_UPDATE") end,
+  TRAINER_CLOSED = function() trainerVisit = nil end,
   UNIT_SPELLCAST_SUCCEEDED = RecordSpell,
   COMBAT_LOG_EVENT_UNFILTERED = function()
     if log.events.COMBAT_LOG_EVENT_UNFILTERED.count <= 20 then
@@ -363,6 +429,16 @@ local function ProbeApis()
   Call("GetProfessions", "GetProfessions")
   Call("GetNumSkillLines", "GetNumSkillLines")
   Call("GetSkillLineInfo", "GetSkillLineInfo", 1)
+  -- The trainer and profession window calls the crafting guide may use: whether they exist
+  for _, path in ipairs({ "GetNumTrainerServices", "GetTrainerServiceInfo", "GetTrainerServiceCost",
+      "GetTrainerServiceSkillReq", "GetTrainerServiceItemLink", "GetTrainerServiceLevelReq",
+      "GetTrainerServiceNumAbilityReq", "GetTrainerServiceAbilityReq", "GetTrainerServiceNumReagents",
+      "GetTrainerServiceReagentInfo", "GetTrainerServiceReagentItemLink", "GetTrainerServiceTypeFilter",
+      "IsTradeskillTrainer", "GetTradeSkillLine", "GetNumTradeSkills", "GetTradeSkillInfo",
+      "GetTradeSkillItemLink", "GetTradeSkillNumMade", "GetTradeSkillNumReagents", "GetTradeSkillReagentInfo",
+      "GetTradeSkillReagentItemLink", "C_TradeSkillUI.GetAllRecipeIDs" }) do
+    Api(path, path)
+  end
 end
 
 local function RegisterEvents()
@@ -386,11 +462,12 @@ local function Start()
   log = {
     startedAt = time(), client = {},
     secretChecks = {}, apis = {}, events = {}, loots = {}, money = {}, deaths = {},
-    spells = {}, spellsSecret = 0, dropped = {},
+    spells = {}, spellsSecret = 0, dropped = {}, trainers = {},
   }
   MarketWallDB.probe = log
   clockStart = GetTime()
   target, open, seen, lastMoney, lastKillGUID, looting = { poll = 0, party = 0 }, {}, {}, nil, nil, false
+  trainerVisit = nil
   frame = frame or CreateFrame("Frame")
   frame:SetScript("OnEvent", OnEvent)
   log.client.version, log.client.build = Call("GetBuildInfo", "GetBuildInfo")
@@ -429,6 +506,13 @@ local function Status()
   local seconds = running and Now() or saved.seconds or 0
   ns.Print(string.format("Probe %s, %d min recorded. %d loots, %d money changes, %d deaths.",
     running and "running" or "stopped", math.floor(seconds / 60), #saved.loots, #saved.money, #saved.deaths))
+  for _, visit in ipairs(saved.trainers or {}) do
+    local withItem = 0
+    for _, service in ipairs(visit.services) do
+      if service.item then withItem = withItem + 1 end
+    end
+    print(string.format("  Trainer: %d services read, %d with an item link.", #visit.services, withItem))
+  end
   local fired = {}
   for _, event in ipairs(SortedKeys(saved.events, function(e) return e.count > 0 end)) do
     fired[#fired + 1] = event .. " " .. saved.events[event].count

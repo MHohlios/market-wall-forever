@@ -23,6 +23,8 @@ describe("loading the addon", function()
     assert.is_table(ns.Kills.tracker)       -- Kills.lua
     assert.is_function(ns.Containers.OpenedValue) -- Containers.lua
     assert.is_function(ns.Mobs.For)         -- Mobs.lua
+    assert.is_table(ns.RecipeTables.Tailoring) -- Recipes/Tailoring.lua
+    assert.is_function(ns.Professions.Guide) -- Professions.lua, after Crafting.lua it calls
     assert.is_table(ns.DisenchantLog.tracker) -- DisenchantLog.lua
     assert.is_function(ns.MobsView.Build)   -- MobsView.lua, before Search.lua builds it
     assert.is_function(ns.LedgerView.Build) -- LedgerView.lua, the same
@@ -36,6 +38,6 @@ describe("loading the addon", function()
     local _, fire = addon.Load()
     fire("ADDON_LOADED", addon.ADDON)
     assert.same({ version = 1, cfg = {}, realms = {}, mobs = {}, disenchants = {}, containers = {}, ledger = {}, sessions = {},
-      sessionGroups = {}, creatures = {}, depositRate = {} }, MarketWallDB)
+      sessionGroups = {}, creatures = {}, depositRate = {}, crafting = {} }, MarketWallDB)
   end)
 end)

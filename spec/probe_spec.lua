@@ -158,6 +158,28 @@ describe("probe", function()
       assert.equal(string.rep("number,", 12) .. "table*", next(api.returns))
     end)
 
+    it("records each trainer service, read again on an update while the trainer is open", function()
+      local services = 2
+      Stub("GetNumTrainerServices", function() return services end)
+      Stub("GetTrainerServiceInfo", function(i) return i == 1 and "Tailoring" or "Bolt of Silk Cloth", "", i == 1 and "header" or "available" end)
+      Stub("GetTrainerServiceCost", function() return 1000, 0, 0 end)
+      Stub("GetTrainerServiceSkillReq", function() return "Tailoring", 125, true end)
+      Stub("GetTrainerServiceItemLink", function(i) if i == 2 then return "|Hitem:4305::|h[Bolt of Silk Cloth]|h" end end)
+      ns.ProbeCommand("start")
+      fire("TRAINER_SHOW")
+      local visit = MarketWallDB.probe.trainers[1]
+      assert.same({ name = "Bolt of Silk Cloth", subText = "", category = "available", cost = 1000, skill = "Tailoring",
+        skillRank = 125, hasSkill = true, item = 4305 }, visit.services[2])
+      assert.is_false(MarketWallDB.probe.apis.GetTrainerServiceNumReagents.exists)
+
+      services = 1
+      fire("TRAINER_UPDATE")
+      assert.same({ 1, 2 }, { #visit.services, visit.reads })
+      fire("TRAINER_CLOSED")
+      fire("TRAINER_UPDATE")
+      assert.same({ 1, 2, 1 }, { #MarketWallDB.probe.trainers, visit.reads, #visit.services })
+    end)
+
     it("records an API that errors and one that is missing", function()
       Stub("GetProfessions", function() error("blocked") end)
       ns.ProbeCommand("start")

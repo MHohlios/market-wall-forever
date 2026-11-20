@@ -42,7 +42,9 @@ not tracked here.
 **New files need a full client restart.** `/reload` picks up edits to files the game
 already knows, but a new file in `MarketWall.toc`, or a new `Bindings.xml`, loads only
 after quitting and restarting the game. The item search window added `PriceView.lua`,
-`Search.lua` and `Minimap.lua`, so restart the game once after updating to it.
+`Search.lua` and `Minimap.lua`, so restart the game once after updating to it. The
+crafting data added `Crafting.lua`, `Recipes/Tailoring.lua` and `Professions.lua`, so restart
+once more after updating to it.
 
 ## Item search
 
