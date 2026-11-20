@@ -312,10 +312,16 @@ function Sessions.RenameLabel(list, from, to)
 end
 
 -- Sets a stopped session's running time, keeping its start: it stops that long after it started,
--- paused time left as it was. Returns whether it changed.
+-- paused time left as it was. Gaps that ended after the new stop go, such as the idle hours of a
+-- session left running by mistake. Returns whether it changed.
 function Sessions.SetDuration(s, seconds)
   if not s.stop or seconds <= 0 then return false end
   s.stop = s.start + s.paused + seconds
+  local kept = {}
+  for _, gap in ipairs(s.gaps) do
+    if gap[1] <= s.stop then kept[#kept + 1] = gap end
+  end
+  s.gaps = kept
   return true
 end
 

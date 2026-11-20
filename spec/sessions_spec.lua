@@ -259,6 +259,16 @@ describe("Sessions", function()
       assert.is_false(S.SetDuration(S.New("open", "c", T0), 60))   -- a running session keeps its clock
     end)
 
+    it("drops the idle gaps of a session left running for hours when it is cut to its real length", function()
+      local s = S.New("Forgotten", "c", T0)
+      S.Add(s, Loot(T0 + 5 * 60, TURTLE, 100))
+      S.Add(s, Loot(T0 + 20 * 60, TURTLE, 100))   -- a 15 min gap, before the new stop
+      S.StopAt(s, T0 + 10 * HOUR)                  -- and nearly 10 h idle after it
+      assert.is_true(S.SetDuration(s, 44 * 60))
+      local report = S.Report(s, lenses.optimal, tostring, T0 + 20 * HOUR)
+      assert.same({ 44 * 60, 1, 15 * 60 }, { report.duration, report.gaps, report.gapSeconds })
+    end)
+
     it("deletes only a stopped session that is in the list", function()
       local old, open = Run("a", T0, HOUR, 0), S.New("b", "c", T0 + 2 * HOUR)
       local list = { old, open }
@@ -316,6 +326,20 @@ describe("Sessions", function()
       assert.is_false(S.Merge(list, a, a))
       assert.is_false(S.Merge(list, Run("y", T0 + HOUR, 60, 0), a))
       assert.same({ a, open }, list)
+    end)
+
+    it("leaves the Ledger and Mobs records as they were", function()
+      local function Ledger() return { ["Player-1"] = { opening = { T0, 100 }, balance = 400, entries = { { T0 + 60, 300, "loot" } } } } end
+      local function Mobs() return { [TURTLE] = { name = "Turtle", kills = 3 } } end
+      local a, b, c = Run("x", T0, HOUR, 50), Run("y", T0 + 2 * HOUR, HOUR, 60), Run("z", T0 + 4 * HOUR, HOUR, 70)
+      _G.MarketWallDB = { sessions = { a, b, c }, ledger = Ledger(), mobs = Mobs() }
+      local list = MarketWallDB.sessions
+      S.RenameLabel(list, "x", "w")
+      S.Merge(list, a, b)
+      S.SetDuration(b, 60)
+      S.Delete(list, c)
+      assert.same({ b }, list)
+      assert.same({ Ledger(), Mobs() }, { MarketWallDB.ledger, MarketWallDB.mobs })
     end)
   end)
 
