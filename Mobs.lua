@@ -283,15 +283,18 @@ end
 local cache = {}   -- [npcID] = stats, or false for a mob never killed
 
 -- Stats for one mob at current prices, nil when it has never been killed. Cached until the mob
--- gets a new kill, or Mobs.Invalidate after a scan or a settings change.
+-- gets a new kill, or Mobs.Invalidate after a scan or a settings change; the name is looked up
+-- each time, so one learned later shows at once.
 function Mobs.For(npc)
   local stats = cache[npc]
+  local mob = MarketWallDB.mobs[npc]
   if stats == nil then
-    local mob = MarketWallDB.mobs[npc]
     stats = mob and Mobs.Stats(mob, Mobs.MobPrices(), Mobs.GameOptions()) or false
     cache[npc] = stats
   end
-  return stats or nil
+  if not stats then return nil end
+  stats.name = ns.Creatures.Name(npc, mob.name)
+  return stats
 end
 
 function Mobs.Invalidate()

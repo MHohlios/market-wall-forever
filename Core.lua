@@ -49,6 +49,13 @@ function ns.LastBagIndex()
   return NUM_TOTAL_EQUIPPED_BAG_SLOTS or ((NUM_BAG_SLOTS or 4) + (NUM_REAGENTBAG_SLOTS or 0))
 end
 
+-- A value the game returned, or nil when it is secret (Forever hides some values from add-ons)
+function ns.Readable(v)
+  local check = _G.issecretvalue
+  if check and check(v) then return nil end
+  return v
+end
+
 local function Print(...)
   print("|cfff5c518MarketWall|r:", ...)
 end

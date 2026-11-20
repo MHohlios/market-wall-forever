@@ -38,6 +38,11 @@ local function Count(set)
   return n
 end
 
+-- What a mob the game never named is called
+local function UnknownName(npc)
+  return "Unknown mob (" .. npc .. ")"
+end
+
 -- One row per mob from Mobs.All whose name contains the filter, ignoring case. Mobs with values
 -- come first, highest median per kill under the lens first; mobs with no seen kill follow,
 -- most kills first.
@@ -45,11 +50,11 @@ function V.Rows(all, lens, filter)
   local want = string.lower(strtrim(filter or ""))
   local rows = {}
   for _, stats in ipairs(all) do
-    local name = stats.name or ("NPC " .. stats.npc)
+    local name = stats.name or UnknownName(stats.npc)
     if want == "" or string.find(string.lower(name), want, 1, true) then
       local value, common = stats[lens], stats[lens .. "NoRare"]
       rows[#rows + 1] = {
-        npc = stats.npc, name = name, kills = stats.seen,
+        npc = stats.npc, name = name, unknown = stats.name == nil, kills = stats.seen,
         median = value and value.median, average = value and value.average,
         withoutRare = common and common.average, top = stats.top,
         unpriced = stats.market and Count(stats.market.unpriced),
@@ -70,16 +75,17 @@ local function Rough(row, reliableKills)
   return row.median ~= nil and row.kills < reliableKills
 end
 
--- Display cells for a mob row. The kill count is orange while the values are rough; a mob
--- with no seen kill has no values and a grey count.
+-- Display cells for a mob row. An unknown mob's name is grey. The kill count is orange while the
+-- values are rough; a mob with no seen kill has no values and a grey count.
 function V.MobCells(row, reliableKills)
+  local name = row.unknown and (GREY .. row.name .. "|r") or row.name
   if not row.median then
-    return { row.name, GREY .. row.kills .. "|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", "" }
+    return { name, GREY .. row.kills .. "|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", "" }
   end
   local kills = Rough(row, reliableKills) and (ORANGE .. row.kills .. "|r") or tostring(row.kills)
   local top = row.top and (ns.ColorName(row.top.id) .. " " .. ns.ShareText(row.top.share)) or GREY .. "-|r"
   local unpriced = row.unpriced > 0 and (ORANGE .. row.unpriced .. "|r") or (GREY .. "0|r")
-  return { row.name, kills, ns.Money(row.median), ns.Money(row.average), ns.Money(row.withoutRare), top, unpriced }
+  return { name, kills, ns.Money(row.median), ns.Money(row.average), ns.Money(row.withoutRare), top, unpriced }
 end
 
 -- The hover for a mob row whose values are rough, nil otherwise
@@ -201,7 +207,7 @@ function V.Build(parent)
     self.title:SetShown(dropTable)
     if dropTable then
       local stats = ns.Mobs.For(self.npc)
-      self.title:SetText((stats.name or ("NPC " .. self.npc)) .. GREY .. " · drop table, " .. stats.seen .. " kills with loot seen|r")
+      self.title:SetText((stats.name or (GREY .. UnknownName(self.npc) .. "|r")) .. GREY .. " · drop table, " .. stats.seen .. " kills with loot seen|r")
       local data = {}
       for _, drop in ipairs(ns.Mobs.GameDropTable(self.npc)) do
         data[#data + 1] = { id = drop.id, cells = V.DropCells(drop), sort = V.DropSortValues(drop) }

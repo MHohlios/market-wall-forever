@@ -443,11 +443,14 @@ describe("Kills", function()
     assert.same({ 1, 2, 3 }, { Of("loot")[1].window, Of("loot")[2].window, Of("fish")[1].window })
   end)
 
-  it("names a looted mob from a unit seen earlier", function()
+  it("names a looted mob and its kill by asking for the creature's name", function()
+    local names = { [WOLF] = "Timber Wolf" }
+    tracker = K.NewTracker(function(e) events[#events + 1] = e end, function() end, nil, function(npc) return names[npc] end)
     local wolf = Guid(WOLF, 1)
-    tracker:SawUnit(wolf, "Timber Wolf")
+    tracker:Kill(wolf, 100)
     tracker:Loot({ Slot(LINEN, 1, wolf, 1) }, false, 100)
     assert.equal("Timber Wolf", Of("loot")[1].name)
+    assert.equal("Timber Wolf", Of("kill")[1].name)
   end)
 
   it("keeps fishing out of mob records", function()

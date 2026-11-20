@@ -16,6 +16,7 @@ Scan.lua
 Buy.lua
 Disenchant.lua
 Record.lua
+Creatures.lua
 Kills.lua
 DisenchantLog.lua
 Outlet.lua

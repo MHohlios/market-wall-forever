@@ -30,7 +30,7 @@ describe("Mobs view", function()
       market(Valued(1, "Lashtail Raptor", 80, 58), { [5] = true }),
       { npc = 2, name = "Jungle Stalker", lifetime = 7, seen = 0 },   -- every kill looted by someone else
       market(Valued(3, "Stranglethorn Raptor", 95, 142), {}),
-      { npc = 4, lifetime = 12, seen = 0 },   -- never targeted, so no name
+      { npc = 4, lifetime = 12, seen = 0 },   -- the game never named it
       market(Valued(5, "Young Panther", 400, 11), {}),
     }
   end
@@ -43,8 +43,15 @@ describe("Mobs view", function()
 
   it("sorts by median per kill, with mobs that have no seen kill last", function()
     local rows = V.Rows(All(), "optimal", "")
-    assert.same({ "Young Panther", "Stranglethorn Raptor", "Lashtail Raptor", "Jungle Stalker", "NPC 4" }, Names(rows))
+    assert.same({ "Young Panther", "Stranglethorn Raptor", "Lashtail Raptor", "Jungle Stalker", "Unknown mob (4)" }, Names(rows))
     assert.equal(0, rows[5].kills)   -- the seen kills, not all 12
+  end)
+
+  it("shows a mob the game never named as a grey unknown mob with its ID", function()
+    local rows = V.Rows(All(), "optimal", "unknown")
+    assert.same({ "Unknown mob (4)" }, Names(rows))
+    assert.equal(GREY .. "Unknown mob (4)|r", V.MobCells(rows[1], 10)[1])
+    assert.equal("Young Panther", V.MobCells(V.Rows(All(), "optimal", "panther")[1], 10)[1])
   end)
 
   describe("header sort", function()
@@ -57,16 +64,16 @@ describe("Mobs view", function()
     it("keeps the median order until a header is clicked", function()
       local entries = Entries()
       V.Sort(entries, nil)
-      assert.same({ "Young Panther", "Stranglethorn Raptor", "Lashtail Raptor", "Jungle Stalker", "NPC 4" }, Names(entries))
+      assert.same({ "Young Panther", "Stranglethorn Raptor", "Lashtail Raptor", "Jungle Stalker", "Unknown mob (4)" }, Names(entries))
     end)
 
     it("sorts by a column either way, with mobs that have no value last", function()
       local entries = Entries()
       V.Sort(entries, { col = 2, desc = true })
-      assert.same({ "Stranglethorn Raptor", "Lashtail Raptor", "Young Panther", "Jungle Stalker", "NPC 4" }, Names(entries))
+      assert.same({ "Stranglethorn Raptor", "Lashtail Raptor", "Young Panther", "Jungle Stalker", "Unknown mob (4)" }, Names(entries))
       V.Sort(entries, { col = 3, desc = false })
       assert.same({ "Lashtail Raptor", "Stranglethorn Raptor", "Young Panther" }, { entries[1].name, entries[2].name, entries[3].name })
-      assert.same({ "Jungle Stalker", "NPC 4" }, { entries[4].name, entries[5].name })
+      assert.same({ "Jungle Stalker", "Unknown mob (4)" }, { entries[4].name, entries[5].name })
     end)
 
     it("sorts the drop table by name or by any lens value", function()
