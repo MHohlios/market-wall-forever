@@ -207,7 +207,8 @@ Releases are made in the GitHub UI. Draft a new release with a new tag on `main`
 the release notes, edit them for players and publish. The release workflow then builds the
 addon and uploads it to CurseForge, which shows the release's text as the file's changelog.
 A tag containing `alpha` or `beta` is published as that file type.
-[CONTRIBUTING.md](CONTRIBUTING.md#releasing) has the details.
+[CONTRIBUTING.md](CONTRIBUTING.md#releasing) has the details, including the one-time
+CurseForge token setup and how to test a beta in the CurseForge app before a wide release.
 
 ## Contributing
 
