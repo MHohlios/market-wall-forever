@@ -1166,6 +1166,10 @@ local SETTING_GROUPS = {
     { key = "salvagerBonus", label = "Salvager bonus", kind = "points", note = "Imported from Disenchantry",
       tip = "Extra materials Salvager gives, in percent. Imported once from Disenchantry, so Reset to defaults keeps it." },
   } },
+  { title = "Sell", column = 1, settings = {
+    { key = "postAskUnder", label = "Ask before posting", kind = "pct", note = "More than this under normal",
+      tip = "The Sell page asks before a post whose price is more than this far under the low end of the item's normal range. Smaller dips post without asking, and still show a note on the page. A price that matches a bait price always asks." },
+  } },
   { title = "Scanning and alerts", column = 2, settings = {
     { key = "autoScan", label = "Daily full scan on open", kind = "bool", note = "If none has run today",
       tip = "Start a full scan when you open the auction house, if none has run today." },
