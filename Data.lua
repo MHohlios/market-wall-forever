@@ -9,7 +9,7 @@ ns.dips = {}
 ns.disenchants = {}
 
 local D_WALL, D_LOW, D_HIGH, D_UNITS, D_MIN, D_PARTS = 1, 2, 3, 4, 5, 6
-local ORANGE, GREY = "|cffffb057", "|cffa3acac"
+local WARN, GREY = ns.COLOR.WARN, ns.COLOR.GREY
 
 ns.PART_NAMES = { "Night", "Morning", "Afternoon", "Evening" }   -- 0-6, 6-12, 12-18, 18-24 local time
 ns.WDAY_NAMES = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" }
@@ -114,7 +114,7 @@ end
 
 -- A list's Data cell: "3 d", orange while low on data, grey after
 function ns.DataBadge(days)
-  return (ns.IsLowData(days) and ORANGE or GREY) .. days .. " d|r"
+  return (ns.IsLowData(days) and WARN or GREY) .. days .. " d|r"
 end
 
 -- The badge and its hover in one cell tip, for lists with no room for a Data column
@@ -126,7 +126,7 @@ end
 -- line its hover adds, while the item is low on data; nil for both otherwise
 function ns.DataSuffix(days)
   if not ns.LowDataText(days) then return nil end
-  return ORANGE .. " · " .. days .. " d|r"
+  return WARN .. " · " .. days .. " d|r"
 end
 
 function ns.LowDataTip(days)
@@ -452,6 +452,6 @@ function ns.Versus(price, stats)
 end
 
 function ns.VersusText(diff, word)
-  local colored = (word == "low" and "|cff7cc0fflow|r") or (word == "high" and "|cffffb057high|r") or word
+  local colored = word == "low" and (ns.COLOR.BUY .. "low|r") or word
   return string.format("%+d%% (%s)", ns.Round(diff * 100), colored)
 end

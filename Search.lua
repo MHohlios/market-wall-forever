@@ -22,7 +22,7 @@ local CELLS = {
   "current", "rangeMin", "rangeMax", "rangeAverage", "rangeMedian", "rangeTrend", "rangePoints", "normalRange",
   "vendor", "disenchant", "limits",
 }
-local GREY, GOLD = "|cffa3acac", "|cfff5c518"
+local GREY, LABEL = ns.COLOR.GREY, ns.COLOR.LABEL
 
 -------------------------------------------------------------------------------
 -- Data
@@ -146,7 +146,7 @@ local function ListingsText(id)
   local lines = { "Listings " .. GREY .. "(" .. ns.Ago(held.t) .. ")|r" }
   for i = 1, math.min(LISTING_LINES, #held.ladder) do
     local tier = held.ladder[i]
-    lines[#lines + 1] = string.format("%s   x %d", ns.Money(tier.p), tier.q) .. (tier.p == wall and GOLD .. "  wall|r" or "")
+    lines[#lines + 1] = string.format("%s   x %d", ns.Money(tier.p), tier.q) .. (tier.p == wall and LABEL .. "  wall|r" or "")
   end
   if #held.ladder > LISTING_LINES then
     lines[#lines + 1] = GREY .. string.format("and %d more price levels", #held.ladder - LISTING_LINES) .. "|r"

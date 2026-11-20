@@ -45,9 +45,10 @@ describe("price view", function()
       assert.equal("flat", PV.TrendText(970 / 1000 - 1))
     end)
 
-    it("names moves past 3% up or down with the rounded percent", function()
-      assert.truthy(PV.TrendText(0.031):find("up 3%%"))
-      assert.truthy(PV.TrendText(-0.126):find("down 13%%"))
+    it("shows moves past 3% up or down as an arrow and the rounded percent, uncoloured", function()
+      assert.equal("▲ 3%", Plain(PV.TrendText(0.031)))
+      assert.equal("▼ 13%", Plain(PV.TrendText(-0.126)))
+      assert.is_nil(PV.TrendText(0.031):find("|c", 1, true))
     end)
   end)
 
@@ -148,7 +149,7 @@ describe("price view", function()
       end)
 
       it("summarizes the last 30 days", function()
-        assert.same({ "Min: 90c", "Max: 2s", "Average: 1s 20c", "Median: 1s 5c", "Trend: down 50%", "Points: 6 over 21 days" },
+        assert.same({ "Min: 90c", "Max: 2s", "Average: 1s 20c", "Median: 1s 5c", "Trend: ▼ 50%", "Points: 6 over 21 days" },
           Grid(RANGE_CELLS, THIRTY_DAYS))
       end)
 
@@ -156,7 +157,7 @@ describe("price view", function()
         local start = today - 62 - (today - 62 + 3) % 7   -- a Monday about two months back
         ns.R().weeks[ID] = ns.PackWeeks({ { start = start, wall = 260, low = 240, high = 280 } })
         local days = today - (start + 3) + 1   -- the weekly point sits mid-week
-        assert.same({ "Min: 90c", "Max: 2s 60c", "Average: 1s 40c", "Median: 1s 10c", "Trend: down 62%", "Points: 7 over " .. days .. " days" },
+        assert.same({ "Min: 90c", "Max: 2s 60c", "Average: 1s 40c", "Median: 1s 10c", "Trend: ▼ 62%", "Points: 7 over " .. days .. " days" },
           Grid(RANGE_CELLS, ALL))
         assert.same({ "Points: 6 over 21 days" }, Grid({ "rangePoints" }, THIRTY_DAYS))
       end)

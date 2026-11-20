@@ -7,7 +7,7 @@ local L = {}
 ns.LedgerView = L
 
 local TABLE_ROWS, TABLE_WIDTH, CHART_HEIGHT, GUTTER = 9, 362, 110, 66
-local GREY = "|cffa3acac"
+local GREY = ns.COLOR.GREY
 local LAST = { other = 1, offline = 2 }   -- these sources list last, in this order
 local TOTAL_TINT = { 0.96, 0.77, 0.09, 0.10 }
 
@@ -203,11 +203,11 @@ function L.Build(parent)
   panel.opening:SetWordWrap(true)
 
   local function Fill(list, side, periodText)
-    list:SetColumns({ { list.title, 240, nil, list.tip }, { periodText, 122, "RIGHT", "Copper in the period shown." } })
+    list:SetColumns({ { list.title, 240, nil, list.tip }, { periodText, 122, "RIGHT", "Copper in the period shown.", money = true } })
     local data = {}
     for _, row in ipairs(L.Rows(side)) do
       local total = row.source == "total"
-      data[#data + 1] = { cells = { row.label, ns.Money(row.copper) }, tint = total and TOTAL_TINT or nil }
+      data[#data + 1] = { cells = { row.label, row.copper }, tint = total and TOTAL_TINT or nil }
     end
     list:SetData(data)
   end

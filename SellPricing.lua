@@ -6,7 +6,7 @@ local B, Outlet = ns.Bait, ns.Outlet
 local P = {}
 ns.SellPricing = P
 
-local ORANGE, GOLD, GREEN, RED = "|cffffb057", "|cfff5c518", "|cff4fc36b", "|cffe06060"
+local WARN, LABEL, GAIN, LOSS = ns.COLOR.WARN, ns.COLOR.LABEL, ns.COLOR.GAIN, ns.COLOR.LOSS
 local NONE = "—"
 
 -- The wall to compare a price with: live when listings are loaded, else the last recorded one
@@ -76,8 +76,8 @@ end
 function P.BeatsText(t)
   if not t.beats then return "—" end
   local amount = ns.Money(t.beats)
-  if t.beats > 0 then return GREEN .. "+" .. amount .. "|r" end
-  return RED .. amount .. "|r"
+  if t.beats > 0 then return GAIN .. "+" .. amount .. "|r" end
+  return LOSS .. amount .. "|r"
 end
 
 -- The warnings that apply to posting at a price, each one line. f: price; totals (P.Totals);
@@ -123,8 +123,8 @@ end
 
 -- The Note column: the bait level Bait Detect tracks, or the wall
 function P.AuctionNote(tier, wall, bait)
-  if bait and tier.p == bait.p then return ORANGE .. "bait? " .. B.LevelNote(bait) .. "|r" end
-  if tier.p == wall then return GOLD .. "wall|r" end
+  if bait and tier.p == bait.p then return WARN .. "bait? " .. B.LevelNote(bait) .. "|r" end
+  if tier.p == wall then return LABEL .. "wall|r" end
   return ""
 end
 

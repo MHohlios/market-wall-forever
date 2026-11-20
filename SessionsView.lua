@@ -10,20 +10,20 @@ ns.SessionsView = V
 V.RECENT_LABELS = 5   -- labels the minimap menu offers to start again
 local LIST_ROWS, ACTIVITY_ROWS, TOP_ITEMS = 16, 13, 2
 local STAT_WIDTH = 146
-local GREY, GREEN, ORANGE = "|cffa3acac", "|cff7fd17f", "|cffffb057"
+local GREY, GAIN, WARN = ns.COLOR.GREY, ns.COLOR.GAIN, ns.COLOR.WARN
 
 local HISTORY_COLUMNS = {
   { "Label", 220, nil, "What you farmed. Click a session for its activities." },
   { "Date", 120, nil, "When it started." },
   { "Duration", 100, "RIGHT", "Time it ran, paused time left out." },
-  { "Value earned", 140, "RIGHT", "Coins plus items gained, at current prices under the chosen lens." },
-  { "Gold / hour", 140, "RIGHT", "Value earned per hour of running time." },
+  { "Value earned", 140, "RIGHT", "Coins plus items gained, at current prices under the chosen lens.", money = true },
+  { "Gold / hour", 140, "RIGHT", "Value earned per hour of running time.", money = true },
 }
 local ACTIVITY_COLUMNS = {
   { "Activity", 180, nil, "Kills by creature family or name, gathering, fishing, chests and quests. Right-click to rename, merge or unmerge." },
   { "Share", 60, "RIGHT", "Its part of the session's value earned." },
-  { "Value", 110, "RIGHT", "Coins plus items gained from it, at current prices under the chosen lens." },
-  { "Gold / hour", 110, "RIGHT", "Its value per hour of the session's running time." },
+  { "Value", 110, "RIGHT", "Coins plus items gained from it, at current prices under the chosen lens.", money = true },
+  { "Gold / hour", 110, "RIGHT", "Its value per hour of the session's running time.", money = true },
   { "Top items", 270, nil, "The items that added the most value." },
 }
 
@@ -33,7 +33,7 @@ local ACTIVITY_COLUMNS = {
 
 function V.StateText(s)
   if s.stop then return nil end
-  return s.pausedAt and (ORANGE .. "paused|r") or (GREEN .. "running|r")
+  return s.pausedAt and (WARN .. "paused|r") or (GAIN .. "running|r")
 end
 
 -- The running tracker's lines for a session and its Sessions.Report
@@ -75,7 +75,7 @@ function V.ActivityEntries(report)
     entries[i] = {
       group = group.name,
       bar = group.share,
-      cells = { group.name, ns.ShareText(group.share), ns.Money(group.value), ns.Money(group.perHour), V.TopText(group.top) },
+      cells = { group.name, ns.ShareText(group.share), group.value, group.perHour, V.TopText(group.top) },
       sort = { group.name, group.share, group.value, group.perHour, group.top[1] and group.top[1].value },
     }
   end
@@ -113,7 +113,7 @@ function V.HistoryEntries(list, label, value, now)
     entries[i] = {
       session = s,
       cells = { s.label .. (state and ("  " .. state) or ""), date("%b %d, %H:%M", s.start), Sessions.Clock(row.duration),
-        ns.Money(row.value), ns.Money(row.perHour) },
+        row.value, row.perHour },
       sort = { s.label, s.start, row.duration, row.value, row.perHour },
     }
   end

@@ -6,7 +6,7 @@ local ui = { view = "watch", limits = {}, sort = {} }
 ns.ui = ui
 
 local ROWS, ROW_H = 16, 20
-local BLUE, ORANGE, GREY, GOLD = "|cff7cc0ff", "|cffffb057", "|cffa3acac", "|cfff5c518"
+local BUY, GAIN, WARN, GREY, LABEL = ns.COLOR.BUY, ns.COLOR.GAIN, ns.COLOR.WARN, ns.COLOR.GREY, ns.COLOR.LABEL
 
 local function MakeButton(parent, text, width)
   local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
@@ -104,7 +104,7 @@ local function ShowMenu(items)
     local button = menu.buttons[i] or MenuButton(i)
     menu.buttons[i] = button
     button.item = item
-    local color = (item.disabled and GREY) or (not item.onClick and GOLD) or ""
+    local color = (item.disabled and GREY) or (not item.onClick and LABEL) or ""
     button.text:SetText(color .. item.text .. (color ~= "" and "|r" or ""))
     button:SetEnabled(item.onClick ~= nil and not item.disabled)
     button:Show()
@@ -248,7 +248,19 @@ local function CreateList(parent, rows)
     return header
   end
 
-  -- A hover area over one row's cell, for columns marked cellTip. Clicks pass through to the row.
+  -- A cell's hover text: a money cell's exact amount when the cell rounds it, then the row's
+  -- own text for the cell from entry.cellTips
+  local function CellTip(entry, c)
+    local tip = entry.cellTips and entry.cellTips[c]
+    local copper = list.columns[c].money and type(entry.cells[c]) == "number" and entry.cells[c]
+    if copper and ns.Money(copper) ~= ns.MoneyShort(copper) then
+      tip = tip and (ns.Money(copper) .. "\n" .. tip) or ns.Money(copper)
+    end
+    return tip
+  end
+
+  -- A hover area over one row's cell, for columns marked cellTip or money. Clicks pass through
+  -- to the row; with nothing to say about the cell, the row's own hover shows.
   local function CellHit(row, c)
     local hit = row.hits[c]
     if hit then return hit end
@@ -256,15 +268,17 @@ local function CreateList(parent, rows)
     hit:SetMouseMotionEnabled(true)
     hit:SetMouseClickEnabled(false)
     hit:SetScript("OnEnter", function(self)
-      local tip = row.entry and row.entry.cellTips and row.entry.cellTips[c]
-      if tip then ShowTip(self, self.title, tip) end
+      local tip = row.entry and CellTip(row.entry, c)
+      if tip then ShowTip(self, self.title, tip) else row:GetScript("OnEnter")(row) end
     end)
     hit:SetScript("OnLeave", HideTip)
     row.hits[c] = hit
     return hit
   end
 
-  -- columns: { {title, width, justify, tip, cellTip = true?}, ... }   sortCol/sortDesc mark the active sort
+  -- columns: { {title, width, justify, tip, cellTip = true?, money = true?}, ... }   sortCol/sortDesc
+  -- mark the active sort. A money column's cells hold copper, shown in the compact form, or nil
+  -- for a dash, or text to show as it is.
   function list:SetColumns(columns, sortCol, sortDesc)
     self.columns = columns
     local x = 8
@@ -286,7 +300,7 @@ local function CreateList(parent, rows)
         else
           cell:Hide()
         end
-        if col and col.cellTip then
+        if col and (col.cellTip or col.money) then
           local hit = CellHit(row, c)
           hit:ClearAllPoints()
           hit:SetPoint("TOPLEFT", row, "TOPLEFT", x, 0)
@@ -331,7 +345,10 @@ local function CreateList(parent, rows)
       if entry then
         for c = 1, #self.columns do
           local suffix = entry.suffixes and entry.suffixes[c]
-          if suffix then FitText(row.cells[c], entry.cells[c] or "", suffix) else row.cells[c]:SetText(entry.cells[c] or "") end
+          local text = entry.cells[c]
+          if self.columns[c].money and type(text) ~= "string" then text = ns.MoneyShort(text) end
+          text = text or ""
+          if suffix then FitText(row.cells[c], text, suffix) else row.cells[c]:SetText(text) end
         end
         row.icon:SetTexture(entry.id and ns.Icon(entry.id) or nil)
         row:SetAlpha(entry.dim and 0.45 or 1)
@@ -373,46 +390,46 @@ local WALL_TIP = "The item's real price: the lowest price level that has meaning
 local DATA_COLUMN = { "Data", 44, "RIGHT", "Days of data behind the normal price. Orange: fewer than the \"Days before data is reliable\" setting, so the normal price may be off.", cellTip = true }
 local WATCH_COLUMNS = {
   { "Item", 140, nil, "Items you are tracking. Click a row for its chart and live listings." },
-  { "Wall price", 85, "RIGHT", WALL_TIP },
-  { "Lowest", 85, "RIGHT", "The single cheapest listing right now, even if it is only one unit." },
+  { "Wall price", 85, "RIGHT", WALL_TIP, money = true },
+  { "Lowest", 85, "RIGHT", "The single cheapest listing right now, even if it is only one unit.", money = true },
   -- the watchlist has no room for a Data column, so this column's cells carry its badge
   { "Normal range", 160, "RIGHT", "Where the wall price usually sits: the middle half of its daily history. On an item's first day, today's wall. No room for a Data column here: hover a cell for the item's days of data.", cellTip = true },
-  { "Buy below", 85, "RIGHT", "Your buy threshold. Units listed under this price count as deals. Set it on the item's page." },
-  { "Sell at", 85, "RIGHT", "Your target resale price. The row says Sell when the wall price reaches it." },
+  { "Buy below", 85, "RIGHT", "Your buy threshold. Units listed under this price count as deals. Set it on the item's page.", money = true },
+  { "Sell at", 85, "RIGHT", "Your target resale price. The row says Sell when the wall price reaches it.", money = true },
   { "Units under", 65, "RIGHT", "How many units are listed under your buy price as of the last scan." },
   { "Status", 80, "RIGHT", "Buy: units are under your buy price. Sell: the wall reached your sell price. Old: the price has not been scanned recently." },
 }
 local SNIPE_COLUMNS = {
   { "Item", 170, nil, "Items with listings priced under their wall. Click a row to load live listings before buying." },
-  { "Wall price", 90, "RIGHT", WALL_TIP },
-  { "Cheapest", 90, "RIGHT", "The lowest listing found in the scan." },
+  { "Wall price", 90, "RIGHT", WALL_TIP, money = true },
+  { "Cheapest", 90, "RIGHT", "The lowest listing found in the scan.", money = true },
   { "Units", 70, "RIGHT", "Units listed under the wall that would still profit after the auction house cut." },
-  { "Cost", 100, "RIGHT", "What it costs to buy all of those units." },
-  { "Profit after cut", 120, "RIGHT", "Expected profit if you resell at the normal price, after the auction house cut. Uses the lower of today's wall and the historical median." },
+  { "Cost", 100, "RIGHT", "What it costs to buy all of those units.", money = true },
+  { "Profit after cut", 120, "RIGHT", "Expected profit if you resell at the normal price, after the auction house cut. Uses the lower of today's wall and the historical median.", money = true },
   { "Under normal", 90, "RIGHT", "How far the average cost of those units is below the normal price." },
   DATA_COLUMN,
 }
 local DIP_COLUMNS = {
   { "Item", 200, nil, "Items whose wall price dropped suddenly compared with their own history." },
-  { "Wall now", 90, "RIGHT", WALL_TIP },
-  { "Normal", 90, "RIGHT", "The median wall price over the history window." },
+  { "Wall now", 90, "RIGHT", WALL_TIP, money = true },
+  { "Normal", 90, "RIGHT", "The median wall price over the history window.", money = true },
   { "Under by", 80, "RIGHT", "How far today's wall is below the normal price." },
   { "Supply", 90, "RIGHT", "Total units listed. More supply means the dip is real, not one seller." },
-  { "Profit each", 110, "RIGHT", "Expected profit per unit if the price returns to normal, after the auction house cut." },
+  { "Profit each", 110, "RIGHT", "Expected profit per unit if the price returns to normal, after the auction house cut.", money = true },
   DATA_COLUMN,
 }
 local DISENCHANT_COLUMNS = {
   { "Item", 220, nil, "Weapons and armor, uncommon or better, listed under what disenchanting them is worth. Click a row to load live listings before buying." },
-  { "Price", 90, "RIGHT", "The cheapest buyout found in the scan." },
-  { "Net DE value", 130, "RIGHT", "Expected value of the materials from one disenchant, at their wall prices, after the auction house cut and the deposit to list each material, as the item tooltip's Disenchant (net) shows it." },
-  { "Profit", 100, "RIGHT", "Net disenchant value minus the price." },
+  { "Price", 90, "RIGHT", "The cheapest buyout found in the scan.", money = true },
+  { "Net DE value", 130, "RIGHT", "Expected value of the materials from one disenchant, at their wall prices, after the auction house cut and the deposit to list each material, as the item tooltip's Disenchant (net) shows it.", money = true },
+  { "Profit", 100, "RIGHT", "Net disenchant value minus the price.", money = true },
   { "Profit %", 80, "RIGHT", "Profit as a share of the price." },
   { "Odds from", 150, nil, "Where the material odds come from: your own disenchants (recorded by MarketWall), a Forever estimate, or the classic disenchanting table." },
 }
 local COLUMNS = { watch = WATCH_COLUMNS, snipes = SNIPE_COLUMNS, dips = DIP_COLUMNS, disenchant = DISENCHANT_COLUMNS }
 
 local STATUS_TEXT = {
-  buy = BLUE .. "Buy|r", sell = ORANGE .. "Sell|r", normal = "Normal", nodata = GREY .. "Not scanned|r",
+  buy = BUY .. "Buy|r", sell = GAIN .. "Sell|r", normal = "Normal", nodata = GREY .. "Not scanned|r",
 }
 local STATUS_ORDER = { buy = 1, sell = 2, normal = 3, old = 4, nodata = 5 }
 
@@ -430,20 +447,22 @@ local function WatchData()
       status = "old"
       statusText = GREY .. "Old, " .. ns.Ago(cur.t) .. "|r"
     end
-    local range = GREY .. "building|r"
-    if stats.n > 0 then range = ns.Money(stats.p25) .. " to " .. ns.Money(stats.p75) end
+    local range, exactRange = GREY .. "building|r", nil
+    if stats.n > 0 then
+      range = ns.MoneyShort(stats.p25) .. " to " .. ns.MoneyShort(stats.p75)
+      exactRange = ns.Money(stats.p25) .. " to " .. ns.Money(stats.p75)
+    end
     local name = ns.Name(id)
     local days = ns.DaysOfData(id)
     data[#data + 1] = {
       id = id, status = status, name = name, highlight = (status == "buy"), dim = stale,
       cells = {
-        ns.ColorName(id), ns.Money(cur.w), ns.Money(cur.m), range,
-        entry.buy and ns.Money(entry.buy) or "-", entry.sell and ns.Money(entry.sell) or "-",
+        ns.ColorName(id), cur.w, cur.m, range, entry.buy, entry.sell,
         cur.under and tostring(cur.under) or "-", statusText,
       },
       sort = { name, cur.w, cur.m, stats.n > 0 and stats.p25 or nil, entry.buy, entry.sell, cur.under, -STATUS_ORDER[status] },
       suffixes = { ns.DataSuffix(days) }, itemTip = ns.LowDataTip(days),
-      cellTips = { [4] = ns.DataBadgeTip(days) },
+      cellTips = { [4] = exactRange and (exactRange .. "\n" .. ns.DataBadgeTip(days)) or ns.DataBadgeTip(days) },
     }
   end
   table.sort(data, function(a, b)
@@ -459,7 +478,7 @@ local function SnipeData()
   for i = 1, #ns.snipes do
     local s = ns.snipes[i]
     data[i] = { id = s.id,
-      cells = { ns.ColorName(s.id), ns.Money(s.wall), ns.Money(s.min), tostring(s.units), ns.Money(s.cost), ns.Money(s.profit), Pct(s.discount), ns.DataBadge(s.days) },
+      cells = { ns.ColorName(s.id), s.wall, s.min, tostring(s.units), s.cost, s.profit, Pct(s.discount), ns.DataBadge(s.days) },
       sort = { ns.Name(s.id), s.wall, s.min, s.units, s.cost, s.profit, s.discount, s.days },
       cellTips = { [8] = ns.DataTip(s.days) },
     }
@@ -472,7 +491,7 @@ local function DipData()
   for i = 1, #ns.dips do
     local d = ns.dips[i]
     data[i] = { id = d.id,
-      cells = { ns.ColorName(d.id), ns.Money(d.wall), ns.Money(d.median), Pct(d.under), tostring(d.total), ns.Money(d.profit), ns.DataBadge(d.days) },
+      cells = { ns.ColorName(d.id), d.wall, d.median, Pct(d.under), tostring(d.total), d.profit, ns.DataBadge(d.days) },
       sort = { ns.Name(d.id), d.wall, d.median, d.under, d.total, d.profit, d.days },
       cellTips = { [7] = ns.DataTip(d.days) },
     }
@@ -489,7 +508,7 @@ local function DisenchantData()
   for _, d in ipairs(ns.DisenchantDeals()) do
     if showAll or d.skill <= skill then
       data[#data + 1] = { id = d.id,
-        cells = { ns.ColorName(d.id), ns.Money(d.price), ns.Money(d.value), ns.Money(d.profit), Pct(d.pct), d.odds },
+        cells = { ns.ColorName(d.id), d.price, d.value, d.profit, Pct(d.pct), d.odds },
         sort = { ns.Name(d.id), d.price, d.value, d.profit, d.pct, d.odds },
       }
     else
@@ -626,7 +645,7 @@ local function CreateChart(parent)
       Line(0, Y(stats.median), width, Y(stats.median), 0.96, 0.77, 0.09, 0.6, 1)
     end
     if buy then Line(0, Y(buy), width, Y(buy), 0.49, 0.75, 1, 0.9, 1) end
-    if sell then Line(0, Y(sell), width, Y(sell), 1, 0.69, 0.34, 0.9, 1) end
+    if sell then Line(0, Y(sell), width, Y(sell), 0.31, 0.76, 0.42, 0.9, 1) end
 
     if #series == 1 then
       local x = math.max(6, math.min(width - 6, X(series[1].t)))
@@ -642,7 +661,7 @@ local function CreateChart(parent)
     self.yLabels[3]:SetText(ns.MoneyShort(lo))
     self.xFirst:SetText(date("%b %d %H:%M", t0))
     self.xLast:SetText(date("%b %d %H:%M", t1))
-    local legend = "White: wall price   " .. BLUE .. "Blue: buy below|r   " .. ORANGE .. "Orange: sell at|r   " .. GOLD .. "Gold band: normal range|r   Bars: supply"
+    local legend = "White: wall price   " .. BUY .. "Blue: buy below|r   " .. GAIN .. "Green: sell at|r   " .. LABEL .. "Gold band: normal range|r   Bars: supply"
     self.legend:SetText(legend)
   end
   return chart
@@ -698,9 +717,9 @@ local function RefreshItem()
     if tier then
       local text = string.format("%s   x %d", ns.Money(tier.p), tier.q)
       if limits.buy and tier.p < limits.buy then
-        text = text .. BLUE .. "  under buy price|r"
+        text = text .. BUY .. "  under buy price|r"
       elseif wall and tier.p == wall then
-        text = text .. GOLD .. "  wall|r"
+        text = text .. LABEL .. "  wall|r"
       end
       line:SetText(text)
     elseif i == 1 then
@@ -725,7 +744,7 @@ local function RefreshItem()
     lines[#lines + 1] = GREY .. "No current listings loaded. Press Refresh with the auction house open.|r"
   end
   local lowData = ns.LowDataText(ns.DaysOfData(id))
-  if lowData then lines[#lines + 1] = ORANGE .. lowData .. "|r" end
+  if lowData then lines[#lines + 1] = WARN .. lowData .. "|r" end
   if stats.n > 0 then
     lines[#lines + 1] = string.format("Normal: median %s, range %s to %s, from %d %s", ns.Money(stats.median), ns.Money(stats.p25), ns.Money(stats.p75), stats.n, stats.n == 1 and "day" or "days")
   else
@@ -735,7 +754,7 @@ local function RefreshItem()
     local units, cost = W.UnitsUnder(held.ladder, limits.buy)
     if units > 0 then
       local each = cost / units
-      local text = string.format("%sUnder your buy price: %d units for %s|r    Break-even resale %s", BLUE, units, ns.Money(cost), ns.Money(math.ceil(each / (1 - cut))))
+      local text = string.format("%sUnder your buy price: %d units for %s|r    Break-even resale %s", BUY, units, ns.Money(cost), ns.Money(math.ceil(each / (1 - cut))))
       if limits.sell then
         text = text .. string.format("    Profit at sell price %s", ns.Money(units * limits.sell * (1 - cut) - cost))
       end
@@ -752,14 +771,14 @@ local function RefreshItem()
     lines[#lines + 1] = string.format("Bought through this addon: %d units at about %s each. Break-even resale %s.", pos.qty, ns.Money(each), ns.Money(math.ceil(each / (1 - cut))))
   end
   if limits.buy and limits.sell and limits.sell * (1 - cut) <= limits.buy then
-    lines[#lines + 1] = ORANGE .. "Warning: selling at that price loses money after the " .. Pct(cut) .. " cut.|r"
+    lines[#lines + 1] = WARN .. "Warning: selling at that price loses money after the " .. Pct(cut) .. " cut.|r"
   end
   -- day/night and day-of-week pattern
   local cycle = ns.Cycle(id)
   local function Cell(label, g)
     if not g or g.n < 3 then return GREY .. label .. " n/a|r" end
     local diff = ns.Round((g.r - 1) * 100)
-    local color = (diff <= -2 and BLUE) or (diff >= 2 and ORANGE) or "|cffffffff"
+    local color = diff <= -2 and BUY or ns.COLOR.VALUE
     return string.format("%s%s %+d%%|r", color, label, diff)
   end
   local parts = {}
@@ -913,7 +932,7 @@ local SETTINGS = {
   { key = "mobDisenchant", label = "Mob value: disenchanting", kind = "mode", tip = "Include disenchanting in a mob's Optimal value. Auto: when this character has Enchanting. Always suits an enchanter alt." },
   { key = "mobSkinning", label = "Mob value: skinning", kind = "mode", tip = "Include skinning in a mob's Optimal value. Auto: when this character has Skinning." },
   { key = "mobRareShare", label = "Rare drop threshold", kind = "pct", tip = "Drops seen in fewer kills than this count as rare, and are left out of the values without rare drops." },
-  { key = "mobMinKills", label = "Kills before values are reliable", kind = "int", tip = "A mob's values show from its first kill with loot seen. Under this many, its kill count shows in orange as a flag that the values are rough." },
+  { key = "mobMinKills", label = "Kills before values are reliable", kind = "int", tip = "A mob's values show from its first kill with loot seen. Under this many, an orange kill count after its name flags the values as rough." },
   { key = "salvagerMode", label = "Salvager mode", kind = "mode", modes = { "auto", "on", "off" }, tip = "Count Salvager's disenchant bonus. Auto: while the buff is up. Imported once from Disenchantry, so Reset to defaults keeps it." },
   { key = "salvagerBonus", label = "Salvager bonus %", kind = "points", tip = "Extra materials Salvager gives, in percent. Imported once from Disenchantry, so Reset to defaults keeps it." },
 }
@@ -1106,7 +1125,7 @@ local function RefreshDisenchant()
   else
     empty = "No disenchant deals in the last full scan."
   end
-  local skillText = skill and ("Enchanting " .. skill) or (ORANGE .. "Enchanting skill unknown, so every item is shown|r")
+  local skillText = skill and ("Enchanting " .. skill) or (WARN .. "Enchanting skill unknown, so every item is shown|r")
   ListView("disenchant", data, empty, skillText .. ". Click a row to load live listings before buying.")
   ui.showAllBox:SetChecked(ns.Cfg("disenchantShowAll") and true or false)
 end
@@ -1150,7 +1169,7 @@ function ns.UpdateStatus()
     local r = ns.R()
     text = GREY .. "Full scan: " .. ns.Ago(r.lastFull) .. "    Watchlist scan: " .. ns.Ago(r.lastWatch) .. "|r"
     if not r.lastFull or ns.DayOf(r.lastFull) ~= ns.Today() then
-      text = text .. ORANGE .. "    No full scan yet today|r"
+      text = text .. WARN .. "    No full scan yet today|r"
     end
   end
   ui.status:SetText(text or "")
