@@ -511,6 +511,6 @@ events:SetScript("OnEvent", function()
   ns.SearchChanged()
   ns.ui.dirty = true
 end)
-for _, event in ipairs({ "TRADE_SKILL_SHOW", "TRADE_SKILL_UPDATE" }) do
-  pcall(events.RegisterEvent, events, event)   -- a client without the Classic profession window lacks them
+for _, event in ipairs(ns.Professions.EVENTS) do
+  pcall(events.RegisterEvent, events, event)   -- a client has only some of them
 end
