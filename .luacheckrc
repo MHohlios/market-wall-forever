@@ -32,6 +32,8 @@ read_globals = {
   "StaticPopup_Show", "hooksecurefunc", "ChatEdit_InsertLink",
   "GetTradeSkillLine", "GetNumTradeSkills", "GetTradeSkillInfo", "GetTradeSkillItemLink", "GetTradeSkillNumMade",
   "GetTradeSkillNumReagents", "GetTradeSkillReagentInfo", "GetTradeSkillReagentItemLink",
+  "GetNumTrainerServices", "GetTrainerServiceInfo", "GetTrainerServiceCost", "GetTrainerServiceSkillReq",
+  "GetTrainerServiceItemLink",
   "PanelTemplates_DeselectTab", "PanelTemplates_SelectTab", "PanelTemplates_TabResize",
   -- Frames and constants
   "LibStub",                -- only to find Auctionator's tabs, when it is installed

@@ -40,3 +40,4 @@ Search.lua
 Minimap.lua
 SessionTracker.lua
 Tooltip.lua
+Trainer.lua
