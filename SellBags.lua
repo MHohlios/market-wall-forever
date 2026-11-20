@@ -2,7 +2,7 @@
 local _, ns = ...
 local P, Outlet = ns.SellPricing, ns.Outlet
 
-local GREY, GOLD = "|cffa3acac", "|cfff5c518"
+local GREY, LABEL = ns.COLOR.GREY, ns.COLOR.LABEL
 local ICON, GAP, HEADER, SCROLL_BAR = 34, 4, 20, 26
 
 local GROUP_TITLES = {
@@ -109,7 +109,7 @@ function SellBags.Grid(parent, width, onPick)
       local header = Header(g)
       header:SetPoint("TOPLEFT", 0, -y)
       local worth = group.value > 0 and ("  ·  " .. ns.Money(group.value)) or ""
-      header.text:SetText(GOLD .. GROUP_TITLES[group.outlet] .. "|r" .. GREY .. "  ·  " .. #group.items .. "|r" .. worth)
+      header.text:SetText(LABEL .. GROUP_TITLES[group.outlet] .. "|r" .. GREY .. "  ·  " .. #group.items .. "|r" .. worth)
       header:Show()
       y = y + HEADER
       for i, item in ipairs(group.items) do

@@ -65,7 +65,8 @@ Hovering a mob adds three lines to the tooltip: its worth per kill under Optimal
 median); a grey line with the Average and the kill count; and the top drop. The Vendor and
 Market comparison lives in the Mobs view's switch. Values show from the first looted kill.
 Under **Kills before values are reliable**, the kill count turns orange and reads "3 kills,
-rough", and the Mobs view shows that mob's kill count in orange.
+rough", and the Mobs view keeps the kill count a plain number and adds an orange "· N kills"
+after the mob's name.
 
 A container a mob drops, such as a clam, counts in Optimal at what it opens into on
 average, once you have opened some, when that beats selling it unopened. Hovering such a

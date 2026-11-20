@@ -34,7 +34,7 @@ describe("Sessions view", function()
     it("shows elapsed time, value earned and gold per hour while running", function()
       local s = Farm()
       local text = V.TrackerText(s, S.Report(s, Price, Name, T0 + 1800))
-      assert.equal("Tanaris turtles  |cff7fd17frunning|r", text.title)
+      assert.equal("Tanaris turtles  |cff4fc36brunning|r", text.title)
       assert.equal("0:30:00", text.elapsed)
       assert.equal(ns.Money(500), text.value)
       assert.equal(ns.Money(1000), text.perHour)
@@ -59,8 +59,8 @@ describe("Sessions view", function()
       for i, entry in ipairs(entries) do names[i] = entry.group end
       assert.same({ "Fishing", "Turtles", "Owls" }, names)
       assert.same({ 0.5, 0.3, 0.2 }, { entries[1].bar, entries[2].bar, entries[3].bar })   -- share bars
-      assert.same({ "Fishing", "50%", ns.Money(250), ns.Money(250), "Yellowtail x10, Turtle Scale x1" }, entries[1].cells)
-      assert.same({ "Owls", "20%", ns.Money(100), ns.Money(100), "Feather x5" }, entries[3].cells)
+      assert.same({ "Fishing", "50%", 250, 250, "Yellowtail x10, Turtle Scale x1" }, entries[1].cells)
+      assert.same({ "Owls", "20%", 100, 100, "Feather x5" }, entries[3].cells)
     end)
 
     it("sorts by a header column, and says when a group gained only coins", function()
@@ -107,7 +107,7 @@ describe("Sessions view", function()
       assert.equal(3, #entries)
       assert.equal(list[4], entries[1].session)
       assert.equal(list[1], entries[3].session)
-      assert.same({ "Tanaris turtles", "1:00:00", ns.Money(1000), ns.Money(1000) },
+      assert.same({ "Tanaris turtles", "1:00:00", 1000, 1000 },
         { entries[1].cells[1], entries[1].cells[3], entries[1].cells[4], entries[1].cells[5] })
       assert.equal(4, #V.HistoryEntries(list, nil, Value, T0 + 1e5))
     end)

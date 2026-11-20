@@ -8,7 +8,9 @@ ns.PriceView = PV
 
 local DAY = 86400
 PV.FLAT = 0.03   -- moves within 3% count as flat
-local BLUE, ORANGE, GREY = "|cff7cc0ff", "|cffffb057", "|cffa3acac"
+local WARN, GREY = ns.COLOR.WARN, ns.COLOR.GREY
+-- Trend arrows as icons: the game's fonts have no arrow characters
+PV.UP, PV.DOWN = "|TInterface\\Buttons\\Arrow-Up-Up:0:0|t", "|TInterface\\Buttons\\Arrow-Down-Up:0:0|t"
 
 PV.RANGES = { { days = 7, label = "7 days" }, { days = 30, label = "30 days" }, { label = "All" } }
 
@@ -45,8 +47,8 @@ end
 function PV.TrendText(diff)
   local pct = math.abs(ns.Round(diff * 100)) .. "%"
   local limit = PV.FLAT + 1e-9   -- absorbs float error, so a change of exactly 3% (1000 to 1030) is flat
-  if diff < -limit then return BLUE .. "down " .. pct .. "|r" end
-  if diff > limit then return ORANGE .. "up " .. pct .. "|r" end
+  if diff < -limit then return PV.DOWN .. " " .. pct end
+  if diff > limit then return PV.UP .. " " .. pct end
   return "flat"
 end
 
@@ -211,7 +213,7 @@ function PV.CreateView(parent, layout)
     local points = facts.chart or PV.InRange(facts.series, self.range.days, facts.now)
     self.chart:Draw(points, self.buy, self.sell, facts.stats)
     local flag = ns.LowDataText(ns.DaysOfData(self.id))
-    self.flag:SetText(flag and ORANGE .. flag .. "|r" or "")
+    self.flag:SetText(flag and WARN .. flag .. "|r" or "")
     for i, cell in ipairs(PV.Cells(facts, layout.cells)) do
       self.cells[i].label:SetText(cell.label)
       self.cells[i].value:SetText(cell.value)

@@ -36,7 +36,7 @@ describe("Sell page bait handling", function()
       local wide = { p = 1000, u = 3, q = 3, w = 4000 }
       assert.truthy(B.PostWarning(wide, 1030, FLAT))
       assert.truthy(B.PostWarning(wide, 970, FLAT))
-      assert.truthy(Plain(B.PostWarning(wide, 1010, FLAT)):find("^3 units at 10s 0c sits 75%% under the 40s 0c wall"))
+      assert.truthy(Plain(B.PostWarning(wide, 1010, FLAT)):find("^3 units at 10s sits 75%% under the 40s wall"))
     end)
 
     it("does not warn away from the bait price", function()

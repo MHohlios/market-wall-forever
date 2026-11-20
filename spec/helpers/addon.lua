@@ -59,10 +59,12 @@ function M.Load()
   return ns, Fire, frames
 end
 
--- Display text as plain letters: colour codes dropped, coin icons back to g, s and c
+-- Display text as plain letters: colour codes dropped, coin icons back to g, s and c, trend
+-- arrow icons to ▲ and ▼
 function M.Plain(text)
   return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|T[^|]*Gold[^|]*|t", "g")
-    :gsub("|T[^|]*Silver[^|]*|t", "s"):gsub("|T[^|]*Copper[^|]*|t", "c"))
+    :gsub("|T[^|]*Silver[^|]*|t", "s"):gsub("|T[^|]*Copper[^|]*|t", "c")
+    :gsub("|T[^|]*Arrow%-Up[^|]*|t", "▲"):gsub("|T[^|]*Arrow%-Down[^|]*|t", "▼"))
 end
 
 return M

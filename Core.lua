@@ -56,8 +56,20 @@ function ns.Readable(v)
   return v
 end
 
+-- Colour codes, one job each. Item names keep their quality colour instead.
+ns.COLOR = {
+  LABEL = "|cffffd100",   -- titles and labels only
+  VALUE = "|cffffffff",   -- values
+  GREY = "|cffa3acac",    -- secondary detail
+  GAIN = "|cff4fc36b",    -- profit or gain
+  WARN = "|cffffb057",    -- warnings only: low data, stale, rough, suspected bait
+  LOSS = "|cffe06060",    -- loss
+  BUY = "|cff7cc0ff",     -- your buy price and what is under it, like the chart's buy line
+  BRAND = "|cff2fa39d",   -- the MarketWall name, as the item tooltip's heading shows it
+}
+
 local function Print(...)
-  print("|cfff5c518MarketWall|r:", ...)
+  print(ns.COLOR.BRAND .. "MarketWall|r:", ...)
 end
 ns.Print = Print
 
@@ -72,19 +84,17 @@ function ns.ShareText(share)
   return string.format("%d%%", ns.Round(pct))
 end
 
--- The coins shown for a copper amount, and whether it was negative. Copper-only amounts leave
--- out gold and silver; zero silver and copper still show once there is gold.
+-- The coins shown for a copper amount, largest first, and whether it was negative. A zero coin
+-- is left out ("2g", not "2g 0s 0c"); zero itself shows as 0c.
 local function CoinParts(c)
   c = ns.Round(c)
   local neg = c < 0
   if neg then c = -c end
-  local g = math.floor(c / 10000)
-  local s = math.floor((c % 10000) / 100)
-  local k = c % 100
   local parts = {}
-  if g > 0 then parts[#parts + 1] = { g, "g" } end
-  if g > 0 or s > 0 then parts[#parts + 1] = { s, "s" } end
-  parts[#parts + 1] = { k, "c" }
+  for _, coin in ipairs({ { math.floor(c / 10000), "g" }, { math.floor(c / 100) % 100, "s" }, { c % 100, "c" } }) do
+    if coin[1] > 0 then parts[#parts + 1] = coin end
+  end
+  if #parts == 0 then parts[1] = { 0, "c" } end
   return parts, neg
 end
 
@@ -94,13 +104,12 @@ local COIN_ICON = {
   c = "|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:0:0|t",
 }
 
-local function JoinCoins(c, mark, dropCopperOverGold)
+local function JoinCoins(c, mark, compact)
   if not c then return "-" end
-  if dropCopperOverGold and math.abs(c) >= 10000 then
+  if compact and math.abs(c) >= 10000 then
     c = (c < 0 and -1 or 1) * ns.Round(math.abs(c) / 100) * 100   -- to the nearest silver, either sign
   end
   local parts, neg = CoinParts(c)
-  if dropCopperOverGold and #parts == 3 then parts[3] = nil end
   local out = {}
   for i, part in ipairs(parts) do out[i] = part[1] .. mark(part[2]) end
   return (neg and "-" or "") .. table.concat(out, " ")
@@ -123,7 +132,9 @@ function ns.MoneyFaded(c)
   return JoinCoins(c, function(unit) return FADED_COIN_ICON[unit] end)
 end
 
--- For chart axis labels, which have a narrow gutter: at 1g and over, copper is left out ("12g 34s")
+-- For table cells and chart labels: at most two coins, from the largest, so gold amounts are
+-- rounded to the nearest silver (5g 4s 73c shows 5g 5s, 9g 99s 88c shows 10g). A list's money
+-- cell shows the exact ns.Money amount on hover; chart labels have no hover.
 function ns.MoneyShort(c)
   return JoinCoins(c, function(unit) return COIN_ICON[unit] end, true)
 end

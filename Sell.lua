@@ -7,7 +7,7 @@ local _, ns = ...
 local P, PV, Outlet = ns.SellPricing, ns.PriceView, ns.Outlet
 local ui = ns.ui
 
-local BLUE, ORANGE, GREY = "|cff7cc0ff", "|cffffb057", "|cffa3acac"
+local WARN, GREY = ns.COLOR.WARN, ns.COLOR.GREY
 local DURATIONS = { { 1, "12h" }, { 2, "24h" }, { 3, "48h" } }
 
 -- The Market tab's page is about 782 x 480 below the navigation row
@@ -143,7 +143,7 @@ local function ShowTotals(t, quantity)
   rows.total:SetText(ns.Money(t.total))
   rows.afterCutLabel:SetText("After " .. ns.Round(ns.Cfg("ahCut") * 100) .. "% cut")
   rows.afterCut:SetText(ns.Money(t.afterCut))
-  rows.deposit:SetText(ORANGE .. "- |r" .. ns.Money(t.deposit))
+  rows.deposit:SetText("- " .. ns.Money(t.deposit))
   rows.net:SetText(ns.Money(t.net))
   if t.vendor then
     rows.vendorLabel:SetText("Vendor (" .. quantity .. " x " .. ns.Money(t.vendorEach) .. ")")
@@ -172,12 +172,12 @@ local function UpdateTotals()
 
   local info = P.InfoLine(price, page.start, P.Wall(page.item.id))
   if page.notes ~= "" then info = (info ~= "" and info .. "  " or "") .. GREY .. page.notes .. "|r" end
-  page.info:SetText(BLUE .. info .. "|r")
+  page.info:SetText(info)
   local warnings = Warnings(page.item, price, quantity, totals)
   -- shown with the warnings, but not one: posting a young item needs no confirmation
   local lowData = ns.LowDataText(ns.DaysOfData(page.item.id))
   if lowData then table.insert(warnings, 1, lowData) end
-  page.warning:SetText(ORANGE .. "· " .. table.concat(warnings, "\n· ") .. "|r")
+  page.warning:SetText(WARN .. "· " .. table.concat(warnings, "\n· ") .. "|r")
   page.warnings:SetShown(#warnings > 0)
 end
 

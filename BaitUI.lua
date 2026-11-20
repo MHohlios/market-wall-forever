@@ -6,7 +6,7 @@ local W, B = ns.Wall, ns.Bait
 local widgets = ns.widgets
 local MakeButton, MakeText, MakeEdit = widgets.MakeButton, widgets.MakeText, widgets.MakeEdit
 
-local GREEN, ORANGE, GREY = "|cff4fc36b", "|cfff0a040", "|cffa3acac"
+local GAIN, WARN, GREY = ns.COLOR.GAIN, ns.COLOR.WARN, ns.COLOR.GREY
 local LIST_WIDTH, RIGHT_X, RIGHT_WIDTH = 420, 432, 350
 local LIST_ROWS, LADDER_ROWS = 15, 8
 local SEARCHES_SHOWN_LIMIT = 100
@@ -20,9 +20,9 @@ BINDING_NAME_MARKETWALL_BAIT_ACTION = "Bait Detect: search or buy"
 
 local COLUMNS = {
   { "Item", 112, nil, "Commodities whose cheapest price level looks like bait: thin supply under the wall, below the item's normal range, seen in two scans in a row." },
-  { "Bait", 110, "RIGHT", "Units first seen at the bait price, and that price." },
+  { "Bait", 110, "RIGHT", "Units first seen at the bait price, and that price.", cellTip = true },
   -- the list is full, so this column's cells carry the Data badge other lists show in a column
-  { "Wall", 90, "RIGHT", "The item's real price: the lowest price level with meaningful supply behind it. No room for a Data column here: hover a cell for the item's days of data.", cellTip = true },
+  { "Wall", 90, "RIGHT", "The item's real price: the lowest price level with meaningful supply behind it. No room for a Data column here: hover a cell for the item's days of data.", cellTip = true, money = true },
   { "Under", 38, "RIGHT", "How far the bait price is under the wall." },
   { "Copies", 40, "RIGHT", "Units posted at the bait price since it first appeared. Green rows: copies are piling up; those are the cheap units worth buying." },
   { "Seen", 30, "RIGHT", "How long ago the bait price first appeared." },
@@ -208,11 +208,11 @@ local function ListData()
     data[i] = {
       id = item.id, highlight = (item.id == selectedID), tint = copies > 0 and PILING_TINT or nil,
       cells = {
-        ns.ColorName(item.id), r.u .. " @ " .. ns.Money(r.p), ns.Money(r.w), string.format("%d%%", ns.Round(B.Under(r) * 100)),
-        (copies > 0 and GREEN or GREY) .. copies .. "|r", Short(r.first),
+        ns.ColorName(item.id), r.u .. " @ " .. ns.MoneyShort(r.p), r.w, string.format("%d%%", ns.Round(B.Under(r) * 100)),
+        (copies > 0 and GAIN or GREY) .. copies .. "|r", Short(r.first),
       },
       suffixes = { ns.DataSuffix(days) }, itemTip = ns.LowDataTip(days),
-      cellTips = { [3] = ns.DataBadgeTip(days) },
+      cellTips = { [2] = ns.Money(r.p) ~= ns.MoneyShort(r.p) and ns.Money(r.p) or nil, [3] = ns.DataBadgeTip(days) },
     }
   end
   return data
@@ -234,7 +234,7 @@ local function DrawLadder(id, held, wall)
       local note, color = "", ""
       if record and level.p == record.p then
         note = "bait " .. B.LevelNote(record)
-        color = ORANGE
+        color = WARN
       elseif wall and level.p == wall then
         note = GREY .. "wall|r"
       end
@@ -397,7 +397,7 @@ local function BuildDetail(parent)
   local note = MakeText(detail, "GameFontNormalSmall")
   note:SetPoint("TOPLEFT", 0, -352)
   note:SetWidth(RIGHT_WIDTH)
-  note:SetText(ORANGE .. "Press the key yourself. Turbo keys, auto-clickers and macro software can get your account banned. MarketWall never searches or buys on its own.|r")
+  note:SetText(WARN .. "Press the key yourself. Turbo keys, auto-clickers and macro software can get your account banned. MarketWall never searches or buys on its own.|r")
 
   -- the waiting countdown and the searches readout change every second
   local elapsed = 0

@@ -18,11 +18,12 @@ ns.ItemSearch = S
 local MATCHES, RECENT = 8, 10
 local WIDTH, HEIGHT, SIDE_WIDTH, MAIN_X = 760, 460, 180, 210
 local SIDE_ROWS, ROW_HEIGHT, LISTING_LINES = 20, 16, 5
+local TABS_X, TABS_BOTTOM = 96, 32   -- after the heading; the views start just below
 local CELLS = {
   "current", "rangeMin", "rangeMax", "rangeAverage", "rangeMedian", "rangeTrend", "rangePoints", "normalRange",
   "vendor", "disenchant", "limits",
 }
-local GREY, GOLD = "|cffa3acac", "|cfff5c518"
+local GREY, LABEL = ns.COLOR.GREY, ns.COLOR.LABEL
 
 -------------------------------------------------------------------------------
 -- Data
@@ -146,7 +147,7 @@ local function ListingsText(id)
   local lines = { "Listings " .. GREY .. "(" .. ns.Ago(held.t) .. ")|r" }
   for i = 1, math.min(LISTING_LINES, #held.ladder) do
     local tier = held.ladder[i]
-    lines[#lines + 1] = string.format("%s   x %d", ns.Money(tier.p), tier.q) .. (tier.p == wall and GOLD .. "  wall|r" or "")
+    lines[#lines + 1] = string.format("%s   x %d", ns.Money(tier.p), tier.q) .. (tier.p == wall and LABEL .. "  wall|r" or "")
   end
   if #held.ladder > LISTING_LINES then
     lines[#lines + 1] = GREY .. string.format("and %d more price levels", #held.ladder - LISTING_LINES) .. "|r"
@@ -178,7 +179,7 @@ function ns.RefreshSearch()
   for _, tab in ipairs(TABS) do
     local on = tab.key == win.mode
     win.views[tab.key]:SetShown(on)
-    win.tabButtons[tab.key]:SetEnabled(not on)
+    ns.widgets.SelectTab(win.tabButtons[tab.key], on)
   end
   if win.mode == "items" then
     RefreshSide()
@@ -235,21 +236,16 @@ local function Build()
 
   local heading = w.MakeText(f, "GameFontNormal")
   heading:SetPoint("TOPLEFT", 12, -10)
-  heading:SetText("MarketWall ·")
+  heading:SetText("MarketWall")
   local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
   close:SetPoint("TOPRIGHT", 2, 2)
 
-  -- Items | Mobs | Ledger | Sessions switch; the button for the view on show is disabled
+  -- Items | Mobs | Ledger | Sessions tabs after the heading, their bottoms on a line above the views
   f.mode = "items"
-  f.tabButtons, f.views = {}, {}
-  local previous = heading
+  f.tabButtons = w.MakeTabRow(f, TABS_X, TABS_BOTTOM, TABS, function(key) f.mode = key ns.RefreshSearch() end)
+  f.views = {}
   for _, tab in ipairs(TABS) do
-    local button = w.MakeButton(f, tab.label, 70)
-    button:SetPoint("LEFT", previous, "RIGHT", previous == heading and 8 or 4, 0)
-    button:SetScript("OnClick", function() f.mode = tab.key ns.RefreshSearch() end)
-    f.tabButtons[tab.key] = button
     if tab.view then f.views[tab.key] = tab.view.Build(f) end
-    previous = button
   end
   local items = CreateFrame("Frame", nil, f)   -- the item search, hidden in the other views
   items:SetAllPoints()

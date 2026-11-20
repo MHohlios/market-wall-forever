@@ -8,14 +8,14 @@ ns.MobsView = V
 V.LENSES = { { key = "optimal", label = "Optimal" }, { key = "market", label = "Market" }, { key = "vendor", label = "Vendor" } }
 
 local LIST_ROWS = 16
-local GREY, ORANGE = "|cffa3acac", "|cffffb057"
+local GREY, WARN = ns.COLOR.GREY, ns.COLOR.WARN
 
 local MOB_COLUMNS = {
   { "Mob", 196, nil, "Every mob you, your pet or your party killed. Click a row for its drop table." },
   { "Kills", 50, "RIGHT", "Kills whose loot was seen: looted, or empty at 0c. Kills someone else looted are left out, as they are from the values." },
-  { "Median / kill", 90, "RIGHT", "The typical kill under the chosen lens. Kills someone else looted are left out; empty corpses count as 0c." },
-  { "Average / kill", 90, "RIGHT", "The long-run value per kill under the chosen lens. Well above the median means rare drops carry the value." },
-  { "Without rare", 90, "RIGHT", "Average per kill leaving out drops seen in fewer kills than the rare drop threshold." },
+  { "Median / kill", 90, "RIGHT", "The typical kill under the chosen lens. Kills someone else looted are left out; empty corpses count as 0c.", money = true },
+  { "Average / kill", 90, "RIGHT", "The long-run value per kill under the chosen lens. Well above the median means rare drops carry the value.", money = true },
+  { "Without rare", 90, "RIGHT", "Average per kill leaving out drops seen in fewer kills than the rare drop threshold.", money = true },
   { "Top drop", 160, nil, "The drop that adds the most value, and the share of kills it drops in." },
   { "Unpriced", 60, "RIGHT", "Drops with no market price yet. They count as 0c in Market until a scan prices them." },
 }
@@ -23,9 +23,9 @@ local DROP_COLUMNS = {
   { "Item", 230, nil, "Each item this mob dropped, the most value per kill first." },
   { "% of kills", 90, "RIGHT", "The share of looted and empty kills it dropped in." },
   { "Avg quantity", 90, "RIGHT", "How many drop at once, on average, when it drops." },
-  { "Vendor", 100, "RIGHT", "One unit's vendor price." },
-  { "Market", 100, "RIGHT", "One unit's wall price after the cut, or vendor when the market is thin." },
-  { "Optimal", 100, "RIGHT", "The best of vendor, market and, when included, disenchanting." },
+  { "Vendor", 100, "RIGHT", "One unit's vendor price.", money = true },
+  { "Market", 100, "RIGHT", "One unit's wall price after the cut, or vendor when the market is thin.", money = true },
+  { "Optimal", 100, "RIGHT", "The best of vendor, market and, when included, disenchanting.", money = true },
 }
 
 -------------------------------------------------------------------------------
@@ -75,17 +75,21 @@ local function Rough(row, reliableKills)
   return row.median ~= nil and row.kills < reliableKills
 end
 
--- Display cells for a mob row. An unknown mob's name is grey. The kill count is orange while the
--- values are rough; a mob with no seen kill has no values and a grey count.
-function V.MobCells(row, reliableKills)
+-- Display cells for a mob row, money as copper for the list to format. An unknown mob's name is
+-- grey; a mob with no seen kill has no values and a grey count.
+function V.MobCells(row)
   local name = row.unknown and (GREY .. row.name .. "|r") or row.name
   if not row.median then
     return { name, GREY .. row.kills .. "|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", "" }
   end
-  local kills = Rough(row, reliableKills) and (ORANGE .. row.kills .. "|r") or tostring(row.kills)
   local top = row.top and (ns.ColorName(row.top.id) .. " " .. ns.ShareText(row.top.share)) or GREY .. "-|r"
-  local unpriced = row.unpriced > 0 and (ORANGE .. row.unpriced .. "|r") or (GREY .. "0|r")
-  return { name, kills, ns.Money(row.median), ns.Money(row.average), ns.Money(row.withoutRare), top, unpriced }
+  local unpriced = row.unpriced > 0 and tostring(row.unpriced) or (GREY .. "0|r")
+  return { name, tostring(row.kills), row.median, row.average, row.withoutRare, top, unpriced }
+end
+
+-- The orange note after a mob's name while its values are rough, like a low-data item's
+function V.MobSuffix(row, reliableKills)
+  if Rough(row, reliableKills) then return WARN .. " · " .. row.kills .. (row.kills == 1 and " kill|r" or " kills|r") end
 end
 
 -- The hover for a mob row whose values are rough, nil otherwise
@@ -95,7 +99,7 @@ end
 
 function V.DropCells(drop)
   return { ns.ColorName(drop.id), ns.ShareText(drop.share), string.format("%.1f", drop.quantity),
-    ns.Money(drop.vendor), ns.Money(drop.market), ns.Money(drop.optimal) }
+    drop.vendor, drop.market, drop.optimal }
 end
 
 -- Raw values per column, for sorting by a header
@@ -222,8 +226,8 @@ function V.Build(parent)
     local reliableKills = ns.Cfg("mobMinKills")
     local data = {}
     for _, row in ipairs(V.Rows(ns.Mobs.All(), self.lens, self.filter:GetText())) do
-      data[#data + 1] = { npc = row.npc, cells = V.MobCells(row, reliableKills), sort = V.MobSortValues(row),
-        tip = V.MobTip(row, reliableKills) }
+      data[#data + 1] = { npc = row.npc, cells = V.MobCells(row), sort = V.MobSortValues(row),
+        suffixes = { V.MobSuffix(row, reliableKills) }, tip = V.MobTip(row, reliableKills) }
     end
     local empty = next(MarketWallDB.mobs) and "No recorded mob matches." or "No kills recorded yet. Loot what you kill and each mob's value shows here."
     Show(MOB_COLUMNS, data, self.sorts.mobs, empty)

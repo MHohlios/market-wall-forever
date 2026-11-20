@@ -32,7 +32,7 @@ read_globals = {
   "StaticPopup_Show", "hooksecurefunc", "ChatEdit_InsertLink",
   "GetTradeSkillLine", "GetNumTradeSkills", "GetTradeSkillInfo", "GetTradeSkillItemLink", "GetTradeSkillNumMade",
   "GetTradeSkillNumReagents", "GetTradeSkillReagentInfo", "GetTradeSkillReagentItemLink",
-  "PanelTemplates_DeselectTab", "PanelTemplates_SelectTab", "PanelTemplates_TabResize",
+  "PanelTemplates_DeselectTab", "PanelTemplates_SelectTab", "PanelTemplates_TabResize", "GameFontNormalSmall",
   -- Frames and constants
   "LibStub",                -- only to find Auctionator's tabs, when it is installed
   "UIParent", "UISpecialFrames", "Minimap", "GameTooltip", "ItemRefTooltip", "ITEM_QUALITY_COLORS", "NUM_BAG_SLOTS", "NUM_REAGENTBAG_SLOTS", "NUM_TOTAL_EQUIPPED_BAG_SLOTS", "YES", "NO", "OKAY", "CANCEL",
