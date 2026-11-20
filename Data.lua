@@ -4,7 +4,7 @@ local W = ns.Wall
 local B = ns.Bait
 
 ns.ladders = {}   -- [itemID] = { ladder=, total=, t=, kind=, auctions= } session only
-ns.snipes = {}    -- last full scan results
+ns.snipes = {}    -- the last full scan's candidates, before thresholds; session only
 ns.dips = {}
 ns.disenchants = {}
 
@@ -367,21 +367,43 @@ function ns.ClearStaleBait(stamp)
   end
 end
 
--- One item's snipe and dip in a full scan, each nil when it is not one. Call after ns.Record, with
--- ns.StatsFor: on an item's first scan, snipes resell at today's wall and nothing can dip yet.
+-- One item's snipe and dip candidates in a full scan, each nil when it is not one. Candidates
+-- pass no thresholds yet: any profitable snipe, any dip under the normal price, at any supply.
+-- The lists apply the thresholds when shown (ns.PassesSnipe, ns.PassesDip). Call after
+-- ns.Record, with ns.StatsFor: on an item's first scan, snipes resell at today's wall and
+-- nothing can dip yet.
 function ns.FullScanDeals(id, ladder, total, wall, minPrice, stats, cut)
   local days = ns.DaysOfData(id)
   local snipe, dip
   local ref = stats.median and math.min(wall, stats.median) or wall
   local units, cost, profit, discount = W.Snipe(ladder, wall, cut, ref)
-  if units > 0 and profit >= ns.Cfg("minSnipeProfit") and discount >= ns.Cfg("minSnipeDiscount") then
+  if units > 0 then
     snipe = { id = id, wall = wall, min = minPrice, units = units, cost = cost, profit = profit, discount = discount, total = total, days = days }
   end
-  if W.IsDip(wall, stats, ns.Cfg("dipPct"), cut) then
+  if W.IsDip(wall, stats, 0, cut) then
     dip = { id = id, wall = wall, median = stats.median, under = 1 - wall / stats.median, total = total, days = days,
       profit = stats.median * (1 - cut) - wall }
   end
   return snipe, dip
+end
+
+-- Whether a candidate passes the thresholds in Settings, as they are now
+function ns.PassesSnipe(s)
+  return s.total >= ns.Cfg("minSupply") and s.profit >= ns.Cfg("minSnipeProfit")
+    and s.discount >= ns.Cfg("minSnipeDiscount")
+end
+
+function ns.PassesDip(d)
+  return d.total >= ns.Cfg("minSupply") and d.wall <= d.median * (1 - ns.Cfg("dipPct"))
+end
+
+-- The entries of a list that pass, in its order
+function ns.Passing(list, passes)
+  local out = {}
+  for _, entry in ipairs(list) do
+    if passes(entry) then out[#out + 1] = entry end
+  end
+  return out
 end
 
 -- Status for a watched item: "buy", "sell", "normal" or "nodata"
