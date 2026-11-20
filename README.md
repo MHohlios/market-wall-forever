@@ -40,6 +40,18 @@ ln -s "$PWD" "/Applications/World of Warcraft/_forever_/Interface/AddOns/MarketW
 Saved data lives in `WTF/Account/<account>/SavedVariables/MarketWall.lua` and is
 not tracked here.
 
+Auction House history (prices, the watchlist, purchases, bait and recent searches) is kept
+per realm and per faction, under keys such as `6796-Alliance`: the server ID from the
+character's GUID, or the realm name when the game hides the GUID, then the faction. Alliance
+and Horde characters on one realm each have their own. History saved before this split, under
+the realm name alone, moves once to the faction of the first character to log in, and
+MarketWall says so in chat. The ledger and sessions stay per character; mobs and crafting
+read prices from your faction's history.
+
+At the neutral auction house (Gadgetzan, Booty Bay, Everlook) MarketWall saves nothing and
+its scan, search, buy and post buttons are off; the game's own auction house window works
+as usual.
+
 **New files need a full client restart.** `/reload` picks up edits to files the game
 already knows, but a new file in `MarketWall.toc`, or a new `Bindings.xml`, loads only
 after quitting and restarting the game. The item search window added `PriceView.lua`,

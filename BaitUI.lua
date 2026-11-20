@@ -75,6 +75,7 @@ local function UpdateButton()
     label = B.Label(button, ns.Name(selectedID), action, wait)
   end
   page.action:SetText(label)
+  page.action:SetEnabled(ns.CanTrade())
   local key = GetBindingKey and GetBindingKey(BINDING)
   local keyText = key and ("Key binding: " .. key .. " works like the button.")
     or "Set a key in Key Bindings > AddOns > MarketWall."
@@ -148,7 +149,8 @@ function ns.BaitPress()
     ns.Print("Open the Market tab's Bait Detect page and pick an item first.")
     return
   end
-  if not ns.ahOpen then ns.Print("Open the auction house first.") return end
+  local blocked = ns.TradeBlocked()
+  if blocked then ns.Print(blocked) return end
   local action = Action()
   if action == "search" then
     Search()
@@ -179,7 +181,7 @@ local function Select(id)
     if not thresholds[id] and record then thresholds[id] = record.p end
   end
   -- the click is the press: it searches when a search is allowed, and never buys
-  if ns.ahOpen and Action() == "search" then Search() end
+  if ns.CanTrade() and Action() == "search" then Search() end
   ns.RefreshUI()
 end
 

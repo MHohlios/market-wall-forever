@@ -86,7 +86,8 @@ local function Deposit(item, quantity)
   end
   if not deposit then return 0 end
   local vendor = Vendor(item.id)
-  if vendor then Outlet.LearnDepositRate(duration, deposit, vendor * quantity) end
+  -- the neutral Auction House charges its own deposits, which say nothing about your faction's
+  if vendor and not ns.neutralAH then Outlet.LearnDepositRate(duration, deposit, vendor * quantity) end
   return deposit
 end
 
@@ -166,7 +167,7 @@ end
 
 local function UpdateTotals()
   local price, quantity = ReadInputs()
-  page.post:SetEnabled(price ~= nil and ns.ahOpen)
+  page.post:SetEnabled(price ~= nil and ns.CanTrade())
   page.post:SetText(quantity and ("Post " .. quantity) or "Post")
   if not price then
     ShowAnswer(nil)
@@ -190,7 +191,7 @@ end
 local function Post(confirmed)
   local price, quantity = ReadInputs()
   local item = page.item
-  if not price then return end
+  if not price or not ns.CanTrade() then return end
   if not confirmed then
     local warnings = Warnings(item, price, quantity)
     if #warnings > 0 then
@@ -238,7 +239,7 @@ StaticPopupDialogs["MARKETWALL_CONFIRM_POST"] = {
 local function LoadListings(id, force)
   local held = ns.ladders[id]
   local stale = not held or held.kind == "scan" or time() - held.t > 30
-  if ns.ahOpen and not ns.scanState.running and not ns.fullScanRunning and (force or stale) then
+  if ns.CanTrade() and not ns.scanState.running and not ns.fullScanRunning and (force or stale) then
     ns.StartWatchScan({ id })
   end
 end
@@ -335,6 +336,7 @@ function ns.RefreshSell()
     item.values = valuesOf(item.id, Deposit(item, 1))
   end
   page.grid:SetGroups(P.Groups(items), selectedID)
+  page.refresh:SetEnabled(ns.CanTrade())
   if not current then selectedID = nil end
   RefreshSelected(current)
 end
@@ -497,6 +499,7 @@ local function BuildAnswer(w, s)
   depositTip:SetScript("OnLeave", w.HideTip)
 
   local refresh = w.MakeButton(s, "", 26)
+  page.refresh = refresh
   refresh:SetPoint("TOPRIGHT", -4, -2)
   local icon = refresh:CreateTexture(nil, "OVERLAY")
   icon:SetTexture("Interface\\Buttons\\UI-RefreshButton")

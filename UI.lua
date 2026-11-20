@@ -11,6 +11,8 @@ local PORTRAIT_CLEAR, TAB_BOTTOM = 58, 32   -- the Market tab row: past the port
 -- that line start CONTENT_DROP lower than the status line's own bottom so they stay clear of the buttons.
 local SCAN_BUTTONS_TOP, CONTENT_DROP = 33, 6
 local CONTENT_TOP = 50 + CONTENT_DROP
+-- At the neutral Auction House the status line rises this far, and its note sits as far below
+local NOTE_RAISE = 6
 local BUY, GAIN, WARN, GREY, LABEL = ns.COLOR.BUY, ns.COLOR.GAIN, ns.COLOR.WARN, ns.COLOR.GREY, ns.COLOR.LABEL
 
 local function MakeButton(parent, text, width)
@@ -919,6 +921,8 @@ local function RefreshItem()
   page.icon:SetTexture(ns.Icon(id))
   page.title:SetText(ns.ColorName(id))
   page.watch:SetText(watched and "Stop watching" or "Add to watchlist")
+  page.buyButton:SetEnabled(ns.CanTrade())
+  page.refresh:SetEnabled(ns.CanTrade())
   if not page.buy:HasFocus() then page.buy:SetText(limits.buy and ns.MoneyText(limits.buy) or "") end
   if not page.sell:HasFocus() then page.sell:SetText(limits.sell and ns.MoneyText(limits.sell) or "") end
 
@@ -1120,7 +1124,7 @@ function ui.ShowItem(id)
   if ui.view ~= "item" then ui.lastList = ui.view end
   ui.Show("item")
   local held = ns.ladders[id]
-  if ns.ahOpen and not ns.scanState.running and not ns.fullScanRunning
+  if ns.CanTrade() and not ns.scanState.running and not ns.fullScanRunning
     and (not held or held.kind == "scan" or time() - held.t > 30) then
     ns.StartWatchScan({ id })
   end
@@ -1625,7 +1629,27 @@ function ui.StatusLine()
   return text
 end
 
--- Status line, progress bar and the Full scan button's cooldown
+-- Status text led by the faction whose history it shows: "Alliance · Full scan just now"
+function ui.WithFaction(text)
+  return LABEL .. ns.Faction() .. "|r" .. GREY .. " · |r" .. text
+end
+
+-- The neutral Auction House's note, naming the history shown
+function ui.NeutralNote()
+  return WARN .. ns.NEUTRAL_REFUSAL .. " Your " .. ns.Faction() .. " history is shown as it was.|r"
+end
+
+-- At the neutral Auction House the status line moves up to make room for its note below
+local function ShowNeutralNote(shown)
+  if ui.neutralNote:IsShown() == shown then return end
+  ui.neutralNote:SetText(shown and ui.NeutralNote() or "")
+  ui.neutralNote:SetShown(shown)
+  local raise = shown and NOTE_RAISE or 0
+  ui.status:SetPoint("LEFT", ui.frame, "TOPLEFT", 12, -SCAN_BUTTONS_TOP - 11 + raise)
+  ui.status:SetPoint("RIGHT", ui.scanButton, "LEFT", -12, raise)
+end
+
+-- Status line, progress bar, the scan buttons and the Full scan button's cooldown
 function ns.UpdateStatus()
   if not ui.status then return end
   local busy = ns.scanState.running or ns.fullScanRunning
@@ -1633,7 +1657,9 @@ function ns.UpdateStatus()
   if not busy and (not text or not ns.statusTime or GetTime() - ns.statusTime > 8) then
     text = ui.StatusLine()
   end
-  ui.status:SetText(text or "")
+  ui.status:SetText(ui.WithFaction(text or ""))
+  ShowNeutralNote(ns.neutralAH == true)
+  ui.scanButton:SetEnabled(not ns.neutralAH)
   if busy and ns.progress then
     ui.bar:SetValue(ns.progress)
     ui.bar:Show()
@@ -1643,6 +1669,9 @@ function ns.UpdateStatus()
   local left = ns.FullScanCooldown()
   if ns.fullScanRunning then
     ui.fullButton:SetText("Scanning...")
+    ui.fullButton:Disable()
+  elseif ns.neutralAH then
+    ui.fullButton:SetText("Full scan")
     ui.fullButton:Disable()
   elseif left > 0 then
     ui.fullButton:SetText(string.format("Full scan %d:%02d", math.floor(left / 60), left % 60))
@@ -1686,6 +1715,7 @@ local function Build()
     ShowTip(self, "Scan watchlist", "Refreshes live listings for the items on your watchlist. Takes a few seconds and has no cooldown.")
   end)
   scan:SetScript("OnLeave", HideTip)
+  ui.scanButton = scan
 
   -- status line with a progress bar behind it, ending before the scan buttons
   ui.bar = CreateFrame("StatusBar", nil, f)
@@ -1700,6 +1730,11 @@ local function Build()
   ui.status:SetPoint("LEFT", f, "TOPLEFT", 12, -SCAN_BUTTONS_TOP - 11)
   ui.status:SetPoint("RIGHT", scan, "LEFT", -12, 0)
   ui.status:SetWordWrap(false)
+  ui.neutralNote = MakeText(f, "GameFontHighlightSmall", "LEFT")
+  ui.neutralNote:SetPoint("LEFT", f, "TOPLEFT", 12, -SCAN_BUTTONS_TOP - 11 - NOTE_RAISE)
+  ui.neutralNote:SetPoint("RIGHT", scan, "LEFT", -12, -NOTE_RAISE)
+  ui.neutralNote:SetWordWrap(false)
+  ui.neutralNote:Hide()
 
   ui.list = CreateList(f)
   ui.list:SetPoint("TOPLEFT", 0, -CONTENT_TOP)

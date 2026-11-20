@@ -65,7 +65,7 @@ end
 local function AfterPurchase(id)
   -- refresh the listings for this item so the screen shows what is left
   C_Timer.After(1, function()
-    if ns.ahOpen and not ns.scanState.running then ns.StartWatchScan({ id }) end
+    if ns.CanTrade() and not ns.scanState.running then ns.StartWatchScan({ id }) end
   end)
 end
 
@@ -151,7 +151,8 @@ end
 
 -- Buy every unit priced under limit. Needs listings scanned within the last two minutes.
 function ns.BuyUnder(id, limit)
-  if not ns.ahOpen then ns.Print("Open the auction house first.") return end
+  local blocked = ns.TradeBlocked()
+  if blocked then ns.Print(blocked) return end
   if pending then ns.Print("A purchase is already waiting for confirmation.") return end
   local held = ns.ladders[id]
   if not held or held.kind == "scan" or time() - held.t > 120 then

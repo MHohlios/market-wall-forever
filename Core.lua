@@ -240,11 +240,84 @@ function ns.Realm()
   return (GetNormalizedRealmName and GetNormalizedRealmName()) or (GetRealmName and GetRealmName()) or "Unknown"
 end
 
--- Per-realm data table
+-- The faction whose Auction House the character uses: "Alliance" or "Horde", else "Neutral"
+function ns.Faction()
+  local faction = UnitFactionGroup and ns.Readable(UnitFactionGroup("player"))
+  if faction == "Alliance" or faction == "Horde" then return faction end
+  return "Neutral"
+end
+
+-- The server ID in a player GUID: "6796" from "Player-6796-002683B6", nil for anything else
+function ns.ServerID(guid)
+  return type(guid) == "string" and string.match(guid, "^Player%-(%d+)%-") or nil
+end
+
+-- Whose Auction House history this character reads: its realm and faction, as "6796-Alliance".
+-- WoW Forever gives every character on one realm the same server ID in its GUID, so that
+-- names the realm; the realm name stands in while the GUID is unreadable.
+function ns.RealmKey()
+  local guid = UnitGUID and ns.Readable(UnitGUID("player"))
+  return (ns.ServerID(guid) or ns.Realm()) .. "-" .. ns.Faction()
+end
+
+-- Whether a realm bucket holds anything: any value, or any table with an entry
+local function HasHistory(bucket)
+  for _, value in pairs(bucket or {}) do
+    if type(value) ~= "table" or next(value) then return true end
+  end
+  return false
+end
+
+-- Before realm keys had a faction, all history sat under the realm name alone. Moves it, once,
+-- to key, unless key already has history; the old bucket then stays where it is. Returns true
+-- when it moved.
+function ns.AdoptRealmHistory(realms, legacyKey, key)
+  local old = realms[legacyKey]
+  if not old or legacyKey == key or HasHistory(realms[key]) then return false end
+  realms[key], realms[legacyKey] = old, nil
+  return true
+end
+
+-- Auctioneers friendly to both factions, so they serve the neutral Auction House (from the
+-- installed QuestieDB for WoW Forever, which flags them as auctioneers)
+local NEUTRAL_AUCTIONEERS = {
+  [8661] = true,                                   -- Beardo, Gadgetzan
+  [9858] = true, [15677] = true, [15681] = true,   -- Kresky, Graves and O'reely, Booty Bay
+  [9857] = true,                                   -- Grizzlin, Everlook
+  [258878] = true,                                 -- Quickcoin, added by WoW Forever
+  [257037] = true,                                 -- Zelena Favorbreeze, Zephras Isle, added by WoW Forever
+}
+
+-- The NPC ID in a creature GUID ("Creature-0-6796-0-1-8661-0000ABCDEF" gives 8661), nil for anything else
+function ns.NpcID(guid)
+  if type(guid) ~= "string" then return nil end
+  return tonumber(string.match(guid, "^%a+%-%d+%-%d+%-%d+%-%d+%-(%d+)%-"))
+end
+
+-- Whether the auctioneer you opened the Auction House at serves the neutral one. An unreadable
+-- GUID counts as your faction's.
+function ns.IsNeutralAuctioneer(guid)
+  return NEUTRAL_AUCTIONEERS[ns.NpcID(guid) or 0] == true
+end
+
+ns.NEUTRAL_REFUSAL = "Neutral auction house: MarketWall doesn't scan, buy or post here."
+
+-- Why MarketWall can't search, buy or post right now, or nil when it can
+function ns.TradeBlocked()
+  if not ns.ahOpen then return "Open the auction house first." end
+  if ns.neutralAH then return ns.NEUTRAL_REFUSAL end
+  return nil
+end
+
+function ns.CanTrade()
+  return ns.TradeBlocked() == nil
+end
+
+-- Per-realm, per-faction data table
 function ns.R()
   if ns.realmData then return ns.realmData end
   local db = MarketWallDB
-  local key = ns.Realm()
+  local key = ns.RealmKey()
   db.realms[key] = db.realms[key] or {}
   local r = db.realms[key]
   r.names = r.names or {}   -- [itemID] = name
@@ -338,6 +411,11 @@ frame:SetScript("OnEvent", function(_, event, arg1)
     MarketWallDB.crafting = MarketWallDB.crafting or {}   -- known recipes per character, see Professions.lua
   elseif event == "PLAYER_LOGIN" then
     ns.realmData = nil
+    local faction = ns.Faction()
+    -- an unknown faction would hide the history in a bucket no character reads, so it waits
+    if faction ~= "Neutral" and ns.AdoptRealmHistory(MarketWallDB.realms, ns.Realm(), ns.RealmKey()) then
+      Print("Your auction house history so far now belongs to " .. faction .. " on this realm. Characters of the other faction start their own.")
+    end
     ns.R()
     if ns.InitTooltip then ns.InitTooltip() end
     if ns.InitMinimapButton then ns.InitMinimapButton() end
@@ -345,9 +423,11 @@ frame:SetScript("OnEvent", function(_, event, arg1)
     if ns.DisenchantLog then ns.DisenchantLog.Start() end
   elseif event == "AUCTION_HOUSE_SHOW" then
     ns.ahOpen = true
+    ns.neutralAH = ns.IsNeutralAuctioneer(UnitGUID and ns.Readable(UnitGUID("npc")))
     if ns.OnAuctionHouseShow then ns.OnAuctionHouseShow() end
   elseif event == "AUCTION_HOUSE_CLOSED" then
     ns.ahOpen = false
+    ns.neutralAH = false
     if ns.OnAuctionHouseClosed then ns.OnAuctionHouseClosed() end
     SessionSummary()
   end
