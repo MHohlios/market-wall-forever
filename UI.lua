@@ -6,6 +6,7 @@ local ui = { view = "watch", limits = {}, sort = {} }
 ns.ui = ui
 
 local ROWS, ROW_H = 16, 20
+local PORTRAIT_CLEAR, TAB_BOTTOM = 58, 32   -- the Market tab row: past the portrait, its bottom on the status line
 local BUY, GAIN, WARN, GREY, LABEL = ns.COLOR.BUY, ns.COLOR.GAIN, ns.COLOR.WARN, ns.COLOR.GREY, ns.COLOR.LABEL
 
 local function MakeButton(parent, text, width)
@@ -27,6 +28,48 @@ local function MakeEdit(parent, width)
   e:SetAutoFocus(false)
   e:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
   return e
+end
+
+-- Blizzard's top tab, sized to its label. Tabs are views; actions stay red buttons.
+local TAB_PADDING = 12
+local function FitTab(tab) PanelTemplates_TabResize(tab, TAB_PADDING) end
+local function MakeTab(parent, text)
+  local tab = CreateFrame("Button", nil, parent, "PanelTopTabButtonTemplate")
+  tab:SetText(text)
+  tab:SetScript("OnShow", FitTab)   -- in place of the template's own sizing, which runs wider
+  FitTab(tab)
+  PanelTemplates_DeselectTab(tab)
+  return tab
+end
+
+-- The selected tab joins the panel under it, with gold label text rather than Blizzard's white
+local function SelectTab(tab, selected)
+  if selected then
+    PanelTemplates_SelectTab(tab)
+    tab:SetDisabledFontObject(GameFontNormalSmall)
+  else
+    PanelTemplates_DeselectTab(tab)
+  end
+end
+
+-- A row of tabs whose bottoms sit on a line across parent, y below its top, from x. The line
+-- runs under them, so the selected tab reads as joined to the panel. Returns the tabs by key.
+local TAB_LINE = { 0.35, 0.27, 0.13, 1 }
+local function MakeTabRow(parent, x, y, defs, onSelect)
+  local line = parent:CreateTexture(nil, "BACKGROUND", nil, 2)
+  line:SetColorTexture(TAB_LINE[1], TAB_LINE[2], TAB_LINE[3], TAB_LINE[4])
+  line:SetHeight(1)
+  line:SetPoint("TOPLEFT", 0, -y)
+  line:SetPoint("TOPRIGHT", 0, -y)
+  local tabs, previous = {}, nil
+  for _, def in ipairs(defs) do
+    local tab = MakeTab(parent, def.label)
+    if previous then tab:SetPoint("BOTTOMLEFT", previous, "BOTTOMRIGHT", 0, 0) else tab:SetPoint("BOTTOMLEFT", parent, "TOPLEFT", x, -y) end
+    tab:SetScript("OnClick", function() onSelect(def.key) end)
+    tabs[def.key] = tab
+    previous = tab
+  end
+  return tabs
 end
 
 local function Pct(x)
@@ -668,7 +711,7 @@ local function CreateChart(parent)
 end
 ns.widgets = {
   MakeButton = MakeButton, MakeText = MakeText, MakeEdit = MakeEdit, ShowTip = ShowTip, HideTip = HideTip,
-  OnLinkInsert = OnLinkInsert, CreateList = CreateList, FitText = FitText, CreateChart = CreateChart, ShowMenu = ShowMenu, Prompt = Prompt, ListHeight = function(rows) return 22 + rows * ROW_H end,
+  OnLinkInsert = OnLinkInsert, CreateList = CreateList, MakeTabRow = MakeTabRow, SelectTab = SelectTab, FitText = FitText, CreateChart = CreateChart, ShowMenu = ShowMenu, Prompt = Prompt, ListHeight = function(rows) return 22 + rows * ROW_H end,
 }
 
 -------------------------------------------------------------------------------
@@ -1090,8 +1133,8 @@ function ui.Show(view)
   ui.footer:SetShown(view == "watch")
   ui.disenchantFooter:SetShown(view == "disenchant")
   ui.hint:SetShown(isList)
-  for name, button in pairs(ui.nav) do
-    if name == view or (isItem and name == ui.lastList) then button:LockHighlight() else button:UnlockHighlight() end
+  for name, tab in pairs(ui.nav) do
+    SelectTab(tab, name == view or (isItem and name == ui.lastList))
   end
   ui.list.offset = 0
   ns.RefreshUI()
@@ -1184,7 +1227,7 @@ function ns.UpdateStatus()
     ui.fullButton:SetText("Scanning...")
     ui.fullButton:Disable()
   elseif left > 0 then
-    ui.fullButton:SetText(string.format("Full scan (%d:%02d)", math.floor(left / 60), left % 60))
+    ui.fullButton:SetText(string.format("Full scan %d:%02d", math.floor(left / 60), left % 60))
     ui.fullButton:Disable()
   else
     ui.fullButton:SetText("Full scan")
@@ -1202,17 +1245,12 @@ local function Build()
   bg:SetColorTexture(0.05, 0.07, 0.07, 0.92)
   ui.frame = f
 
-  ui.nav = {}
-  local previous
-  -- widths fit each label, so eight buttons leave room for the scan buttons on the right
-  for _, def in ipairs({ { "watch", "Watchlist", 72 }, { "snipes", "Snipes", 58 }, { "dips", "Dips", 46 }, { "disenchant", "Disenchant", 76 },
-    { "bait", "Bait Detect", 80 }, { "sell", "Sell", 44 }, { "settings", "Settings", 64 } }) do
-    local b = MakeButton(f, def[2], def[3])
-    if previous then b:SetPoint("LEFT", previous, "RIGHT", 4, 0) else b:SetPoint("TOPLEFT", 8, -6) end
-    b:SetScript("OnClick", function() ui.Show(def[1]) end)
-    ui.nav[def[1]] = b
-    previous = b
-  end
+  -- the tabs start right of the auction house portrait, which covers the frame's top-left corner
+  ui.nav = MakeTabRow(f, PORTRAIT_CLEAR, TAB_BOTTOM, {
+    { key = "watch", label = "Watchlist" }, { key = "snipes", label = "Snipes" }, { key = "dips", label = "Dips" },
+    { key = "disenchant", label = "Disenchant" }, { key = "bait", label = "Bait Detect" }, { key = "sell", label = "Sell" },
+    { key = "settings", label = "Settings" },
+  }, ui.Show)
 
   ui.fullButton = MakeButton(f, "Full scan", 116)
   ui.fullButton:SetPoint("TOPRIGHT", -8, -6)
