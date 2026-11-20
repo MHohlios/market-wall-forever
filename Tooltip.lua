@@ -1,7 +1,7 @@
 -- MarketWall: market, vendor and disenchant prices on item tooltips
 local _, ns = ...
 
-local GREY, GOLD, ORANGE = "|cffa3acac", "|cfff5c518", "|cffffb057"
+local GREY, GOLD, GREEN, ORANGE = "|cffa3acac", "|cfff5c518", "|cff4fc36b", "|cffffb057"
 -- The item block: the best outlet bright, every other row faded, Shift's detail dimmer still
 local HEADING, HINT = "|cff2fa39d", "|cff5d6464"
 local BRIGHT, WHITE, FADED, DIM = "|cff3fe6d6", "|cffffffff", "|cff868d8d", "|cff6f7676"
@@ -152,6 +152,51 @@ local function HasDetail(id)
   return ns.DisenchantOutcomes(id) ~= nil or Outlet.CONVERSIONS[id] ~= nil or ns.LatestWall(id) ~= nil
 end
 
+-- Crafting ----------------------------------------------------------------------------------
+
+local RED = "|cffe0524a"
+local MARKET_WORDS = { deep = "Deep", steady = "Steady", thin = "Thin", nodata = "No data" }
+
+-- Crafting numbers as tooltip text, shared with the trainer rows (Trainer.lua)
+local CraftingText = {}
+
+function CraftingText.Profit(profit)
+  if not profit then return GREY .. "no data|r" end
+  if profit > 0 then return GREEN .. "+" .. ns.Money(profit) .. "|r" end
+  return RED .. ns.Money(profit) .. "|r"
+end
+
+function CraftingText.Market(market)
+  local word = MARKET_WORDS[market.level]
+  if market.level == ns.Crafting.NO_DATA then return GREY .. word .. "|r" end
+  return word .. " · " .. market.units .. " listed"
+end
+
+function CraftingText.Payback(payback)
+  if payback == ns.Crafting.NEVER then return RED .. "never|r" end
+  if not payback then return GREY .. "no data|r" end
+  return payback .. (payback == 1 and " craft" or " crafts")
+end
+
+-- The Crafting block, after the MarketWall block: what a pattern teaches and earns. Payback is
+-- left out once this character knows the recipe.
+local function PatternLines(tooltip, add, id)
+  local recipe, profession = ns.Professions.ByPattern(id)
+  if not recipe then return end
+  local evaluation = ns.Professions.Evaluate(recipe, ns.Professions.Context(profession))
+  local function row(label, value) add(ROW .. FADED .. label .. "|r", value) end
+  tooltip:AddLine(" ")
+  add(HEADING .. "Crafting|r", "")
+  row("Teaches", recipe.name .. (recipe.skill and " (" .. recipe.skill .. ")" or ""))
+  row("Profit per craft", CraftingText.Profit(evaluation.profit))
+  row("Market", CraftingText.Market(evaluation.market))
+  if not recipe.known then
+    local at = evaluation.learnCost and " at " .. ns.MoneyFaded(evaluation.learnCost) or ""
+    row("Pays back" .. at, CraftingText.Payback(evaluation.payback))
+  end
+  row("You", recipe.known and GREEN .. "Known|r" or "Not known")
+end
+
 -- Size of the stack the tooltip is for, read from the bag slot that owns it.
 -- Nil when the tooltip has no bag slot owner or the slot holds a different item.
 local function StackCount(tooltip, id)
@@ -170,7 +215,7 @@ local function StackCount(tooltip, id)
 end
 
 -- The MarketWall block: the heading, the outlet rows, and with Shift held the detail. Nothing for
--- an item with nothing to price, such as a hearthstone.
+-- an item with nothing to price, such as a hearthstone. Then a pattern's Crafting block.
 local function AddLines(tooltip, id)
   if not id or not MarketWallDB then return end
   local function add(left, right) tooltip:AddDoubleLine(left, right) end
@@ -180,13 +225,14 @@ local function AddLines(tooltip, id)
   local rows = {}
   local priced = OutletLines(function(left, right) rows[#rows + 1] = { left, right } end,
     id, StackCount(tooltip, id), details)
-  if not priced then return end
-
-  tooltip:AddLine(" ")
-  add(HEADING .. "MarketWall|r", not details and HasDetail(id) and HINT .. "Shift: details|r" or "")
-  LowDataFlag(add, id)
-  for _, row in ipairs(rows) do add(row[1], row[2]) end
-  if details then MarketContextLines(add, id) end
+  if priced then
+    tooltip:AddLine(" ")
+    add(HEADING .. "MarketWall|r", not details and HasDetail(id) and HINT .. "Shift: details|r" or "")
+    LowDataFlag(add, id)
+    for _, row in ipairs(rows) do add(row[1], row[2]) end
+    if details then MarketContextLines(add, id) end
+  end
+  PatternLines(tooltip, add, id)
 end
 
 local function RedrawOnShift(_, _, key)
@@ -238,6 +284,7 @@ local function AddMobLines(tooltip)
   for _, line in ipairs(lines) do tooltip:AddDoubleLine(line[1], line[2], 1, 1, 1, 1, 1, 1) end
 end
 
+ns.CraftingText = CraftingText
 ns.TooltipLines = { Add = AddLines, StackCount = StackCount, Mob = MobLines }   -- exposed for tests
 
 function ns.InitTooltip()

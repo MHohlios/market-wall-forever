@@ -58,6 +58,20 @@ chart with a 7 days / 30 days / All switch, the item's numbers, and Add to watch
 Live listings load only while the auction house is open. The window moves by dragging,
 remembers where you left it, and closes with Escape.
 
+## Crafting at the trainer and on patterns
+
+A pattern's tooltip adds a Crafting block: the recipe it teaches and its skill, profit per
+craft, the product's market (Deep, Steady, Thin or No data, with the units listed), how many
+crafts pay back the pattern at its wall (or its vendor price when it isn't listed), and
+whether this character knows the recipe. Known recipes come from your profession window, so
+open it once per character. Tailoring patterns only for now.
+
+At a profession trainer, each recipe row shows its training cost, profit per craft and
+payback, and hovering a row adds the mats, sale value, profit, market and payback to the
+tooltip. MarketWall remembers each recipe's training cost, so the payback of trainer recipes
+fills in elsewhere after one visit. It never trains anything. This added `Trainer.lua`, so
+restart the game once after updating to it.
+
 ## Mob values
 
 MarketWall records each kill you, your pet or your party make and what it dropped.

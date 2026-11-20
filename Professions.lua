@@ -4,13 +4,16 @@
 -- Saved in MarketWallDB.crafting, per character by its GUID (Recording.CharacterKey):
 --   [guid] = { [profession] = { rank, maxRank, t, recipes = { [product] = recipe } } }
 -- where a recipe holds name, made, reagents and colour (see Crafting.lua). Recipes are only ever
--- added or updated, as a collapsed header or a filter hides some from a read.
+-- added or updated, as a collapsed header or a filter hides some from a read. Trainer costs are
+-- account-wide, as Trainer.lua last read them:
+--   trainer = { [profession] = { [product] = copper } }
 --
 -- API for the crafting guide, trainer rows and pattern tooltips:
 --   Professions.Names()                    professions with a table or saved recipes, sorted
 --   Professions.Known(profession)          this character's saved read, or nil
 --   Professions.Rank(profession)           this character's skill, or nil when unknown
 --   Professions.Recipes(profession)        every recipe, known and bundled, merged (Crafting.Merge)
+--   Professions.SaveTrainerCost(profession, product, cost)   a trainer's price, for payback
 --   Professions.ByPattern(itemID)          the recipe a pattern teaches and its profession, or nil
 --   Professions.ByName(profession, name)   a recipe by its name, for trainer rows without a product
 --   Professions.Context(profession)        game prices and rank, read once for a whole list
@@ -133,7 +136,15 @@ end
 function Professions.Recipes(profession)
   local known = Professions.Known(profession)
   local bundled = ns.RecipeTables[profession]
-  return Crafting.Merge(known and known.recipes, bundled and bundled.recipes)
+  local trainer = MarketWallDB.crafting.trainer
+  return Crafting.Merge(known and known.recipes, bundled and bundled.recipes, trainer and trainer[profession])
+end
+
+function Professions.SaveTrainerCost(profession, product, cost)
+  local trainer = MarketWallDB.crafting.trainer or {}
+  MarketWallDB.crafting.trainer = trainer
+  trainer[profession] = trainer[profession] or {}
+  trainer[profession][product] = cost
 end
 
 function Professions.ByPattern(patternID)
