@@ -46,7 +46,7 @@ describe("mob tooltip", function()
       assert.same({
         Worth(),
         Average(GREY .. "140 kills|r"),
-        GREY .. "Top drop|r|" .. GREY .. "Raptor Hide " .. GREY .. "4%|r",
+        GREY .. "Top drop|r|Raptor Hide " .. GREY .. "4%|r",
       }, Texts(Lines(FullStats(), 10)))
     end)
 
@@ -61,7 +61,7 @@ describe("mob tooltip", function()
     it("keeps the top drop's item quality color", function()
       _G.C_Item = { GetItemQualityByID = function() return 2 end }
       _G.ITEM_QUALITY_COLORS = { [2] = { hex = "|cff1eff00" } }
-      assert.equal(GREY .. "Top drop|r|" .. GREY .. "|cff1eff00Raptor Hide|r " .. GREY .. "4%|r",
+      assert.equal(GREY .. "Top drop|r||cff1eff00Raptor Hide|r " .. GREY .. "4%|r",
         Texts(Lines(FullStats(), 10))[3])
       _G.ITEM_QUALITY_COLORS = nil
     end)
@@ -69,13 +69,13 @@ describe("mob tooltip", function()
     it("rounds the top drop's share to a whole percent", function()
       local stats = FullStats()
       stats.top.share = 0.675
-      assert.equal(GREY .. "Top drop|r|" .. GREY .. "Raptor Hide " .. GREY .. "68%|r", Texts(Lines(stats, 10))[3])
+      assert.equal(GREY .. "Top drop|r|Raptor Hide " .. GREY .. "68%|r", Texts(Lines(stats, 10))[3])
     end)
 
     it("shows a top drop share that rounds to 0% as under 1%", function()
       local stats = FullStats()
       stats.top.share = 0.004
-      assert.equal(GREY .. "Top drop|r|" .. GREY .. "Raptor Hide " .. GREY .. "<1%|r", Texts(Lines(stats, 10))[3])
+      assert.equal(GREY .. "Top drop|r|Raptor Hide " .. GREY .. "<1%|r", Texts(Lines(stats, 10))[3])
     end)
 
     it("leaves out the top drop when nothing dropped", function()
