@@ -52,6 +52,8 @@ function B.Update(record, ladder, wall, stats, minUnder, now)
   return record
 end
 
+-- Confirmed: a second full scan or a live search saw the same bait level. Only a confirmed
+-- record plans a buy; one seen once is shown, dimmed, until then.
 function B.Flagged(record)
   return record ~= nil and record.seen >= SCANS_TO_FLAG
 end
@@ -72,15 +74,18 @@ function B.LevelNote(record)
 end
 
 -- A warning when posting at price would match the bait: at its price or within band of it.
--- Returns nil when there is no bait record or the price is away from it.
+-- Returns nil when there is no bait record or the price is away from it. A record seen once
+-- warns too: a needless warning costs nothing, a missed one costs gold.
 function B.PostWarning(record, price, band)
   if not record or math.abs(price - record.p) > record.p * band + EDGE then return nil end
   return string.format("%d unit%s at %s sits %d%% under the %s wall. Likely bait; don't match it.",
     record.u, record.u == 1 and "" or "s", ns.Money(record.p), ns.Round(B.Under(record) * 100), ns.Money(record.w))
 end
 
--- Piling-up items first, then the furthest under the wall
+-- Confirmed items first, then piling-up items, then the furthest under the wall
 function B.Before(a, b)
+  local ca, cb = B.Flagged(a), B.Flagged(b)
+  if ca ~= cb then return ca end
   local pa, pb = B.Copies(a) > 0, B.Copies(b) > 0
   if pa ~= pb then return pa end
   return B.Under(a) > B.Under(b)
@@ -88,8 +93,9 @@ end
 
 -- A live search's ladder with the bait as that search saw it. The saved record changes with
 -- every later scan, and a plan built from it could lose the bait it must leave.
+-- bait is nil unless the record is confirmed: only confirmed bait is bought against.
 function B.Snapshot(ladder, record)
-  return { ladder = ladder, bait = record and { p = record.p, u = record.u } or nil }
+  return { ladder = ladder, bait = B.Flagged(record) and { p = record.p, u = record.u } or nil }
 end
 
 -- What one buy would take. A commodity purchase always takes the cheapest units, so leaving

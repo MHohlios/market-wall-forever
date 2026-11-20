@@ -363,10 +363,7 @@ local function Finalize(maps, names, stamp)
       ticker:Cancel()
       table.sort(snipes, function(a, b) return a.profit > b.profit end)
       table.sort(dips, function(a, b) return a.under > b.under end)
-      -- items with nothing listed any more have no bait level left
-      for id in pairs(r.bait) do
-        if not maps[id] then r.bait[id] = nil end
-      end
+      ns.ClearStaleBait(stamp)
       ns.snipes, ns.dips = snipes, dips
       -- after the loop, so materials are priced at today's walls
       scannedGear, dealsStale = gearPrices, false

@@ -40,14 +40,14 @@ describe("Sell page bait handling", function()
     end)
 
     it("warns within 3% of the bait price, either side, including the edge", function()
-      local wide = { p = 1000, u = 3, q = 3, w = 4000 }
+      local wide = { p = 1000, u = 3, q = 3, w = 4000, seen = 2 }
       assert.truthy(B.PostWarning(wide, 1030, FLAT))
       assert.truthy(B.PostWarning(wide, 970, FLAT))
       assert.truthy(Plain(B.PostWarning(wide, 1010, FLAT)):find("^3 units at 10s sits 75%% under the 40s wall"))
     end)
 
     it("does not warn away from the bait price", function()
-      local wide = { p = 1000, u = 3, q = 3, w = 4000 }
+      local wide = { p = 1000, u = 3, q = 3, w = 4000, seen = 2 }
       assert.is_nil(B.PostWarning(wide, 1031, FLAT))
       assert.is_nil(B.PostWarning(wide, 969, FLAT))
       assert.is_nil(B.PostWarning(record, 102, FLAT))
@@ -56,11 +56,16 @@ describe("Sell page bait handling", function()
     it("does not round a band under a copper up to a whole copper", function()
       assert.is_nil(B.PostWarning(record, 31, FLAT))   -- 3.3% over a 30c bait
       assert.is_nil(B.PostWarning(record, 29, FLAT))
-      assert.is_nil(B.PostWarning({ p = 20, u = 1, q = 1, w = 100 }, 21, FLAT))
+      assert.is_nil(B.PostWarning({ p = 20, u = 1, q = 1, w = 100, seen = 2 }, 21, FLAT))
     end)
 
     it("does not warn without a bait record", function()
       assert.is_nil(B.PostWarning(nil, 30, FLAT))
+    end)
+
+    it("warns on bait seen only once too", function()
+      local seenOnce = { p = 30, u = 1, q = 15, w = 102, first = 1, last = 1, seen = 1 }
+      assert.truthy(B.PostWarning(seenOnce, 30, FLAT))
     end)
   end)
 end)

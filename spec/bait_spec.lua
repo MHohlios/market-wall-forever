@@ -118,12 +118,20 @@ describe("Bait", function()
     end)
 
     it("lists piling-up items first, then the furthest under the wall", function()
-      local piling = { p = 50, u = 1, q = 5, w = 100 }
-      local deep = { p = 10, u = 1, q = 1, w = 100 }
-      local shallow = { p = 40, u = 1, q = 1, w = 100 }
+      local piling = { p = 50, u = 1, q = 5, w = 100, seen = 2 }
+      local deep = { p = 10, u = 1, q = 1, w = 100, seen = 2 }
+      local shallow = { p = 40, u = 1, q = 1, w = 100, seen = 2 }
       local items = { shallow, deep, piling }
       table.sort(items, B.Before)
       assert.same({ piling, deep, shallow }, items)
+    end)
+
+    it("lists confirmed items before items seen once", function()
+      local confirmed = { p = 40, u = 1, q = 1, w = 100, seen = 2 }
+      local deepOnce = { p = 10, u = 1, q = 1, w = 100, seen = 1 }
+      local items = { deepOnce, confirmed }
+      table.sort(items, B.Before)
+      assert.same({ confirmed, deepOnce }, items)
     end)
   end)
 
@@ -167,6 +175,29 @@ describe("Bait", function()
       ns.UpdateBait(9, W.SortLadder({ [100] = 200 }), 100, History(), 5)   -- no item info loaded
       assert.equal(record, ns.R().bait[9])
       assert.same({ p = 30, u = 1, q = 3, w = 100, first = 1, last = 1, seen = 2 }, record)
+    end)
+
+    -- a live search updates the record the same way, with the commodity known
+    it("confirms a record seen once when a live search still finds the bait level", function()
+      ns.UpdateBait(7, Baited(), 100, History(), 1, true)
+      assert.is_false(B.Flagged(ns.R().bait[7]))
+      ns.UpdateBait(7, Baited(), 100, History(), 2, true)
+      assert.is_true(B.Flagged(ns.R().bait[7]))
+    end)
+
+    it("drops a record seen once when a live search no longer finds the bait level", function()
+      ns.UpdateBait(7, Baited(), 100, History(), 1, true)
+      ns.UpdateBait(7, W.SortLadder({ [100] = 200 }), 100, History(), 2, true)
+      assert.is_nil(ns.R().bait[7])
+    end)
+
+    it("drops every record the latest full scan did not refresh", function()
+      local function Record(last) return { p = 30, u = 1, q = 1, w = 100, first = 1, last = last, seen = 2 } end
+      ns.R().bait[7], ns.R().bait[8], ns.R().bait[9] = Record(5), Record(10), Record(12)
+      ns.ClearStaleBait(10)
+      assert.is_nil(ns.R().bait[7])
+      assert.is_table(ns.R().bait[8])
+      assert.is_table(ns.R().bait[9])   -- a live search after the scan started
     end)
 
     it("logs each purchase with item, units, unit price, total and time", function()
@@ -308,7 +339,7 @@ describe("Bait", function()
     local ladder, record
     before_each(function()
       ladder = W.SortLadder({ [30] = 15, [35] = 4, [100] = 200 })
-      record = { p = 30, u = 1, q = 15, w = 100 }
+      record = { p = 30, u = 1, q = 15, w = 100, seen = 2 }
     end)
 
     it("leaves the bait's units and stops at the bait level", function()
@@ -347,6 +378,11 @@ describe("Bait", function()
       assert.is_nil(B.Update(record, W.SortLadder({ [100] = 200 }), 100, History(), MIN_UNDER,2))
       local plan = B.Plan(seen.ladder, 35, seen.bait, true)
       assert.same({ 1, 30 }, { plan.leaving, plan.leaveAt })
+    end)
+
+    it("keeps no bait from a search that saw it only once", function()
+      record.seen = 1
+      assert.is_nil(B.Snapshot(ladder, record).bait)
     end)
   end)
 
@@ -397,6 +433,45 @@ describe("Bait", function()
 
       ns.BaitPress()
       assert.same({ { ID, 14 } }, purchases)
+    end)
+
+    local function SearchSeenOnce(confirmedByIt)
+      ns.R().bait[ID].seen = 1
+      page.list.onClick({ id = ID })
+      local ladder, total = W.SortLadder({ [30] = 15, [100] = 200 })
+      ns.ladders[ID] = { ladder = ladder, total = total, t = os.time(), kind = "commodity" }
+      if confirmedByIt then ns.R().bait[ID].seen = 2 end   -- as the search's own ns.UpdateBait does
+      pending(true)
+      _G.GetTime = function() return 200 end   -- past the search gap
+    end
+
+    it("offers no buy for bait the live search did not confirm", function()
+      local label
+      page.action.SetText = function(_, text) label = text end
+      SearchSeenOnce(false)
+      ns.RefreshBait()
+      assert.equal("Not confirmed as bait · Search " .. ns.Name(ID), Plain(label))
+      ns.BaitPress()                              -- searches again; never buys
+      assert.same({}, purchases)
+    end)
+
+    it("buys once the live search confirms a row seen once", function()
+      SearchSeenOnce(true)
+      ns.BaitPress()
+      assert.same({ { ID, 14 } }, purchases)
+    end)
+
+    it("lists rows seen once dimmed, after confirmed rows, and counts both in the status line", function()
+      ns.R().bait[8] = { p = 10, u = 1, q = 1, w = 100, first = 1, last = 1, seen = 1 }
+      ns.R().bait[9] = { p = 20, u = 1, q = 1, w = 100, first = 1, last = 1, seen = 1 }
+      local rows = ns.BaitListData()
+      assert.same({ ID, false }, { rows[1].id, rows[1].dim })
+      assert.same({ true, "seen once" }, { rows[2].dim, rows[2].cells[6] })
+      ns.RefreshBait()
+      assert.equal("1 possibly baited · 2 seen once", ns.ui.statusNote)
+      ns.R().bait[ID] = nil
+      ns.RefreshBait()
+      assert.equal("2 seen once", ns.ui.statusNote)
     end)
   end)
 
