@@ -50,7 +50,8 @@ describe("Sell page layout", function()
     local LINE = 13
     -- "92 × 2s 5c = 1g 88s 60c · 5% cut -9s 43c · deposit -27s 60c" runs about 350 wide in the small font
     assert.is_true(page.breakdown.width >= 450)
-    assert.is_true(Top(page.breakdown) >= Top(page.info) + LINE)
+    assert.is_true(page.info.height >= 2 * LINE - 1)   -- a long status wraps onto a second line
+    assert.is_true(Top(page.info) + page.info.height <= Top(page.breakdown))
     assert.is_true(Top(page.breakdown) + LINE <= page.strip.height)
     assert.is_true(page.versus.width >= 240)   -- and wraps rather than cutting a long comparison off
   end)

@@ -77,7 +77,6 @@ function PV.Facts(id, now, range)
   return facts
 end
 
--- "Today", "Yesterday" or "3 days ago"
 local function DaysAgo(day)
   local age = ns.Today() - day
   return (age == 0 and "Today") or (age == 1 and "Yesterday") or (age .. " days ago")
@@ -87,7 +86,6 @@ local function Plural(n, word) return n .. " " .. word .. (n == 1 and "" or "s")
 
 -- The large stats in order: each returns its label and its value, nil when it has no value
 local STATS = {
-  -- the live wall, else the last recorded one labeled with its day
   function(f)
     if f.live then return "Now", ns.Money(f.live) end
     if f.last then return DaysAgo(f.lastDay), ns.Money(f.last) end
@@ -107,8 +105,7 @@ local STATS = {
     if vendor and vendor > 0 then return "Vendor", ns.Money(vendor) end
   end,
   function(f)
-    local value = ns.DisenchantValue(f.id)
-    if value == false then return "Disenchant", GREY .. "not scanned|r" end
+    local value = ns.DisenchantValue(f.id)   -- false while its materials are not scanned
     if value then return "Disenchant", ns.Money(value) end
   end,
   function(f)
@@ -215,7 +212,6 @@ function PV.CreateView(parent, layout)
   view.rangeLine:SetWidth(statsWidth)
   view.rangeLine:SetWordWrap(false)
 
-  -- Draw an item, with optional buy and sell lines on the chart
   function view:SetItem(id, buy, sell)
     self.id, self.buy, self.sell = id, buy, sell
     self:Redraw()
@@ -247,7 +243,6 @@ function PV.CreateView(parent, layout)
     self.flag:SetText(flag and WARN .. flag .. "|r" or "")
     self.rangeLine:SetText(PV.RangeLine(facts) or "")
     Arrange(self, flag ~= nil, PlaceStats(self.stats, self.cells, PV.Stats(facts), statsWidth))
-    -- after Arrange, which sizes the chart the drawing fills
     self.chart:Draw(facts.chart or PV.InRange(facts.series, self.range.days, facts.now), self.buy, self.sell, facts.stats)
   end
 

@@ -165,11 +165,11 @@ describe("price view", function()
       assert.equal("Today: 1s 50c", Stats()[1])
     end)
 
-    it("shows Disenchant once it has a value, and says when its materials are not scanned", function()
+    it("shows Disenchant once it has a value, and hides it while its materials are not scanned", function()
       ns.DisenchantValue = function() return 340 end
       assert.equal("Disenchant: 3s 40c", Stats()[6])
       ns.DisenchantValue = function() return false end
-      assert.equal("Disenchant: not scanned", Stats()[6])
+      assert.equal("Your buy / sell: 90c / 1s 20c", Stats()[6])
     end)
 
     it("hides every stat an unseen item lacks", function()

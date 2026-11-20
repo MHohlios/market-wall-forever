@@ -131,8 +131,12 @@ end
 local function ShowTip(owner, title, body, extra)
   if not GameTooltip then return end
   GameTooltip:SetOwner(owner, "ANCHOR_TOP")
-  GameTooltip:SetText(title, 1, 0.82, 0)
-  if body then GameTooltip:AddLine(body, 1, 1, 1, true) end
+  if title == "" then   -- an untitled column's hover: the body leads, with no empty title line
+    GameTooltip:SetText(body, 1, 1, 1, 1, true)
+  else
+    GameTooltip:SetText(title, 1, 0.82, 0)
+    if body then GameTooltip:AddLine(body, 1, 1, 1, true) end
+  end
   if extra then GameTooltip:AddLine(extra, 0.6, 0.6, 0.6, true) end
   GameTooltip:Show()
 end

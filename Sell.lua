@@ -14,20 +14,20 @@ local DURATIONS = { { 1, "12h" }, { 2, "24h" }, { 3, "48h" } }
 
 -- The Market tab's page is about 782 x 480 below the navigation row
 local WIDTH = 782
-local STRIP_TOP, STRIP_HEIGHT = -50, 106
+local STRIP_TOP, STRIP_HEIGHT = -50, 120
 local BODY_TOP = STRIP_TOP - STRIP_HEIGHT - 6
 local BODY_HEIGHT = 480 + BODY_TOP
 local LEFT_WIDTH, RIGHT_X = 300, 312
 local POST_X, POST_WIDTH = 384, 130    -- the strip's Duration and Post column
 local ANSWER_X = POST_X + POST_WIDTH + 12
 local ANSWER_WIDTH = WIDTH - ANSWER_X - 8
-local STATUS_Y = -76                -- the status line, under Price each
+local STATUS_Y = -76                -- the status line, under Price each: up to two lines
 -- the answer's breakdown: a row of its own under the status line, ending under the answer
-local BREAKDOWN_Y, BREAKDOWN_WIDTH = -91, WIDTH - 58 - 8
+local BREAKDOWN_Y, BREAKDOWN_WIDTH = -104, WIDTH - 58 - 8
 local WARNINGS_GAP = 4
 local RIGHT_WIDTH = WIDTH - RIGHT_X
 local TAB_LINE = 28                 -- the right panel's tabs stand on a line this far below its top
-local LIST_ROWS = 12
+local LIST_ROWS = 11
 
 local AUCTION_COLUMNS = {
   { "Price each", 130, nil, "Each price level listed right now, cheapest first. Click a row to set Price each to it." },
@@ -520,8 +520,8 @@ local function BuildStrip(w)
 
   page.info = w.MakeText(s, "GameFontHighlightSmall")
   page.info:SetPoint("TOPLEFT", 58, STATUS_Y)
-  page.info:SetWidth(ANSWER_X - 58 - 8)
-  page.info:SetWordWrap(false)
+  page.info:SetSize(ANSWER_X - 58 - 8, STATUS_Y - BREAKDOWN_Y - 2)   -- two lines, above the breakdown
+  page.info:SetJustifyV("TOP")
 
   page.pick = w.MakeText(page, "GameFontDisable", "CENTER")
   page.pick:SetPoint("TOPLEFT", 0, STRIP_TOP - 30)
@@ -599,7 +599,7 @@ function ns.BuildSellPage(parent)
   page.bags = bags
   page.grid = ns.SellBags.Grid(bags, LEFT_WIDTH, Select)
   BuildListings(w)
-  ShowTab("listings")
+  ShowTab("history")
 
   -- bags change after posting, selling or looting; the main frame redraws when dirty
   page:RegisterEvent("BAG_UPDATE_DELAYED")
