@@ -38,6 +38,15 @@ describe("money", function()
     end)
   end)
 
+  describe("MoneyFaded", function()
+    it("shows the same amount as Money, with each coin icon tinted darker", function()
+      assert.equal("1|TInterface\\MoneyFrame\\UI-GoldIcon:0:0:0:0:64:64:0:64:0:64:128:128:128|t "
+        .. "41|TInterface\\MoneyFrame\\UI-SilverIcon:0:0:0:0:64:64:0:64:0:64:128:128:128|t "
+        .. "23|TInterface\\MoneyFrame\\UI-CopperIcon:0:0:0:0:64:64:0:64:0:64:128:128:128|t", ns.MoneyFaded(14123))
+      assert.equal(Plain(ns.Money(-105)), Plain(ns.MoneyFaded(-105)))
+    end)
+  end)
+
   describe("MoneyShort", function()
     it("leaves copper out from 1g up, rounding to the nearest silver", function()
       assert.equal("1g 41s", Plain(ns.MoneyShort(14123)))

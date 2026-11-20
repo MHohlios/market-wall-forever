@@ -104,6 +104,18 @@ function ns.Money(c)
   return JoinCoins(c, function(unit) return COIN_ICON[unit] end)
 end
 
+-- Coin icons tinted darker, so they fade with grey text. A tint needs the full texture form:
+-- size, offset, texture size, coordinates, then r:g:b out of 255.
+local FADED_COIN_ICON = {}
+for unit, icon in pairs(COIN_ICON) do
+  FADED_COIN_ICON[unit] = icon:gsub(":0:0:0:0|t$", ":0:0:0:0:64:64:0:64:0:64:128:128:128|t")
+end
+
+-- ns.Money for faded text: the same numbers, with the coin icons darkened to match
+function ns.MoneyFaded(c)
+  return JoinCoins(c, function(unit) return FADED_COIN_ICON[unit] end)
+end
+
 -- For chart axis labels, which have a narrow gutter: at 1g and over, copper is left out ("12g 34s")
 function ns.MoneyShort(c)
   return JoinCoins(c, function(unit) return COIN_ICON[unit] end, true)
