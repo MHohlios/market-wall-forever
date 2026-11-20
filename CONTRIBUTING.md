@@ -54,6 +54,23 @@ out Dependabot's (see [.github/release.yml](.github/release.yml)). Good pull req
 titles therefore make good release notes, and less editing.
 `make package-check` lists the files a package would contain.
 
+### One-time setup
+
+Create a CurseForge API token at <https://authors.curseforge.com/account/api-tokens> and
+add it to the repository as the `CF_API_KEY` secret (Settings, Secrets and variables,
+Actions).
+
+### Testing a build before a wide release
+
+Publish a GitHub release with a beta tag, such as `v0.8.0-beta1`. Ticking "Set as
+pre-release" is tidy, but the workflow does not depend on it. CurseForge then holds the
+file as a Beta, which the CurseForge app does not install by default. To get it, right-click
+MarketWall in the app and set its release type to Beta; set it back to Release afterwards.
+Betas can still be downloaded by hand from the project's Files tab.
+
+When the build is good, publish a normal release with a plain `vX.Y.Z` tag. An `-rc1` tag
+would not do: only `alpha` and `beta` change the file type, so `-rc` ships as a full Release.
+
 ## Pull requests
 
 Open pull requests into `main`, one topic per pull request. Fill in the template's
