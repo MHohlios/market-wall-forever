@@ -1137,10 +1137,11 @@ local SETTING_GROUPS = {
 }
 ui.settingGroups = SETTING_GROUPS
 
--- Two columns that fit without scrolling: each one a stack of group titles and rows
-local SETTING_COLUMN_X, SETTING_COLUMN_W = { 12, 400 }, 380
+-- Two columns that fit without scrolling: each one a stack of group titles and rows. The left
+-- one is wider for its longer notes; controlX clears the column's longest name.
+local SETTING_COLUMNS = { { x = 8, width = 414, controlX = 164 }, { x = 428, width = 358, controlX = 158 } }
 local SETTING_TITLE_H, SETTING_ROW_H = 24, 23
-local SETTING_CONTROL_X, SETTING_EDIT_W, SETTING_NOTE_GAP = 164, 56, 8
+local SETTING_EDIT_W, SETTING_NOTE_GAP = 54, 6
 local SETTING_SWITCH_W = 80   -- room for the Auto / On / Off switch, which is as wide as its labels
 
 local function FormatSetting(def)
@@ -1201,11 +1202,11 @@ local function TipOnHover(frame, def)
 end
 
 -- The row's control, anchored left at the control column, and its width
-local function SettingControl(row, def)
+local function SettingControl(row, def, controlX)
   if def.kind == "bool" then
     local box = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
     box:SetSize(24, 24)
-    box:SetPoint("LEFT", SETTING_CONTROL_X - 4, 0)
+    box:SetPoint("LEFT", controlX - 4, 0)
     box:SetScript("OnClick", function(self)
       SaveSetting(def.key, self:GetChecked() and true or false)
       ns.UpdateMinimapButton()
@@ -1213,13 +1214,13 @@ local function SettingControl(row, def)
     TipOnHover(box, def)
     return box, 20
   elseif def.kind == "mode" then
-    local switch = MakeSwitch(row, def.modes, function(value) SaveSetting(def.key, value) end)
-    switch:SetPoint("LEFT", SETTING_CONTROL_X, 0)
+    local switch = MakeSwitch(row, def.modes, function(key) SaveSetting(def.key, key) end)
+    switch:SetPoint("LEFT", controlX, 0)
     for _, button in ipairs(switch.buttons) do TipOnHover(button, def) end
     return switch, SETTING_SWITCH_W
   end
   local edit = MakeEdit(row, SETTING_EDIT_W)
-  edit:SetPoint("LEFT", SETTING_CONTROL_X + 6, 0)
+  edit:SetPoint("LEFT", controlX + 6, 0)
   local function Apply(self)
     local value = ParseSetting(def, self:GetText())
     if value ~= nil then SaveSetting(def.key, value) end
@@ -1237,32 +1238,33 @@ local function SettingControl(row, def)
   return edit, SETTING_EDIT_W + 6
 end
 
-local function BuildSettingRow(page, def, x, y)
+local function BuildSettingRow(page, def, column, y)
   local row = CreateFrame("Frame", nil, page)
-  row:SetSize(SETTING_COLUMN_W, SETTING_ROW_H)
-  row:SetPoint("TOPLEFT", x, y)
+  row:SetSize(column.width, SETTING_ROW_H)
+  row:SetPoint("TOPLEFT", column.x, y)
   row:EnableMouse(true)
   TipOnHover(row, def)
   local label = MakeText(row, "GameFontHighlight")
   label:SetPoint("LEFT", 0, 0)
   label:SetText(def.label)
-  local control, controlWidth = SettingControl(row, def)
+  local control, controlWidth = SettingControl(row, def, column.controlX)
+  local noteX = column.controlX + controlWidth + SETTING_NOTE_GAP
   local note = MakeText(row, "GameFontDisableSmall")
-  note:SetPoint("LEFT", SETTING_CONTROL_X + controlWidth + SETTING_NOTE_GAP, 0)
-  note:SetWidth(SETTING_COLUMN_W - SETTING_CONTROL_X - controlWidth - SETTING_NOTE_GAP)
+  note:SetPoint("LEFT", noteX, 0)
+  note:SetWidth(column.width - noteX)
   note:SetWordWrap(false)
   note:SetText(def.note)
   return { def = def, control = control }
 end
 
-local function BuildSettingGroupTitle(page, title, x, y)
+local function BuildSettingGroupTitle(page, title, column, y)
   local text = MakeText(page, "GameFontHighlight")
-  text:SetPoint("TOPLEFT", x, y - 4)
+  text:SetPoint("TOPLEFT", column.x, y - 4)
   text:SetText(LABEL .. title .. "|r")
   local rule = page:CreateTexture(nil, "ARTWORK")
   rule:SetColorTexture(TAB_LINE[1], TAB_LINE[2], TAB_LINE[3], TAB_LINE[4])
-  rule:SetSize(SETTING_COLUMN_W, 1)
-  rule:SetPoint("TOPLEFT", x, y - SETTING_TITLE_H + 3)
+  rule:SetSize(column.width, 1)
+  rule:SetPoint("TOPLEFT", column.x, y - SETTING_TITLE_H + 3)
 end
 
 local function BuildSettings(parent)
@@ -1271,18 +1273,18 @@ local function BuildSettings(parent)
   page.rows = {}
   local columnY = { -CONTENT_TOP, -CONTENT_TOP }
   for _, group in ipairs(SETTING_GROUPS) do
-    local x, y = SETTING_COLUMN_X[group.column], columnY[group.column]
-    BuildSettingGroupTitle(page, group.title, x, y)
+    local column, y = SETTING_COLUMNS[group.column], columnY[group.column]
+    BuildSettingGroupTitle(page, group.title, column, y)
     y = y - SETTING_TITLE_H
     for _, def in ipairs(group.settings) do
-      page.rows[#page.rows + 1] = BuildSettingRow(page, def, x, y)
+      page.rows[#page.rows + 1] = BuildSettingRow(page, def, column, y)
       y = y - SETTING_ROW_H
     end
     columnY[group.column] = y
   end
 
   local reset = MakeButton(page, "Reset to defaults", 140)
-  reset:SetPoint("BOTTOMLEFT", SETTING_COLUMN_X[1], 10)
+  reset:SetPoint("BOTTOMLEFT", SETTING_COLUMNS[1].x, 10)
   reset:SetScript("OnClick", function()
     ns.ResetSettings(MarketWallDB.cfg)
     ns.Mobs.Invalidate()
