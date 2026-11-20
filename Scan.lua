@@ -253,8 +253,9 @@ end
 -- onDone(answered): answered is false when the scan was stopped or a single-try search got no answer.
 -- once: send one search per item, never retry, and record nothing when it gets no answer.
 function ns.StartWatchScan(ids, onDone, once)
-  if not ns.ahOpen then
-    ns.Print("Open the auction house first.")
+  local blocked = ns.TradeBlocked()
+  if blocked then
+    ns.Print(blocked)
     return
   end
   if state.running or ns.fullScanRunning then
@@ -290,6 +291,7 @@ end
 -- later. Returns false, sending nothing, while the game throttles searches or the item's key
 -- info is still loading. Otherwise Step sends the query before this returns.
 function ns.SearchNow(id, onDone)
+  if not ns.CanTrade() then return false end
   if not C_AuctionHouse.IsThrottledMessageSystemReady() then return false end
   if not C_AuctionHouse.GetItemKeyInfo(C_AuctionHouse.MakeItemKey(id)) then return false end
   ns.StartWatchScan({ id }, onDone, true)
@@ -412,8 +414,9 @@ function ns.OnReplicateReady()
 end
 
 function ns.StartFullScan()
-  if not ns.ahOpen then
-    ns.Print("Open the auction house first.")
+  local blocked = ns.TradeBlocked()
+  if blocked then
+    ns.Print(blocked)
     return
   end
   if state.running or ns.fullScanRunning then
@@ -434,7 +437,7 @@ end
 
 -- Start today's full scan when the auction house opens, if none has run today
 function ns.MaybeAutoScan()
-  if not ns.Cfg("autoScan") then return end
+  if not ns.Cfg("autoScan") or not ns.CanTrade() then return end
   local r = ns.R()
   if r.lastFull and ns.DayOf(r.lastFull) == ns.Today() then return end
   if ns.FullScanCooldown() > 0 then return end

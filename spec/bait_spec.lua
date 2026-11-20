@@ -262,11 +262,11 @@ describe("Bait", function()
       keyInfo, hasResults = {}, true
       Search()
       fire("COMMODITY_SEARCH_RESULTS_UPDATED", 1)   -- 3 units, under minSupply
-      assert.is_nil(MarketWallDB.realms[ns.Realm()].supplied[1])
+      assert.is_nil(MarketWallDB.realms[ns.RealmKey()].supplied[1])
       MarketWallDB.cfg.minSupply = 3
       Search()
       fire("COMMODITY_SEARCH_RESULTS_UPDATED", 1)
-      assert.is_true(MarketWallDB.realms[ns.Realm()].supplied[1])
+      assert.is_true(MarketWallDB.realms[ns.RealmKey()].supplied[1])
     end)
 
     it("records nothing when the search gets no answer", function()

@@ -72,7 +72,7 @@ local function LoadListings(id)
   waitingID = nil
   local held = ns.ladders[id]
   local stale = not held or held.kind == "scan" or time() - held.t > 30
-  if not (ns.ahOpen and stale) then return end
+  if not (ns.CanTrade() and stale) then return end
   if ns.scanState.running or ns.fullScanRunning then
     waitingID = id
   else
@@ -135,6 +135,7 @@ end
 
 local function ListingsText(id)
   if not ns.ahOpen then return GREY .. "Live listings load when the auction house is open.|r" end
+  if ns.neutralAH then return GREY .. "Live listings don't load at the neutral auction house.|r" end
   local held = ns.ladders[id]
   if not held then
     local loading = ns.scanState.running or waitingID == id
