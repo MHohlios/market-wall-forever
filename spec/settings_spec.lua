@@ -10,11 +10,10 @@ describe("Reset to defaults", function()
 end)
 
 describe("the Settings page", function()
-  local SETTING_KEYS = {
-    "ahCut", "wallShare", "minHistoryDays", "minSupply", "minSnipeProfit", "minSnipeDiscount", "dipPct",
-    "minDisenchantProfit", "minDisenchantPct", "salvagerMode", "salvagerBonus", "autoScan", "sound", "staleMinutes",
-    "baitSearchGap", "baitMinUnder", "baitConfirmPress", "mobDisenchant", "mobSkinning", "mobRareShare", "mobMinKills",
-    "minimapButton",
+  -- Defaults the Settings page leaves out: tuning constants, and choices made on other pages
+  local NOT_ON_PAGE = {
+    wallMinUnits = true, baselineDays = true, retainDays = true, retainWeeks = true, minRecordSupply = true,
+    maxSnaps = true, disenchantShowAll = true, sellDuration = true,
   }
 
   local ns
@@ -41,7 +40,9 @@ describe("the Settings page", function()
       seen[def.key] = true
     end
     local expected = {}
-    for _, key in ipairs(SETTING_KEYS) do expected[key] = true end
+    for key in pairs(ns.cfgDefaults) do
+      if not NOT_ON_PAGE[key] then expected[key] = true end
+    end
     assert.same(expected, seen)
   end)
 
