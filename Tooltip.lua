@@ -1,17 +1,33 @@
 -- MarketWall: market, vendor and disenchant prices on item tooltips
 local _, ns = ...
 
-local GREY, GOLD, GREEN, ORANGE = "|cffa3acac", "|cfff5c518", "|cff4fc36b", "|cffffb057"
+local GREY, GOLD, ORANGE = "|cffa3acac", "|cfff5c518", "|cffffb057"
+-- The item block: the best outlet bright, every other row faded, Shift's detail dimmer still
+local HEADING, HINT = "|cff2fa39d", "|cff5d6464"
+local BRIGHT, WHITE, FADED, DIM = "|cff3fe6d6", "|cffffffff", "|cff868d8d", "|cff6f7676"
+local ROW, DETAIL = "  ", "      "   -- indents under the heading and under a row
 local Outlet = ns.Outlet
 
 local MIN_SHOWN_CHANCE = 0.01
-local CONVERSION = "conversion"   -- the best-tag key for a conversion line
+local CONVERSION = "conversion"   -- the best outlet's key for a conversion
 
--- An outlet line's left side: the name, the best tag, then any note in grey. The right side
--- holds only the price, so prices line up.
-local function OutletLabel(name, outlet, best, note)
-  return GOLD .. name .. "|r" .. (outlet == best and " " .. GREEN .. "best|r" or "")
-    .. (note and " " .. GREY .. note .. "|r" or "")
+-- A row's right side in its colour: copper as money, its coins darkened unless the row is
+-- bright, or text such as "no price" as given
+local function Price(value, color)
+  if type(value) == "string" then return color .. value .. "|r" end
+  return color .. (color == WHITE and ns.Money(value) or ns.MoneyFaded(value)) .. "|r"
+end
+
+-- One outlet's row: bright when it is the best, faded otherwise, with any note after the label.
+-- The right side holds only the price, so prices line up.
+local function OutletRow(add, label, outlet, best, value, note)
+  local bright = outlet == best
+  add(ROW .. (bright and BRIGHT or FADED) .. label .. "|r" .. (note and " " .. FADED .. note .. "|r" or ""),
+    Price(value, bright and WHITE or FADED))
+end
+
+local function FadedRow(add, label, value)
+  add(ROW .. FADED .. label .. "|r", Price(value, FADED))
 end
 
 -- One decimal, dropped when it is zero: 1.5, 2, 99.5
@@ -19,10 +35,10 @@ local function Decimal(x)
   return (string.format("%.1f", x):gsub("%.0$", ""))
 end
 
--- One indented line per likely material, most likely first, then where the odds come from.
--- True when it added lines.
+-- One dim line per likely material under the Disenchant row, most likely first: its chance, its
+-- name and its latest wall
 local function DisenchantLines(add, id)
-  local outcomes, source = ns.DisenchantOutcomes(id)
+  local outcomes = ns.DisenchantOutcomes(id)
   if not outcomes then return end
   local shown = {}
   for _, o in ipairs(outcomes) do
@@ -30,11 +46,8 @@ local function DisenchantLines(add, id)
   end
   table.sort(shown, function(a, b) return a.chance > b.chance end)
   for _, o in ipairs(shown) do
-    add("  " .. ns.ColorName(o.id),
-      GREY .. Decimal(o.quantity) .. "× · " .. Decimal(o.chance * 100) .. "%|r " .. ns.Money(ns.LatestWall(o.id)))
+    add(DETAIL .. DIM .. Decimal(o.chance * 100) .. "% " .. ns.Name(o.id) .. "|r", Price(ns.LatestWall(o.id), DIM))
   end
-  add(GREY .. "  odds: " .. source .. " · net after the cut and each material's deposit|r", "")
-  return true
 end
 
 -- What one input nets as its share of the product (Outlet.CONVERSIONS), after the cut and the
@@ -46,79 +59,97 @@ local function ConversionValue(conversion, prices, cut)
   return Outlet.Net(wall, cut, prices.deposit(conversion.product)) / conversion.inputs, not supplied
 end
 
--- What one unit nets through each outlet, after the cut and an estimated deposit, with the
--- disenchant breakdown under its line. The best of vendor, market and disenchanting follows the
--- Sell page's bag-group rule; a conversion is best when it pays more than all three.
--- True when it added the disenchant breakdown.
-local function OutletLines(add, id, count)
+-- The bright row and what one unit nets there. It follows the Sell page's bag-group rule, except
+-- that an item with no market data goes to the better of vendor and disenchanting (counted only
+-- when that setting is on). A conversion is best when it pays more. NO_DATA when nothing pays.
+local function BestOutlet(values, converted, convertedThin)
+  if converted and not convertedThin and converted > values.best then return CONVERSION, converted end
+  local best = ns.SellPricing.Group(values)
+  if best == Outlet.NO_DATA then
+    if values.disenchant and values.disenchant > math.max(values.vendor, 0) then
+      best = Outlet.DISENCHANT
+    elseif values.vendor > 0 then
+      best = Outlet.VENDOR
+    end
+  end
+  return best, values.best
+end
+
+-- One row per outlet in a fixed order, each at what one unit nets after the cut and an estimated
+-- deposit, then the stack and what a container opens to. details adds the disenchant materials
+-- and the conversion's recipe. True when the item has something to price.
+local function OutletLines(add, id, count, details)
   local prices, opts = ns.Mobs.GamePrices(), ns.Mobs.GameOptions()
   local values = Outlet.Priced(prices, opts, id)
-  local best, bestValue = ns.SellPricing.Group(values), values.best
   local conversion = Outlet.CONVERSIONS[id]
   local converted, convertedThin
   if conversion then converted, convertedThin = ConversionValue(conversion, prices, opts.cut) end
-  if converted and not convertedThin and converted > values.best then best, bestValue = CONVERSION, converted end
+  local best, bestValue = BestOutlet(values, converted, convertedThin)
 
-  if values.vendor > 0 then add(OutletLabel("Vendor", Outlet.VENDOR, best), ns.Money(values.vendor)) end
+  OutletRow(add, "Market", Outlet.AUCTION, best, values.auction or "no price", values.thin and "(thin market)" or nil)
 
-  if values.auction then
-    add(OutletLabel("Market (net)", Outlet.AUCTION, best, values.thin and "(thin market)" or nil),
-      ns.Money(values.auction))
-  end
+  if values.vendor > 0 then OutletRow(add, "Vendor", Outlet.VENDOR, best, values.vendor) end
 
   -- shown whether or not disenchanting counts toward the best outlet
   local disenchant, _, deposits = ns.DisenchantValue(id, prices.deposit)
-  if disenchant then
-    add(OutletLabel("Disenchant (net)", Outlet.DISENCHANT, best, "(" .. ns.Money(disenchant) .. " in mats)"),
-      ns.Money(Outlet.Net(disenchant, opts.cut, deposits)))
-  elseif disenchant == false then
-    add(OutletLabel("Disenchant (net)", Outlet.DISENCHANT, best), GREY .. "materials not scanned|r")
+  if disenchant ~= nil then
+    OutletRow(add, "Disenchant", Outlet.DISENCHANT, best,
+      disenchant and Outlet.Net(disenchant, opts.cut, deposits) or "materials not scanned")
+    if details then DisenchantLines(add, id) end
   end
-  local breakdown = DisenchantLines(add, id)
 
   if conversion then
     local product = ns.Name(conversion.product)
-    local note = "· " .. conversion.inputs .. " " .. conversion.input .. " → 1 " .. conversion.output
-      .. (convertedThin and " (thin market)" or "")
-    add(OutletLabel("As " .. product .. " (net)", CONVERSION, best, note),
-      converted and ns.Money(converted) or GREY .. product .. " not scanned|r")
+    OutletRow(add, "Make " .. product, CONVERSION, best, converted or product .. " not scanned",
+      convertedThin and "(thin market)" or nil)
+    if details then
+      add(DETAIL .. DIM .. conversion.inputs .. " " .. conversion.input .. " → 1 " .. conversion.output .. "|r", "")
+    end
   end
 
   if count and count > 1 and best ~= Outlet.NO_DATA then
     local suffix = best == CONVERSION and " (as " .. conversion.output .. "s)" or ""
-    add(GREY .. "Stack of " .. count .. suffix .. "|r", ns.Money(bestValue * count))
+    FadedRow(add, "Stack of " .. count .. suffix, bestValue * count)
   end
 
   -- a container you have opened: what one opening gave on average, at each content's best outlet
   local history = MarketWallDB.containers[id]
   local opened = ns.Containers.OpenedValue(history, prices, opts)
-  if opened then
-    add(GOLD .. "Opens to|r " .. GREY .. "avg (" .. history.opens .. " opened)|r", ns.Money(opened))
-  end
-  return breakdown
+  if opened then FadedRow(add, "Opens to avg (" .. history.opens .. " opened)", opened) end
+  return values.auction ~= nil or values.vendor > 0 or disenchant ~= nil or conversion ~= nil or opened ~= nil
+end
+
+local function LowDataFlag(add, id)
+  if not ns.LatestWall(id) then return end
+  local flag = ns.LowDataText(ns.DaysOfData(id))
+  if flag then add(ROW .. ORANGE .. flag .. "|r", "") end
 end
 
 local function MarketContextLines(add, id)
   local wall, day = ns.LatestWall(id)
   if not wall then return end
-  local flag = ns.LowDataText(ns.DaysOfData(id))
-  if flag then add(ORANGE .. flag .. "|r", "") end
   -- a number that cannot be worked out says n/a rather than vanishing, and why on a first scan
   local stats = ns.StatsFor(id)
-  local missing = GREY .. (stats.firstScan and "n/a (first scan)" or "n/a") .. "|r"
+  local missing = stats.firstScan and "n/a (first scan)" or "n/a"
 
   local label = ns.Today() == day and "Against median" or "Against median (last scan)"
   local diff, word = ns.Versus(wall, stats)
-  add(GREY .. label .. "|r", diff and ns.VersusText(diff, word) or missing)
+  FadedRow(add, label, diff and ns.VersusText(diff, word) or missing)
 
   local PV = ns.PriceView
   local week = PV.Summary(PV.InRange(ns.Series(id), 7, time()))
-  add(GREY .. "7-day trend|r", week and week.trend and PV.TrendText(week.trend) or missing)
+  FadedRow(add, "7-day trend", week and week.trend and PV.TrendText(week.trend) or missing)
 
   local entry = ns.R().watch[id]
   if entry and entry.buy then
-    add(GREY .. "Your buy / sell|r", ns.Money(entry.buy) .. " / " .. (entry.sell and ns.Money(entry.sell) or "-"))
+    FadedRow(add, "Your buy / sell", ns.MoneyFaded(entry.buy) .. " / " .. (entry.sell and ns.MoneyFaded(entry.sell) or "-"))
   end
+end
+
+-- Whether holding Shift would add anything: disenchant materials, a conversion's recipe or the
+-- market context
+local function HasDetail(id)
+  return ns.DisenchantOutcomes(id) ~= nil or Outlet.CONVERSIONS[id] ~= nil or ns.LatestWall(id) ~= nil
 end
 
 -- Size of the stack the tooltip is for, read from the bag slot that owns it.
@@ -138,20 +169,31 @@ local function StackCount(tooltip, id)
   return info and info.itemID == id and info.stackCount or nil
 end
 
+-- The MarketWall block: the heading, the outlet rows, and with Shift held the detail. Nothing for
+-- an item with nothing to price, such as a hearthstone.
 local function AddLines(tooltip, id)
   if not id or not MarketWallDB then return end
-  -- A blank line before the next line added, so a block that adds nothing leaves no gap
-  local gap = true
-  local function add(left, right)
-    if gap then
-      tooltip:AddLine(" ")
-      gap = false
-    end
-    tooltip:AddDoubleLine(left, right)
-  end
+  local function add(left, right) tooltip:AddDoubleLine(left, right) end
+  local details = IsShiftKeyDown()
 
-  if OutletLines(add, id, StackCount(tooltip, id)) then gap = true end
-  MarketContextLines(add, id)
+  -- the outlet rows wait until they show the item has a price, below the heading and the flag
+  local rows = {}
+  local priced = OutletLines(function(left, right) rows[#rows + 1] = { left, right } end,
+    id, StackCount(tooltip, id), details)
+  if not priced then return end
+
+  tooltip:AddLine(" ")
+  add(HEADING .. "MarketWall|r", not details and HasDetail(id) and HINT .. "Shift: details|r" or "")
+  LowDataFlag(add, id)
+  for _, row in ipairs(rows) do add(row[1], row[2]) end
+  if details then MarketContextLines(add, id) end
+end
+
+local function RedrawOnShift(_, _, key)
+  if key ~= "LSHIFT" and key ~= "RSHIFT" then return end
+  for _, tooltip in ipairs({ GameTooltip, ItemRefTooltip }) do
+    if tooltip:IsShown() and tooltip.RefreshData and tooltip:GetItem() then tooltip:RefreshData() end
+  end
 end
 
 -- Mob tooltips -------------------------------------------------------------------------------
@@ -211,4 +253,7 @@ function ns.InitTooltip()
     if tooltip ~= GameTooltip then return end
     pcall(AddMobLines, tooltip)
   end)
+  local shift = CreateFrame("Frame")
+  shift:RegisterEvent("MODIFIER_STATE_CHANGED")
+  shift:SetScript("OnEvent", RedrawOnShift)
 end

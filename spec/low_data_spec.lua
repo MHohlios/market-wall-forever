@@ -44,10 +44,11 @@ describe("data from an item's first scan", function()
     ns = addon.Load()
     _G.MarketWallDB = { version = 1, cfg = {}, realms = {}, depositRate = {}, containers = {} }
     _G.C_Item = {}
+    _G.IsShiftKeyDown = function() return true end
   end)
 
   after_each(function()
-    _G.MarketWallDB, _G.C_Item = nil, nil
+    _G.MarketWallDB, _G.C_Item, _G.IsShiftKeyDown = nil, nil, nil
   end)
 
   describe("one scan", function()
@@ -58,16 +59,11 @@ describe("data from an item's first scan", function()
         Grid({ "median", "normalRange", "versusMedian" }))
     end)
 
-    it("flags the tooltip just above Against median, and the trend reads n/a", function()
+    it("flags the tooltip just under the heading, and the trend reads n/a", function()
       local lines = TooltipLines()
-      local flag, versus
-      for i, line in ipairs(lines) do
-        if line == FLAG .. "|" then flag = i end
-        if line:find("^Against median|") then versus = i end
-      end
-      assert.is_not_nil(flag)
-      assert.equal(flag + 1, versus)
-      assert.equal("Against median|+0% (normal)", lines[versus])
+      assert.equal("MarketWall|", lines[2])
+      assert.equal("  " .. FLAG .. "|", lines[3])
+      assert.is_true(Has(lines, "  Against median|+0% (normal)"))
       assert.is_true(Has(lines, "7-day trend|n/a (first scan)"))
     end)
 

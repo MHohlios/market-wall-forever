@@ -1,11 +1,12 @@
 local addon = require("spec.helpers.addon")
 
 local ID = 7
-local GREY = "|cffa3acac"
-local GREY_NA = GREY .. "n/a (first scan)|r"
+local HEADING, HINT = "|cff2fa39d", "|cff5d6464"
+local BRIGHT, WHITE, FADED, DIM = "|cff3fe6d6", "|cffffffff", "|cff868d8d", "|cff6f7676"
+local FADED_NA = FADED .. "n/a (first scan)|r"
 
 describe("item tooltip lines", function()
-  local ns, tooltip
+  local ns, Fire, tooltip, shift
 
   -- A tooltip that records its lines as "left|right" strings, and its double lines' sides apart
   local function NewTooltip(owner)
@@ -37,18 +38,39 @@ describe("item tooltip lines", function()
     return false
   end
 
+  -- Index of the first line containing the text, nil without one
+  local function Find(text)
+    for i, line in ipairs(tooltip.lines) do
+      if line:find(text, 1, true) then return i end
+    end
+  end
+
+  -- The labels of the bright rows: the best outlet's, or none
+  local function BrightRows()
+    local labels = {}
+    for _, line in ipairs(tooltip.lines) do
+      local label = line:match("^  " .. BRIGHT .. "(.-)|r")
+      if label then labels[#labels + 1] = label end
+    end
+    return labels
+  end
+
   before_each(function()
-    ns = addon.Load()
+    ns, Fire = addon.Load()
     _G.MarketWallDB = { version = 1, cfg = {}, realms = {}, depositRate = {}, containers = {} }
     _G.C_Item = {}
+    shift = false
+    _G.IsShiftKeyDown = function() return shift end
     tooltip = NewTooltip()
   end)
 
   after_each(function()
-    _G.MarketWallDB, _G.C_Item, _G.C_Container = nil, nil, nil
+    _G.MarketWallDB, _G.C_Item, _G.C_Container, _G.IsShiftKeyDown = nil, nil, nil, nil
   end)
 
-  describe("7-day trend", function()
+  describe("7-day trend, with Shift held", function()
+    before_each(function() shift = true end)
+
     it("shows nothing for a never-scanned item", function()
       ns.TooltipLines.Add(tooltip, ID)
       assert.same({}, tooltip.lines)
@@ -57,22 +79,22 @@ describe("item tooltip lines", function()
     it("reads n/a on an item's first scan", function()
       SeedWalls(1000)
       ns.TooltipLines.Add(tooltip, ID)
-      assert.is_true(Has("Market (net)|r"))
-      assert.is_true(Has("7-day trend|r|" .. GREY_NA))
+      assert.is_true(Has("Market|r"))
+      assert.is_true(Has("7-day trend|r|" .. FADED_NA))
     end)
 
     it("reads a plain n/a when the only other price is older than 7 days", function()
       ns.R().days[ID] = { [ns.Today() - 10] = { 900 }, [ns.Today()] = { 1000 } }
       ns.TooltipLines.Add(tooltip, ID)
-      assert.is_true(Has("7-day trend|r|" .. GREY .. "n/a|r"))
+      assert.is_true(Has("7-day trend|r|" .. FADED .. "n/a|r"))
       assert.is_false(Has("first scan"))
     end)
 
     it("reads a plain n/a for both when the last scan is older than the baseline window", function()
       ns.R().days[ID] = { [ns.Today() - 20] = { 1000 } }
       ns.TooltipLines.Add(tooltip, ID)
-      assert.is_true(Has("Against median (last scan)|r|" .. GREY .. "n/a|r"))
-      assert.is_true(Has("7-day trend|r|" .. GREY .. "n/a|r"))
+      assert.is_true(Has("Against median (last scan)|r|" .. FADED .. "n/a|r"))
+      assert.is_true(Has("7-day trend|r|" .. FADED .. "n/a|r"))
     end)
 
     it("names a rise past 3% up and a fall past 3% down", function()
@@ -120,10 +142,10 @@ describe("item tooltip lines", function()
       ns.R().supplied[ID] = true
     end)
 
-    it("multiplies the best outlet's net by the stack size", function()
+    it("multiplies the best outlet's net by the stack size, as a faded row", function()
       tooltip = NewTooltip(BagSlot({ itemID = ID, stackCount = 20 }))
       ns.TooltipLines.Add(tooltip, ID)
-      assert.is_true(Has("Stack of 20|r|" .. ns.Money(950 * 20)))   -- the wall after the 5% cut
+      assert.is_true(Has("  " .. FADED .. "Stack of 20|r|" .. FADED .. ns.MoneyFaded(950 * 20)))   -- the wall after the 5% cut
     end)
 
     it("shows nothing without a best outlet, such as a thin market and no vendor price", function()
@@ -131,6 +153,7 @@ describe("item tooltip lines", function()
       tooltip = NewTooltip(BagSlot({ itemID = ID, stackCount = 20 }))
       ns.TooltipLines.Add(tooltip, ID)
       assert.is_false(Has("Stack of"))
+      assert.same({}, BrightRows())
     end)
 
     it("shows nothing for a stack of 1", function()
@@ -172,11 +195,11 @@ describe("item tooltip lines", function()
       ns.R().days[ID] = nil
       tooltip = NewTooltip(BagSlot({ itemID = ID, stackCount = 20 }))
       ns.TooltipLines.Add(tooltip, ID)
-      assert.same({}, tooltip.lines)
+      assert.is_false(Has("Stack of"))
     end)
   end)
 
-  describe("outlets and disenchant breakdown", function()
+  describe("outlets and disenchant materials", function()
     local ARMOR, CONSUMABLE, UNCOMMON = 4, 0, 2
     -- Level 18 green armor: 75% for 2.5 dust, 20% for 1.5 essence, 5% for 1 shard
     local DUST, ESSENCE, SHARD = 10940, 10939, 10978
@@ -192,15 +215,6 @@ describe("item tooltip lines", function()
       ns.R().supplied[id] = true
     end
 
-    -- Index of the first line containing the text, nil without one
-    local function Find(text)
-      for i, line in ipairs(tooltip.lines) do
-        if line:find(text, 1, true) then return i end
-      end
-    end
-
-    local BEST = "best|r"
-
     before_each(function()
       items = {}
       _G.C_Item = {
@@ -213,7 +227,7 @@ describe("item tooltip lines", function()
       MarketWallDB.cfg.mobDisenchant = "always"
       Item(ID, "Vest", { quality = UNCOMMON, level = 18, classID = ARMOR, vendor = 100 })
       Item(DUST, "Dust", { classID = 7 })
-      Item(ESSENCE, "Essence", { classID = 7 })
+      Item(ESSENCE, "Essence", { quality = UNCOMMON, classID = 7 })
       Item(SHARD, "Shard", { classID = 7 })
       -- disenchant value 75% × 2.5 × 100 + 20% × 1.5 × 1000 + 5% × 2000 = 587.5, 558 after the cut
       Wall(DUST, 100)
@@ -221,26 +235,99 @@ describe("item tooltip lines", function()
       Wall(SHARD, 2000)
     end)
 
-    it("lists Vendor, Market (net) and Disenchant (net), then the materials, then market context", function()
+    -- Asserts each text is in its line, in order, and that there are no more lines
+    local function AssertLines(order)
+      for i, text in ipairs(order) do
+        assert.truthy(tooltip.lines[i] and tooltip.lines[i]:find(text, 1, true), text)
+      end
+      assert.equal(#order, #tooltip.lines)
+    end
+
+    it("lists the heading, the low-data flag and Market, Vendor and Disenchant", function()
       SeedWalls(500, 500, 500, 500)
       ns.R().supplied[ID] = true
       ns.R().watch[ID] = { buy = 400 }
       ns.TooltipLines.Add(tooltip, ID)
-      local order = { " ", "Vendor|r", "Market (net)|r", "Disenchant (net)", "Dust", "Essence", "Shard", "odds: classic table",
-        " ", "Only 4 days of data", "Against median|r", "7-day trend|r", "Your buy / sell|r" }
-      for i, text in ipairs(order) do
-        if text == " " then
-          assert.equal(" ", tooltip.lines[i])
-        else
-          assert.truthy(tooltip.lines[i]:find(text, 1, true), text)
-        end
-      end
-      assert.equal(#order, #tooltip.lines)
+      AssertLines({ " ", HEADING .. "MarketWall|r|" .. HINT .. "Shift: details|r", "Only 4 days of data",
+        "  " .. FADED .. "Market|r", "Vendor|r", "Disenchant|r" })
     end)
 
-    it("leaves no gap after the breakdown when there is no market context", function()
-      ns.TooltipLines.Add(tooltip, ID)   -- never scanned, so no wall to compare
-      assert.equal(Find("odds:"), #tooltip.lines)
+    it("adds the materials under Disenchant and the market context at the end while Shift is held", function()
+      SeedWalls(500, 500, 500, 500)
+      ns.R().supplied[ID] = true
+      ns.R().watch[ID] = { buy = 400 }
+      shift = true
+      ns.TooltipLines.Add(tooltip, ID)
+      AssertLines({ " ", HEADING .. "MarketWall|r|", "Only 4 days of data", "Market|r", "Vendor|r", "Disenchant|r",
+        "75% Dust", "20% Essence", "5% Shard", "Against median|r", "7-day trend|r", "Your buy / sell|r" })
+    end)
+
+    it("hints at Shift only when it would add detail, and not while it is held", function()
+      ns.TooltipLines.Add(tooltip, ID)   -- never scanned, but it can be disenchanted
+      assert.equal(HEADING .. "MarketWall|r|" .. HINT .. "Shift: details|r", tooltip.lines[2])
+
+      shift = true
+      tooltip = NewTooltip()
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.equal(HEADING .. "MarketWall|r|", tooltip.lines[2])
+
+      shift = false
+      Item(ID, "Potion", { quality = UNCOMMON, level = 18, classID = CONSUMABLE, vendor = 100 })
+      tooltip = NewTooltip()
+      ns.TooltipLines.Add(tooltip, ID)   -- no wall, no materials, no conversion
+      assert.equal(HEADING .. "MarketWall|r|", tooltip.lines[2])
+    end)
+
+    it("hides the materials and market context without Shift", function()
+      SeedWalls(500, 500, 500, 500)
+      ns.R().watch[ID] = { buy = 400 }
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.is_nil(Find("Dust"))
+      assert.is_nil(Find("Against median"))
+      assert.is_nil(Find("7-day trend"))
+      assert.is_nil(Find("Your buy"))
+    end)
+
+    it("shows one net price per outlet: no (net) labels, no total in mats, no odds footer and no best tag", function()
+      SeedWalls(500, 500, 500, 500)
+      shift = true
+      ns.TooltipLines.Add(tooltip, ID)
+      for _, gone in ipairs({ "(net)", "in mats", "odds", "best" }) do assert.is_nil(Find(gone), gone) end
+    end)
+
+    it("brightens the vendor over a lower disenchant when there is no wall, as for a soulbound item", function()
+      items[ID].vendor = 600
+      ns.TooltipLines.Add(tooltip, ID)
+      AssertLines({ " ", "MarketWall", "  " .. FADED .. "Market|r|" .. FADED .. "no price|r",
+        "  " .. BRIGHT .. "Vendor|r|" .. WHITE .. ns.Money(600) .. "|r",
+        "  " .. FADED .. "Disenchant|r|" .. FADED .. ns.MoneyFaded(558.125) .. "|r" })
+    end)
+
+    it("brightens disenchanting without a wall when it pays more, unless the setting leaves it out", function()
+      ns.TooltipLines.Add(tooltip, ID)   -- 558 from disenchanting, against a 100c vendor price
+      assert.same({ "Disenchant" }, BrightRows())
+
+      MarketWallDB.cfg.mobDisenchant = "never"
+      tooltip = NewTooltip()
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.same({ "Vendor" }, BrightRows())
+      assert.truthy(Find("Disenchant|r|" .. FADED .. ns.MoneyFaded(558.125)))   -- still shown
+    end)
+
+    it("adds no block for an item with nothing to price: no wall, vendor price, disenchant or conversion", function()
+      Item(ID, "Hearthstone", { quality = 1, level = 1, classID = CONSUMABLE })
+      shift = true
+      ns.TooltipLines.Add(tooltip, ID)
+      assert.same({}, tooltip.lines)
+    end)
+
+    it("shows the block with Market at no price when only a container value prices the item", function()
+      local CLAM = 5523
+      Item(CLAM, "Clam", { classID = 15 })
+      MarketWallDB.containers[CLAM] = { opens = 2, coin = 30, drops = { [DUST] = 4 } }
+      ns.TooltipLines.Add(tooltip, CLAM)
+      assert.truthy(Find("Market|r|" .. FADED .. "no price|r"))
+      assert.truthy(Find("Opens to"))
     end)
 
     it("notes a thin market on the Market row when a vendor is best beside a higher wall", function()
@@ -249,8 +336,8 @@ describe("item tooltip lines", function()
       ns.R().supplied[ID] = nil   -- no real supply behind the wall
       MarketWallDB.cfg.mobDisenchant = "never"
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(Find("Market (net)|r " .. GREY .. "(thin market)|r|"))
-      assert.truthy(tooltip.lines[Find("Vendor")]:find(BEST, 1, true))
+      assert.truthy(Find("Market|r " .. FADED .. "(thin market)|r|"))
+      assert.same({ "Vendor" }, BrightRows())
 
       tooltip = NewTooltip()
       ns.R().supplied[ID] = true
@@ -263,58 +350,41 @@ describe("item tooltip lines", function()
       _G.C_Container = { GetContainerItemInfo = function() return { itemID = ID, stackCount = 5 } end }
       tooltip = NewTooltip({ GetSlotAndBagID = function() return 4, 0 end })
       ns.TooltipLines.Add(tooltip, ID)
-      assert.equal(Find("odds:") + 1, Find("Stack of 5|r|" .. ns.Money(558.125 * 5)))
+      assert.equal(Find("Disenchant|r") + 1, Find("Stack of 5|r|" .. FADED .. ns.MoneyFaded(558.125 * 5)))
     end)
 
-    it("marks disenchanting best when its materials after the cut pay most", function()
-      Wall(ID, 500)   -- 475 after the cut, against 558 from disenchanting
+    it("brightens disenchanting when its materials after the cut pay most", function()
+      Wall(ID, 500)   -- 445 net, against 558 from disenchanting
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(tooltip.lines[Find("Disenchant (net)")]:find(BEST, 1, true))
-      assert.is_nil(tooltip.lines[Find("Market (net)|r")]:find(BEST, 1, true))
-      assert.is_nil(tooltip.lines[Find("Vendor|r")]:find(BEST, 1, true))
+      assert.same({ "Disenchant" }, BrightRows())
     end)
 
-    it("marks the market best when the wall after the cut pays most", function()
-      Wall(ID, 1000)
+    it("brightens the market, in white money, when the wall after the cut pays most, and fades the rest", function()
+      Wall(ID, 1000)   -- 950 after the cut, less 30% of the 100c vendor price
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(tooltip.lines[Find("Market (net)")]:find(BEST, 1, true))
-      assert.is_nil(tooltip.lines[Find("Disenchant (net)")]:find(BEST, 1, true))
+      assert.same({ "Market" }, BrightRows())
+      assert.truthy(Find("Market|r|" .. WHITE .. ns.Money(920) .. "|r"))
+      assert.truthy(Find("Vendor|r|" .. FADED .. ns.MoneyFaded(100) .. "|r"))
+      assert.truthy(Find("Disenchant|r|" .. FADED .. ns.MoneyFaded(558.125) .. "|r"))
     end)
 
-    it("marks the vendor best when it pays most", function()
+    it("brightens the vendor when it pays most", function()
       items[ID].vendor = 700
       Wall(ID, 500)
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(tooltip.lines[Find("Vendor")]:find(BEST, 1, true))
-      assert.is_nil(tooltip.lines[Find("Disenchant (net)")]:find(BEST, 1, true))
+      assert.same({ "Vendor" }, BrightRows())
     end)
 
-    it("shows only the market's net after the cut and a 24h deposit, not the listed price", function()
-      Wall(ID, 1000)   -- 950 after the cut, less 30% of the 100c vendor price
-      ns.TooltipLines.Add(tooltip, ID)
-      local market = tooltip.lines[Find("Market (net)")]
-      assert.equal("|" .. ns.Money(920), market:sub(-#("|" .. ns.Money(920))))
-      assert.is_nil(Find("listed"))
-    end)
-
-    it("marks nothing without a wall, as the Sell page groups it with no market data", function()
-      ns.TooltipLines.Add(tooltip, ID)
-      assert.is_nil(Find(BEST))
-      assert.is_nil(Find("Market (net)"))
-      assert.truthy(Find("Vendor|r|" .. ns.Money(100)))
-      assert.truthy(Find("Disenchant (net)|r " .. GREY .. "(" .. ns.Money(588) .. " in mats)|r|" .. ns.Money(558.125)))
-    end)
-
-    it("takes each material's deposit off the disenchant net and says so under the breakdown", function()
+    it("takes each material's deposit off the disenchant net, and materials keep their wall", function()
       items[DUST].vendor, items[ESSENCE].vendor, items[SHARD].vendor = 10, 100, 200
       -- 75% × 2.5 × 3 + 20% × 1.5 × 30 + 5% × 60 = 17.625 in deposits at 30%
+      shift = true
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(Find("in mats)|r|" .. ns.Money(558.125 - 17.625)))
-      assert.truthy(Find("odds: classic table · net after the cut and each material's deposit|r"))
-      assert.truthy(Find("  Dust|" .. GREY .. "2.5× · 75%|r " .. ns.Money(100)))   -- materials keep their wall
+      assert.truthy(Find("Disenchant|r|" .. WHITE .. ns.Money(558.125 - 17.625)))
+      assert.truthy(Find("75% Dust|r|" .. DIM .. ns.MoneyFaded(100)))
     end)
 
-    it("moves the best tag to the vendor once the deposits count", function()
+    it("moves the bright row to the vendor once the deposits count", function()
       -- a vest the vendor buys for 20s 52c, listed at 22s, whose materials list at 21s 80c
       items[ID].vendor = 2052
       Wall(ID, 2200)
@@ -326,16 +396,16 @@ describe("item tooltip lines", function()
       -- without deposits the market pays most: 20s 90c, against 20s 71c from disenchanting
       MarketWallDB.depositRate[2] = 0
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(tooltip.lines[Find("Market (net)")]:find(BEST, 1, true))
-      assert.truthy(Find("best|r|" .. ns.Money(2090)))
+      assert.same({ "Market" }, BrightRows())
+      assert.truthy(Find("Market|r|" .. WHITE .. ns.Money(2090)))
 
       -- at the standard 30% for 24h both drop below the vendor
       MarketWallDB.depositRate[2] = nil
       tooltip = NewTooltip()
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(tooltip.lines[Find("Vendor")]:find(BEST, 1, true))
-      assert.truthy(Find("Market (net)|r|" .. ns.Money(2090 - 615.6)))
-      assert.truthy(Find("(" .. ns.Money(2180) .. " in mats)|r|" .. ns.Money(2071 - 107.25)))
+      assert.same({ "Vendor" }, BrightRows())
+      assert.truthy(Find("Market|r|" .. FADED .. ns.MoneyFaded(2090 - 615.6)))
+      assert.truthy(Find("Disenchant|r|" .. FADED .. ns.MoneyFaded(2071 - 107.25)))
     end)
 
     it("shows what a container you have opened gives on average, after the outlets", function()
@@ -344,7 +414,7 @@ describe("item tooltip lines", function()
       -- dust lists at 100, 95 after the cut: (30 + 4 × 95) / 2
       MarketWallDB.containers[CLAM] = { opens = 2, coin = 30, drops = { [DUST] = 4 } }
       ns.TooltipLines.Add(tooltip, CLAM)
-      assert.equal(Find("Vendor|r") + 1, Find("Opens to|r " .. GREY .. "avg (2 opened)|r|" .. ns.Money(205)))
+      assert.equal(Find("Vendor|r") + 1, Find("  " .. FADED .. "Opens to avg (2 opened)|r|" .. FADED .. ns.MoneyFaded(205)))
 
       tooltip = NewTooltip()
       ns.TooltipLines.Add(tooltip, ID)   -- never opened
@@ -354,25 +424,28 @@ describe("item tooltip lines", function()
     it("leaves out the vendor row without a vendor price and the disenchant rows for an item that can't be", function()
       Item(ID, "Potion", { quality = UNCOMMON, level = 18, classID = CONSUMABLE })
       Wall(ID, 500)
+      shift = true
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(Find("Market (net)"))
+      assert.truthy(Find("Market|r"))
       assert.is_nil(Find("Vendor"))
-      assert.is_nil(Find("Disenchant (net)"))
-      assert.is_nil(Find("odds:"))
+      assert.is_nil(Find("Disenchant"))
     end)
 
-    it("keeps the breakdown when a material has no price yet", function()
+    it("keeps the materials when one has no price yet", function()
       ns.R().days[SHARD] = nil
+      shift = true
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(Find("materials not scanned"))
-      assert.truthy(Find("Shard"))
+      assert.truthy(Find("Disenchant|r|" .. FADED .. "materials not scanned|r"))
+      assert.truthy(Find("5% Shard|r|" .. DIM .. "-|r"))
     end)
 
-    it("shows each material's quantity, chance and wall", function()
+    it("shows each material's chance, plain name and wall, without its quantity", function()
+      shift = true
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(Find("  Dust|" .. "|cffa3acac2.5× · 75%|r " .. ns.Money(100)))
-      assert.truthy(Find("  Essence|" .. "|cffa3acac1.5× · 20%|r " .. ns.Money(1000)))
-      assert.truthy(Find("  Shard|" .. "|cffa3acac1× · 5%|r " .. ns.Money(2000)))
+      assert.truthy(Find("      " .. DIM .. "75% Dust|r|" .. DIM .. ns.MoneyFaded(100) .. "|r"))
+      assert.truthy(Find("      " .. DIM .. "20% Essence|r|" .. DIM .. ns.MoneyFaded(1000) .. "|r"))
+      assert.truthy(Find("      " .. DIM .. "5% Shard|r|" .. DIM .. ns.MoneyFaded(2000) .. "|r"))
+      assert.is_nil(Find("×"))
     end)
 
     it("sorts materials by chance, most likely first", function()
@@ -380,12 +453,13 @@ describe("item tooltip lines", function()
         return { { id = SHARD, chance = 0.05, quantity = 1 }, { id = DUST, chance = 0.75, quantity = 2.5 },
           { id = ESSENCE, chance = 0.2, quantity = 1.5 } }, "classic table"
       end
+      shift = true
       ns.TooltipLines.Add(tooltip, ID)
-      assert.is_true(Find("  Dust|") < Find("  Essence|"))
-      assert.is_true(Find("  Essence|") < Find("  Shard|"))
+      assert.is_true(Find("% Dust|") < Find("% Essence|"))
+      assert.is_true(Find("% Essence|") < Find("% Shard|"))
     end)
 
-    it("skips materials under 1% and names Forever's estimate", function()
+    it("skips materials under 1%", function()
       -- Forever's new level 60 rare: 99.5% Large Brilliant Shard, 0.5% Nexus Crystal
       local NEW_RARE, BRILLIANT, NEXUS = 200001, 14344, 20725
       Item(NEW_RARE, "Rare", { quality = 3, level = 60, classID = ARMOR })
@@ -393,22 +467,23 @@ describe("item tooltip lines", function()
       Item(NEXUS, "Nexus", { classID = 7 })
       Wall(BRILLIANT, 3000)
       Wall(NEXUS, 9000)
+      shift = true
       ns.TooltipLines.Add(tooltip, NEW_RARE)
-      assert.truthy(Find("1× · 99.5%"))
+      assert.truthy(Find("99.5% Brilliant"))
       assert.is_nil(Find("Nexus"))
-      assert.truthy(Find("odds: Forever estimate"))
     end)
 
-    it("names your own disenchants as the source once there are enough", function()
+    it("reads the chances from your own disenchants once there are enough", function()
       local key = ns.DisenchantLog.SampleKey(ID, UNCOMMON, 18, ARMOR, false)
       MarketWallDB.disenchants = { samples = { [key] = { count = 25, materials = { [DUST] = { hits = 25, total = 50 } } } } }
+      shift = true
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(Find("odds: your 25 disenchants"))
-      assert.truthy(Find("2× · 100%"))
+      assert.truthy(Find("100% Dust"))
     end)
 
     it("shows no normal range or cheapest / dearest time", function()
       SeedWalls(400, 500, 600, 500, 450, 550, 500)
+      shift = true
       ns.TooltipLines.Add(tooltip, ID)
       assert.truthy(Find("Against median"))
       assert.is_nil(Find("Normal range"))
@@ -417,7 +492,6 @@ describe("item tooltip lines", function()
 
     describe("conversions", function()
       local IRON_ORE, IRON_BAR = 2772, 3575
-      local TAGGED = " |cff4fc36b" .. BEST   -- a label's green best tag
 
       local function InStack(count)
         _G.C_Container = { GetContainerItemInfo = function() return { itemID = IRON_ORE, stackCount = count } end }
@@ -430,37 +504,44 @@ describe("item tooltip lines", function()
         Wall(IRON_ORE, 400)   -- 380 after the cut, less a 15c deposit: 365
       end)
 
-      it("lists the conversion after the outlets, then the stack at its net as bars when it is best", function()
+      it("lists Make after the outlets, bright when it pays most, then the stack at its net as bars", function()
         Wall(IRON_BAR, 600)   -- 570 after the cut, less a 30c deposit: 540 per ore
         InStack(20)
         ns.TooltipLines.Add(tooltip, IRON_ORE)
-        local order = { " ", "Vendor|r", "Market (net)|r",
-          "As Iron Bar (net)|r" .. TAGGED .. " " .. GREY .. "· 1 ore → 1 bar|r|" .. ns.Money(540),
-          "Stack of 20 (as bars)|r|" .. ns.Money(540 * 20) }
-        for i, text in ipairs(order) do
-          assert.truthy(tooltip.lines[i]:find(text, 1, true), text)
-        end
-        assert.is_nil(tooltip.lines[Find("Market (net)")]:find(BEST, 1, true))
+        AssertLines({ " ", "MarketWall|r|" .. HINT .. "Shift: details", "Only 1 day", "Market|r", "Vendor|r",
+          "  " .. BRIGHT .. "Make Iron Bar|r|" .. WHITE .. ns.Money(540) .. "|r",
+          "Stack of 20 (as bars)|r|" .. FADED .. ns.MoneyFaded(540 * 20) })
+        assert.same({ "Make Iron Bar" }, BrightRows())
       end)
 
-      it("leaves the best tag and the stack on the market when bars net less", function()
+      it("shows the recipe under the Make row only while Shift is held", function()
+        ns.TooltipLines.Add(tooltip, IRON_ORE)
+        assert.is_nil(Find("ore → "))
+
+        shift = true
+        tooltip = NewTooltip()
+        ns.TooltipLines.Add(tooltip, IRON_ORE)
+        assert.equal(Find("Make Iron Bar|r") + 1, Find("      " .. DIM .. "1 ore → 1 bar|r|"))
+      end)
+
+      it("leaves the market bright and the stack on it when bars net less", function()
         Wall(IRON_BAR, 300)   -- 255 per ore
         InStack(20)
         ns.TooltipLines.Add(tooltip, IRON_ORE)
-        assert.truthy(tooltip.lines[Find("Market (net)")]:find(BEST, 1, true))
-        assert.truthy(Find("As Iron Bar (net)|r " .. GREY .. "· 1 ore → 1 bar|r|" .. ns.Money(255)))
-        assert.truthy(Find("Stack of 20|r|" .. ns.Money(365 * 20)))
+        assert.same({ "Market" }, BrightRows())
+        assert.truthy(Find("Make Iron Bar|r|" .. FADED .. ns.MoneyFaded(255)))
+        assert.truthy(Find("Stack of 20|r|" .. FADED .. ns.MoneyFaded(365 * 20)))
         assert.is_nil(Find("as bars"))
       end)
 
-      it("notes a thin product market and keeps it from the best tag and the stack", function()
+      it("notes a thin product market and keeps it from the bright row and the stack", function()
         Wall(IRON_BAR, 600)   -- 540 per ore, above the ore's 365, but no real supply behind it
         ns.R().supplied[IRON_BAR] = nil
         InStack(20)
         ns.TooltipLines.Add(tooltip, IRON_ORE)
-        assert.truthy(Find("As Iron Bar (net)|r " .. GREY .. "· 1 ore → 1 bar (thin market)|r|" .. ns.Money(540)))
-        assert.truthy(tooltip.lines[Find("Market (net)")]:find(BEST, 1, true))
-        assert.truthy(Find("Stack of 20|r|" .. ns.Money(365 * 20)))
+        assert.truthy(Find("Make Iron Bar|r " .. FADED .. "(thin market)|r|" .. FADED .. ns.MoneyFaded(540)))
+        assert.same({ "Market" }, BrightRows())
+        assert.truthy(Find("Stack of 20|r|" .. FADED .. ns.MoneyFaded(365 * 20)))
       end)
 
       it("splits the product's net across the cloth it takes", function()
@@ -469,8 +550,10 @@ describe("item tooltip lines", function()
         Item(BOLT, "Bolt of Linen Cloth", { classID = 7 })
         Wall(LINEN, 10)
         Wall(BOLT, 100)   -- 95 after the cut, for 2 cloth
+        shift = true
         ns.TooltipLines.Add(tooltip, LINEN)
-        assert.truthy(Find("As Bolt of Linen Cloth (net)|r" .. TAGGED .. " " .. GREY .. "· 2 cloth → 1 bolt|r|" .. ns.Money(47.5)))
+        assert.truthy(Find("  " .. BRIGHT .. "Make Bolt of Linen Cloth|r|" .. WHITE .. ns.Money(47.5)))
+        assert.truthy(Find("2 cloth → 1 bolt"))
       end)
 
       it("takes 8 Dark Iron Ore for a bar", function()
@@ -479,16 +562,19 @@ describe("item tooltip lines", function()
         Item(DARK_BAR, "Dark Iron Bar", { classID = 7 })
         Wall(DARK_ORE, 900)
         Wall(DARK_BAR, 8000)   -- 7600 after the cut, for 8 ore
+        shift = true
         ns.TooltipLines.Add(tooltip, DARK_ORE)
-        assert.truthy(Find("As Dark Iron Bar (net)|r" .. TAGGED .. " " .. GREY .. "· 8 ore → 1 bar|r|" .. ns.Money(950)))
+        assert.truthy(Find("  " .. BRIGHT .. "Make Dark Iron Bar|r|" .. WHITE .. ns.Money(950)))
+        assert.truthy(Find("8 ore → 1 bar"))
       end)
 
-      it("keeps only a price in the right column of every outlet line, notes going on the left", function()
+      it("keeps only a price in the right column of every row, notes going on the left", function()
         local function AssertMoneyOnly()
           local checked = 0
           for _, line in ipairs(tooltip.doubles) do
-            if line.left:find("^|cfff5c518") or line.left:find("Stack of", 1, true) then
-              local leftover = line.right:gsub("%-?%d+|T[^|]+|t", ""):gsub(" ", "")
+            if line.left:find("^  " .. BRIGHT) or line.left:find("^  " .. FADED) then
+              local leftover = line.right:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+                :gsub("%-?%d+|T[^|]+|t", ""):gsub(" ", "")
               assert.equal("", leftover, line.left)
               checked = checked + 1
             end
@@ -498,29 +584,64 @@ describe("item tooltip lines", function()
 
         Wall(IRON_BAR, 600)
         InStack(20)
-        ns.TooltipLines.Add(tooltip, IRON_ORE)   -- Vendor, Market, As Iron Bar, Stack
+        ns.TooltipLines.Add(tooltip, IRON_ORE)   -- Market, Vendor, Make Iron Bar, Stack
         assert.equal(4, AssertMoneyOnly())
 
         Wall(ID, 500)
         ns.R().supplied[ID] = nil   -- thin market
         _G.C_Container = { GetContainerItemInfo = function() return { itemID = ID, stackCount = 5 } end }
         tooltip = NewTooltip({ GetSlotAndBagID = function() return 4, 0 end })
-        ns.TooltipLines.Add(tooltip, ID)   -- Vendor, Market, Disenchant, Stack
+        ns.TooltipLines.Add(tooltip, ID)   -- Market, Vendor, Disenchant, Stack
         assert.equal(4, AssertMoneyOnly())
 
         local CLAM = 5523
         Item(CLAM, "Clam", { classID = 15, vendor = 5 })
+        Wall(CLAM, 50)
         MarketWallDB.containers[CLAM] = { opens = 2, coin = 30, drops = { [DUST] = 4 } }
         tooltip = NewTooltip()
-        ns.TooltipLines.Add(tooltip, CLAM)   -- Vendor, Opens to
-        assert.equal(2, AssertMoneyOnly())
+        ns.TooltipLines.Add(tooltip, CLAM)   -- Market, Vendor, Opens to
+        assert.equal(3, AssertMoneyOnly())
       end)
 
-      it("says the product is not scanned without a wall for it, and leaves the best tag where it was", function()
+      it("says the product is not scanned without a wall for it, and leaves the market bright", function()
         ns.TooltipLines.Add(tooltip, IRON_ORE)
-        assert.truthy(Find("As Iron Bar (net)|r " .. GREY .. "· 1 ore → 1 bar|r|" .. GREY .. "Iron Bar not scanned|r"))
-        assert.truthy(tooltip.lines[Find("Market (net)")]:find(BEST, 1, true))
+        assert.truthy(Find("Make Iron Bar|r|" .. FADED .. "Iron Bar not scanned|r"))
+        assert.same({ "Market" }, BrightRows())
       end)
+    end)
+  end)
+
+  describe("Shift redraw", function()
+    local refreshes
+
+    before_each(function()
+      refreshes = 0
+      _G.TooltipDataProcessor = { AddTooltipPostCall = function() end }
+      _G.Enum = { TooltipDataType = { Item = 0, Unit = 2 } }
+      _G.GameTooltip = {
+        IsShown = function() return true end,
+        GetItem = function() return "Vest", "link" end,
+        RefreshData = function() refreshes = refreshes + 1 end,
+      }
+      _G.ItemRefTooltip = { IsShown = function() return false end }
+      ns.InitTooltip()
+    end)
+
+    after_each(function()
+      _G.TooltipDataProcessor, _G.Enum, _G.GameTooltip, _G.ItemRefTooltip = nil, nil, nil, nil
+    end)
+
+    it("redraws a shown item tooltip when either Shift goes down or up, and not for other keys", function()
+      Fire("MODIFIER_STATE_CHANGED", "LSHIFT", 1)
+      Fire("MODIFIER_STATE_CHANGED", "RSHIFT", 0)
+      Fire("MODIFIER_STATE_CHANGED", "LCTRL", 1)
+      assert.equal(2, refreshes)
+    end)
+
+    it("leaves a tooltip that shows no item alone", function()
+      _G.GameTooltip.GetItem = function() return nil end
+      Fire("MODIFIER_STATE_CHANGED", "LSHIFT", 1)
+      assert.equal(0, refreshes)
     end)
   end)
 end)
