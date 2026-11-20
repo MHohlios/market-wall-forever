@@ -7,6 +7,10 @@ ns.ui = ui
 
 local ROWS, ROW_H = 16, 20
 local PORTRAIT_CLEAR, TAB_BOTTOM = 58, 32   -- the Market tab row: past the portrait, its bottom on the status line
+-- The scan buttons sit at the right end of the status line, under the tabs. Views that open right under
+-- that line start CONTENT_DROP lower than the status line's own bottom so they stay clear of the buttons.
+local SCAN_BUTTONS_TOP, CONTENT_DROP = 33, 6
+local CONTENT_TOP = 50 + CONTENT_DROP
 local BUY, GAIN, WARN, GREY, LABEL = ns.COLOR.BUY, ns.COLOR.GAIN, ns.COLOR.WARN, ns.COLOR.GREY, ns.COLOR.LABEL
 
 local function MakeButton(parent, text, width)
@@ -712,6 +716,7 @@ end
 ns.widgets = {
   MakeButton = MakeButton, MakeText = MakeText, MakeEdit = MakeEdit, ShowTip = ShowTip, HideTip = HideTip,
   OnLinkInsert = OnLinkInsert, CreateList = CreateList, MakeTabRow = MakeTabRow, SelectTab = SelectTab, FitText = FitText, CreateChart = CreateChart, ShowMenu = ShowMenu, Prompt = Prompt, ListHeight = function(rows) return 22 + rows * ROW_H end,
+  CONTENT_DROP = CONTENT_DROP,
 }
 
 -------------------------------------------------------------------------------
@@ -1258,7 +1263,7 @@ local function Build()
   }, ui.Show)
 
   ui.fullButton = MakeButton(f, "Full scan", 116)
-  ui.fullButton:SetPoint("TOPRIGHT", -8, -6)
+  ui.fullButton:SetPoint("TOPRIGHT", -8, -SCAN_BUTTONS_TOP)
   ui.fullButton:SetScript("OnClick", function() ns.StartFullScan() end)
   ui.fullButton:SetMotionScriptsWhileDisabled(true)
   ui.fullButton:SetScript("OnEnter", function(self)
@@ -1274,22 +1279,22 @@ local function Build()
   end)
   scan:SetScript("OnLeave", HideTip)
 
-  -- status line with a progress bar behind it
+  -- status line with a progress bar behind it, ending before the scan buttons
   ui.bar = CreateFrame("StatusBar", nil, f)
-  ui.bar:SetPoint("TOPLEFT", 8, -32)
-  ui.bar:SetPoint("TOPRIGHT", -8, -32)
+  ui.bar:SetPoint("LEFT", f, "TOPLEFT", 8, -SCAN_BUTTONS_TOP - 11)
+  ui.bar:SetPoint("RIGHT", scan, "LEFT", -8, 0)
   ui.bar:SetHeight(14)
   ui.bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
   ui.bar:SetStatusBarColor(0.96, 0.77, 0.09, 0.35)
   ui.bar:SetMinMaxValues(0, 1)
   ui.bar:Hide()
   ui.status = MakeText(f, "GameFontHighlightSmall", "LEFT")
-  ui.status:SetPoint("TOPLEFT", 12, -33)
-  ui.status:SetPoint("TOPRIGHT", -12, -33)
+  ui.status:SetPoint("LEFT", f, "TOPLEFT", 12, -SCAN_BUTTONS_TOP - 11)
+  ui.status:SetPoint("RIGHT", scan, "LEFT", -12, 0)
   ui.status:SetWordWrap(false)
 
   ui.list = CreateList(f)
-  ui.list:SetPoint("TOPLEFT", 0, -50)
+  ui.list:SetPoint("TOPLEFT", 0, -CONTENT_TOP)
   ui.list:SetPoint("RIGHT")
   ui.list:SetHeight(22 + ROWS * ROW_H)
   ui.list.onClick = function(entry) ui.ShowItem(entry.id) end
@@ -1337,7 +1342,7 @@ local function Build()
   ui.bait = ns.BuildBaitPage(f)
   ui.bait:Hide()
   -- clicking a pattern opens its item page, which loads its live listings; buying stays a press
-  ui.crafting = ns.CraftingView.Build(f, { top = -50, onPattern = ui.ShowItem })
+  ui.crafting = ns.CraftingView.Build(f, { top = -CONTENT_TOP, onPattern = ui.ShowItem })
   ui.crafting:Hide()
 
   -- item names and icons arrive late; redraw at most twice a second while that happens.

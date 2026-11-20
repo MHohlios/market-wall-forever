@@ -197,6 +197,11 @@ describe("Crafting view", function()
         Plain(V.StatusText("Tailoring", nil, nil, nil)))
     end)
 
+    it("leaves the rank out when the window was never read", function()
+      assert.equal("Tailoring · Open your profession window once to read your recipes. · no full scan yet",
+        Plain(V.StatusText("Tailoring", 0, nil, nil)))
+    end)
+
     it("gives the rank, the recipes known and the age of the read and the prices", function()
       local known = { rank = 236, maxRank = 300, t = os.time() - 7200, recipes = { [SHIRT] = {}, [BAG] = {} } }
       assert.equal("Tailoring 236/300 · 2 recipes known (read from your profession window 2h ago) · prices from the full scan 2h ago",
