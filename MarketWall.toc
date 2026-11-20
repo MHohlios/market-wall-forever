@@ -36,6 +36,7 @@ BaitUI.lua
 MobsView.lua
 LedgerView.lua
 SessionsView.lua
+CraftingView.lua
 Search.lua
 Minimap.lua
 SessionTracker.lua
