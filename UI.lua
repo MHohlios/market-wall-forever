@@ -183,9 +183,10 @@ local function MenuButton(i)
   return button
 end
 
--- A menu at the cursor. items: { { text =, onClick = }, ... }; an item with no onClick is a
--- heading, or greyed out when disabled is set. It closes on a choice, on Escape, or once the
--- mouse has been off it for a moment.
+-- A menu at the cursor. items: { { text =, onClick =, color = }, ... }; an item with no onClick
+-- is a heading, or greyed out when disabled is set; color (an ns.COLOR code) tints a choice, such
+-- as red for one that deletes. It closes on a choice, on Escape, or once the mouse has been off
+-- it for a moment.
 local function ShowMenu(items)
   if not menu then
     menu = CreateFrame("Frame", "MarketWallMenu", UIParent)
@@ -211,7 +212,7 @@ local function ShowMenu(items)
     local button = menu.buttons[i] or MenuButton(i)
     menu.buttons[i] = button
     button.item = item
-    local color = (item.disabled and GREY) or (not item.onClick and LABEL) or ""
+    local color = (item.disabled and GREY) or (not item.onClick and LABEL) or item.color or ""
     button.text:SetText(color .. item.text .. (color ~= "" and "|r" or ""))
     button:SetEnabled(item.onClick ~= nil and not item.disabled)
     button:Show()
@@ -262,6 +263,65 @@ StaticPopupDialogs["MARKETWALL_PROMPT"] = {
 -- Asks for a line of text, starting from initial; onAccept(text) gets it trimmed, never empty
 local function Prompt(question, initial, onAccept)
   StaticPopup_Show("MARKETWALL_PROMPT", question, nil, { initial = initial, onAccept = onAccept })
+end
+
+StaticPopupDialogs["MARKETWALL_CONFIRM"] = {
+  text = "%s",
+  button2 = CANCEL,
+  OnAccept = function(_, data) data.onAccept() end,
+  timeout = 0,
+  whileDead = true,
+  hideOnEscape = true,
+}
+
+-- Asks before something that cannot be undone: the question, a grey line on what it means, and
+-- an accept button named for the action. onAccept() runs only on that button.
+local function Confirm(question, detail, accept, onAccept)
+  StaticPopupDialogs.MARKETWALL_CONFIRM.button1 = accept
+  StaticPopup_Show("MARKETWALL_CONFIRM", question .. "\n\n" .. GREY .. detail .. "|r", nil, { onAccept = onAccept })
+end
+
+-------------------------------------------------------------------------------
+-- Dropdown button and placeholder text
+-------------------------------------------------------------------------------
+
+-- A button that reads as a dropdown: a dark box, its text on the left, an arrow on the right.
+-- Set its OnClick to show a menu; dropdown:SetLabel(text) sets the text.
+local function MakeDropdown(parent, width)
+  local dropdown = CreateFrame("Button", nil, parent)
+  dropdown:SetSize(width, 22)
+  local edge = dropdown:CreateTexture(nil, "BACKGROUND", nil, 0)
+  edge:SetAllPoints()
+  edge:SetColorTexture(0.42, 0.35, 0.23, 1)
+  local bg = dropdown:CreateTexture(nil, "BACKGROUND", nil, 1)
+  bg:SetPoint("TOPLEFT", 1, -1)
+  bg:SetPoint("BOTTOMRIGHT", -1, 1)
+  bg:SetColorTexture(0, 0, 0, 0.85)
+  dropdown:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+  local arrow = dropdown:CreateTexture(nil, "ARTWORK")
+  arrow:SetTexture("Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up")
+  arrow:SetSize(20, 20)
+  arrow:SetPoint("RIGHT", 1, 0)
+  dropdown.text = MakeText(dropdown, "GameFontHighlightSmall")
+  dropdown.text:SetPoint("LEFT", 8, 0)
+  dropdown.text:SetPoint("RIGHT", arrow, "LEFT", -2, 0)
+  dropdown.text:SetWordWrap(false)
+  function dropdown:SetLabel(text) self.text:SetText(text) end
+  return dropdown
+end
+
+-- Grey text inside an empty edit box, saying what to type; it hides while the box has focus or text
+local function SetPlaceholder(box, text)
+  local placeholder = MakeText(box, "GameFontDisableSmall")
+  placeholder:SetPoint("LEFT", 2, 0)
+  placeholder:SetPoint("RIGHT", -4, 0)
+  placeholder:SetWordWrap(false)
+  placeholder:SetText(text)
+  local function Update() placeholder:SetShown(box:GetText() == "" and not box:HasFocus()) end
+  box:HookScript("OnTextChanged", Update)
+  box:HookScript("OnEditFocusGained", Update)
+  box:HookScript("OnEditFocusLost", Update)
+  Update()
 end
 
 -------------------------------------------------------------------------------
@@ -824,7 +884,8 @@ local function CreateChart(parent)
 end
 ns.widgets = {
   MakeButton = MakeButton, MakeText = MakeText, MakeEdit = MakeEdit, ShowTip = ShowTip, HideTip = HideTip,
-  OnLinkInsert = OnLinkInsert, CreateList = CreateList, ShortAge = ShortAge, MakeTabRow = MakeTabRow, SelectTab = SelectTab, MakeSwitch = MakeSwitch, FitText = FitText, CreateChart = CreateChart, ShowMenu = ShowMenu, Prompt = Prompt, ListHeight = function(rows) return 22 + rows * ROW_H end,
+  OnLinkInsert = OnLinkInsert, CreateList = CreateList, ShortAge = ShortAge, MakeTabRow = MakeTabRow, SelectTab = SelectTab, MakeSwitch = MakeSwitch, FitText = FitText, CreateChart = CreateChart, ShowMenu = ShowMenu, Prompt = Prompt, Confirm = Confirm,
+  MakeDropdown = MakeDropdown, SetPlaceholder = SetPlaceholder, ListHeight = function(rows) return 22 + rows * ROW_H end,
   CONTENT_DROP = CONTENT_DROP,
 }
 

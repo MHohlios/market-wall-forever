@@ -21,10 +21,6 @@ local MATCHES, RECENT = 8, 10
 local WIDTH, HEIGHT, SIDE_WIDTH, MAIN_X = 760, 460, 180, 210
 local SIDE_ROWS, ROW_HEIGHT, LISTING_LINES = 20, 16, 5
 local TABS_X, TABS_BOTTOM = 96, 32   -- after the heading; the views start just below
-local CELLS = {
-  "current", "rangeMin", "rangeMax", "rangeAverage", "rangeMedian", "rangeTrend", "rangePoints", "normalRange",
-  "vendor", "disenchant", "limits",
-}
 local GREY, LABEL = ns.COLOR.GREY, ns.COLOR.LABEL
 
 -------------------------------------------------------------------------------
@@ -266,10 +262,7 @@ local function Build()
     f.box:ClearFocus()
     Select(id)
   end)
-  local hint = w.MakeText(items, "GameFontDisableSmall")
-  hint:SetPoint("BOTTOMLEFT", 14, 12)
-  hint:SetWidth(SIDE_WIDTH)
-  hint:SetText("Type a name, or shift-click any item link.")
+  w.SetPlaceholder(f.box, "Item name, or shift-click a link")
 
   f.pick = w.MakeText(items, "GameFontDisable", "CENTER")
   f.pick:SetPoint("TOPLEFT", MAIN_X, -180)
@@ -288,8 +281,10 @@ local function Build()
   f.title:SetWordWrap(false)
 
   local mainWidth = WIDTH - MAIN_X - 14
-  f.view = PV.CreateView(f.item, { width = mainWidth, chartHeight = 124, cellWidth = mainWidth / 4, cells = CELLS, ranges = true })
-  f.view:SetPoint("TOPLEFT")
+  -- the 7 days / 30 days / All switch sits on the title row, at its right
+  local function OnTitleRow(switch) switch:SetPoint("RIGHT", f.item, "TOPRIGHT", 0, -13) end
+  f.view = PV.CreateView(f.item, { width = mainWidth, chartHeight = 124, ranges = true, placeRanges = OnTitleRow })
+  f.view:SetPoint("TOPLEFT", 0, -28)
 
   f.watch = w.MakeButton(f.item, "Add to watchlist", 130)
   f.watch:SetPoint("TOPLEFT", f.view, "BOTTOMLEFT", 0, -6)

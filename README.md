@@ -88,8 +88,9 @@ average, once you have opened some, when that beats selling it unopened. Hoverin
 container shows "Opens to" with that average and how many you opened. Farm sessions keep
 counting a container at its sell value, since they count its contents when you open it.
 
-The search window's **Mobs** switch lists every recorded mob, sorted by median per kill
-under the Optimal, Market or Vendor lens, with a name filter. Click a mob for its drop
+The search window's **Mobs** view lists every recorded mob, sorted by its median value per
+kill under the Optimal, Market or Vendor lens, with its average and top drop, and a name
+filter. Hover a Per kill value for the average without rare drops. Click a mob for its drop
 table. Settings has a Mob values group: disenchanting and skinning in Optimal (Auto, On,
 Off), the rare drop threshold and the kills before values are reliable. The Mobs view added
 `MobsView.lua`, so restart the game once after updating to it.
@@ -109,10 +110,20 @@ its value earned at current prices and at the moment it ended, coins looted, gap
 Right-click an activity to rename it, merge it into another, or unmerge a member; groups
 apply to every session.
 
-The **Ledger** view charts your gold and lists income and spending by source for a week
-or a month, for this character or all of them. Gold changes it can't attribute go to
-Other, so it always matches your gold. Settings has the Salvager and Salvager bonus rows
-under Disenchant; Reset to defaults keeps them, as they were imported once from Disenchantry.
+Right-click a session, or click the "..." at the end of its row, to change its label,
+merge it into a neighbouring session or another with its label, set its running time (for
+a session left running by mistake) or delete it. Merging adds the two sessions' times and
+loot under the target's label, from the earlier start. Delete asks first. Neither touches
+the Ledger or Mobs, which keep their own records. While a session is open, its menu offers
+Pause or Resume and Stop instead. "Rename a label..." in the label dropdown renames every
+session with that label, so two labels for the same farm become one.
+
+The **Ledger** view sums up income, spending and net for a week or a month, for this
+character or all of them, shows each day's net gold as a bar, and lists income and
+spending by source. Gold changes it can't attribute go to Other, and gold that changed
+while MarketWall wasn't running to Unrecorded, so it always matches your gold. Settings
+has the Salvager and Salvager bonus rows under Disenchant; Reset to defaults keeps them, as
+they were imported once from Disenchantry.
 
 These views added `LedgerView.lua`, `SessionsView.lua` and `SessionTracker.lua`, and the
 recording added `Ledger.lua`, `Quests.lua` and `Sessions.lua`, so restart the game once

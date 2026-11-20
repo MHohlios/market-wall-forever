@@ -11,13 +11,12 @@ local LIST_ROWS = 16
 local GREY, WARN = ns.COLOR.GREY, ns.COLOR.WARN
 
 local MOB_COLUMNS = {
-  { "Mob", 196, nil, "Every mob you, your pet or your party killed. Click a row for its drop table." },
-  { "Kills", 50, "RIGHT", "Kills whose loot was seen: looted, or empty at 0c. Kills someone else looted are left out, as they are from the values." },
-  { "Median / kill", 90, "RIGHT", "The typical kill under the chosen lens. Kills someone else looted are left out; empty corpses count as 0c.", money = true },
-  { "Average / kill", 90, "RIGHT", "The long-run value per kill under the chosen lens. Well above the median means rare drops carry the value.", money = true },
-  { "Without rare", 90, "RIGHT", "Average per kill leaving out drops seen in fewer kills than the rare drop threshold.", money = true },
-  { "Top drop", 160, nil, "The drop that adds the most value, and the share of kills it drops in." },
-  { "Unpriced", 60, "RIGHT", "Drops with no market price yet. They count as 0c in Market until a scan prices them." },
+  { "Mob", 230, nil, "Every mob you, your pet or your party killed. Click a row for its drop table." },
+  { "Kills", 60, "RIGHT", "Kills whose loot was seen: looted, or empty at 0c. Kills someone else looted are left out, as they are from the values." },
+  { "Per kill", 100, "RIGHT", "The typical kill, the median, under the chosen lens. Kills someone else looted are left out; empty corpses count as 0c. Hover a value for the average without rare drops.",
+    money = true, answer = true, cellTip = true },
+  { "Average", 100, "RIGHT", "The long-run value per kill under the chosen lens. Well above the median means rare drops carry the value.", money = true, grey = true },
+  { "Top drop", 246, nil, "The drop that adds the most value, and the share of kills it drops in. An orange note counts drops with no market price yet: they count as 0c in Market until a scan prices them." },
 }
 local DROP_COLUMNS = {
   { "Item", 230, nil, "Each item this mob dropped, the most value per kill first." },
@@ -75,21 +74,34 @@ local function Rough(row, reliableKills)
   return row.median ~= nil and row.kills < reliableKills
 end
 
--- Display cells for a mob row, money as copper for the list to format. An unknown mob's name is
--- grey; a mob with no seen kill has no values and a grey count.
+-- Display cells for a mob row, money as copper for the list to format: Mob, Kills, Per kill,
+-- Average, Top drop. An unknown mob's name is grey; a mob with no seen kill has no values and
+-- a grey count.
 function V.MobCells(row)
   local name = row.unknown and (GREY .. row.name .. "|r") or row.name
   if not row.median then
-    return { name, GREY .. row.kills .. "|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r", "" }
+    return { name, GREY .. row.kills .. "|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r" }
   end
-  local top = row.top and (ns.ColorName(row.top.id) .. " " .. ns.ShareText(row.top.share)) or GREY .. "-|r"
-  local unpriced = row.unpriced > 0 and tostring(row.unpriced) or (GREY .. "0|r")
-  return { name, tostring(row.kills), row.median, row.average, row.withoutRare, top, unpriced }
+  return { name, tostring(row.kills), row.median, row.average, row.top and ns.ColorName(row.top.id) or GREY .. "-|r" }
 end
 
 -- The orange note after a mob's name while its values are rough, like a low-data item's
 function V.MobSuffix(row, reliableKills)
   if Rough(row, reliableKills) then return WARN .. " · " .. row.kills .. (row.kills == 1 and " kill|r" or " kills|r") end
+end
+
+-- What follows the top drop's name and stays visible when the name is cut short: its share of
+-- kills in grey, then an orange note when some drops have no market price yet
+function V.TopSuffix(row)
+  if not row.median then return nil end
+  local share = row.top and (" " .. GREY .. ns.ShareText(row.top.share) .. "|r") or ""
+  local unpriced = row.unpriced > 0 and (WARN .. " · " .. row.unpriced .. " unpriced|r") or ""
+  if share .. unpriced ~= "" then return share .. unpriced end
+end
+
+-- The Per kill cell's hover: the average leaving out rare drops
+function V.PerKillTip(row)
+  if row.withoutRare then return "Average without rare drops: " .. ns.Money(row.withoutRare) end
 end
 
 -- The hover for a mob row whose values are rough, nil otherwise
@@ -104,7 +116,7 @@ end
 
 -- Raw values per column, for sorting by a header
 function V.MobSortValues(row)
-  return { row.name, row.kills, row.median, row.average, row.withoutRare, row.top and row.top.share, row.unpriced }
+  return { row.name, row.kills, row.median, row.average, row.top and row.top.share }
 end
 
 function V.DropSortValues(drop)
@@ -138,29 +150,23 @@ function V.Build(parent)
   panel.lens = "optimal"
   panel.npc = nil   -- the mob whose drop table is open
 
-  panel.lensButtons = {}
-  local previous
-  for i, lens in ipairs(V.LENSES) do
-    local button = w.MakeButton(panel, lens.label, 72)
-    if previous then button:SetPoint("LEFT", previous, "RIGHT", 4, 0) else button:SetPoint("TOPLEFT", 12, -34) end
-    button:SetScript("OnClick", function()
-      panel.lens = lens.key
-      panel.list.offset = 0
-      panel:Refresh()
-    end)
-    panel.lensButtons[i] = button
-    previous = button
-  end
+  local lensLabel = w.MakeText(panel, "GameFontDisableSmall")
+  lensLabel:SetPoint("TOPLEFT", 14, -40)
+  lensLabel:SetText("Value by")
+  panel.lensSwitch = w.MakeSwitch(panel, V.LENSES, function(key)
+    panel.lens = key
+    panel.list.offset = 0
+    panel:Refresh()
+  end)
+  panel.lensSwitch:SetPoint("LEFT", lensLabel, "RIGHT", 4, 0)
 
-  panel.filter = w.MakeEdit(panel, 160)
+  panel.filter = w.MakeEdit(panel, 220)
   panel.filter:SetPoint("TOPRIGHT", -16, -35)
   panel.filter:SetScript("OnTextChanged", function()
     panel.list.offset = 0
     panel:Refresh()
   end)
-  local filterLabel = w.MakeText(panel, "GameFontDisableSmall", "RIGHT")
-  filterLabel:SetPoint("RIGHT", panel.filter, "LEFT", -10, 0)
-  filterLabel:SetText("Search")
+  w.SetPlaceholder(panel.filter, "Search mobs")
 
   panel.back = w.MakeButton(panel, "Back to mobs", 110)
   panel.back:SetPoint("TOPLEFT", 12, -34)
@@ -204,9 +210,9 @@ function V.Build(parent)
 
   function panel:Refresh()
     local dropTable = self.npc ~= nil
-    for _, button in ipairs(self.lensButtons) do button:SetShown(not dropTable) end
+    lensLabel:SetShown(not dropTable)
+    self.lensSwitch:SetShown(not dropTable)
     self.filter:SetShown(not dropTable)
-    filterLabel:SetShown(not dropTable)
     self.back:SetShown(dropTable)
     self.title:SetShown(dropTable)
     if dropTable then
@@ -220,18 +226,17 @@ function V.Build(parent)
       self.hint:SetText("Values are for one unit, at current prices.")
       return
     end
-    for i, button in ipairs(self.lensButtons) do
-      if V.LENSES[i].key == self.lens then button:LockHighlight() else button:UnlockHighlight() end
-    end
+    self.lensSwitch:Select(self.lens)
     local reliableKills = ns.Cfg("mobMinKills")
     local data = {}
     for _, row in ipairs(V.Rows(ns.Mobs.All(), self.lens, self.filter:GetText())) do
       data[#data + 1] = { npc = row.npc, cells = V.MobCells(row), sort = V.MobSortValues(row),
-        suffixes = { V.MobSuffix(row, reliableKills) }, tip = V.MobTip(row, reliableKills) }
+        suffixes = { V.MobSuffix(row, reliableKills), [5] = V.TopSuffix(row) }, cellTips = { [3] = V.PerKillTip(row) },
+        tip = V.MobTip(row, reliableKills) }
     end
     local empty = next(MarketWallDB.mobs) and "No recorded mob matches." or "No kills recorded yet. Loot what you kill and each mob's value shows here."
     Show(MOB_COLUMNS, data, self.sorts.mobs, empty)
-    self.hint:SetText("Click a mob for its drop table. Hover a column title for what it means.")
+    self.hint:SetText("Click a mob for its drop table. Hover Per kill for the average without rare drops.")
   end
 
   return panel

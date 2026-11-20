@@ -78,6 +78,7 @@ describe("Sessions view", function()
       local s = Farm()
       assert.equal("|cffa3acacstill open|r", V.Stats(S.Report(s, Price, Name, T0 + 60), "optimal")[2][2])
       S.StopAt(s, T0 + 3600)
+      assert.equal("|cffa3acac-|r", V.Stats(S.Report(s, Price, Name, T0 + 9999), "optimal")[2][2])   -- none kept, as after some merges
       s.ended = { optimal = 777, market = 0, vendor = 0 }
       s.gaps = { { T0, 700 }, { T0, 900 } }
       local stats = V.Stats(S.Report(s, Price, Name, T0 + 9999), "optimal")
@@ -107,7 +108,7 @@ describe("Sessions view", function()
       assert.equal(3, #entries)
       assert.equal(list[4], entries[1].session)
       assert.equal(list[1], entries[3].session)
-      assert.same({ "Tanaris turtles", "1:00:00", 1000, 1000 },
+      assert.same({ "Tanaris turtles", "1 h", 1000, 1000 },
         { entries[1].cells[1], entries[1].cells[3], entries[1].cells[4], entries[1].cells[5] })
       assert.equal(4, #V.HistoryEntries(list, nil, Value, T0 + 1e5))
     end)
@@ -123,6 +124,58 @@ describe("Sessions view", function()
     it("offers the most recently used labels first, each once", function()
       assert.same({ "Tanaris turtles", "Felwood herbs" }, V.RecentLabels(list, 5))
       assert.same({ "Tanaris turtles" }, V.RecentLabels(list, 1))
+    end)
+
+    it("lists every label with its number of runs for the dropdown", function()
+      assert.same({ { label = "Felwood herbs", runs = 1 }, { label = "Tanaris turtles", runs = 3 } }, V.LabelChoices(list))
+      assert.equal(" · 1 run", addon.Plain(V.RunsText(1)))
+      assert.equal(" · 3 runs", addon.Plain(V.RunsText(3)))
+    end)
+  end)
+
+  describe("session menu", function()
+    local function Kinds(choices)
+      local kinds = {}
+      for i, choice in ipairs(choices) do kinds[i] = choice.kind end
+      return kinds
+    end
+
+    local function Stopped(label, start, seconds)
+      local s = ns.Sessions.New(label, "c", start)
+      ns.Sessions.StopAt(s, start + seconds)
+      return s
+    end
+
+    it("offers relabelling, merging, a new duration and deleting for a stopped session", function()
+      local older, newer = Stopped("Farm Turt", T0, 32 * 60), Stopped("Farm Turtle v2", T0 + 1e4, 44 * 60)
+      local choices = V.MenuChoices({ older, newer }, older)
+      assert.same({ "label", "merge", "duration", "delete" }, Kinds(choices))
+      assert.equal(newer, choices[2].target)
+      assert.matches("^Merge into Farm Turtle v2 · ", addon.Plain(choices[2].text))
+    end)
+
+    it("offers pause or resume and stop instead of delete while a session is open", function()
+      local open = ns.Sessions.New("Farm", "c", T0)
+      assert.same({ "label", "pause", "stop" }, Kinds(V.MenuChoices({ open }, open)))
+      ns.Sessions.PauseAt(open, T0 + 60)
+      assert.same({ "label", "resume", "stop" }, Kinds(V.MenuChoices({ open }, open)))
+    end)
+
+    it("says what a delete removes and what it keeps", function()
+      local s = Stopped("Farm Turt", T0, 32 * 60)
+      local question, detail = V.DeleteText(s, 44200)
+      assert.equal("Delete the session \"Farm Turt\" from " .. date("%b %d, %H:%M", T0) .. "?", question)
+      assert.equal("Its 32 min and 4g 42s of loot leave Sessions. The Ledger and Mobs keep their records.", addon.Plain(detail))
+    end)
+
+    it("reads a typed duration as minutes or hours:minutes", function()
+      assert.same({ 2640, 4320, 4320 }, { V.ParseDuration("44"), V.ParseDuration("1:12"), V.ParseDuration("72") })
+      assert.is_nil(V.ParseDuration("0"))
+      assert.is_nil(V.ParseDuration("an hour"))
+      assert.is_nil(V.ParseDuration("1:5"))
+      assert.is_nil(V.ParseDuration("0:00"))
+      assert.is_nil(V.ParseDuration("1:75"))
+      assert.equal(3540, V.ParseDuration("0:59"))
     end)
   end)
 end)

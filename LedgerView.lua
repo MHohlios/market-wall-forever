@@ -1,13 +1,14 @@
--- MarketWall: the Ledger view of the search window. Gold over time, and income and spending by
--- source for one week or month, for this character or all of them. Reads Ledger.lua's roll-ups.
+-- MarketWall: the Ledger view of the search window. For one week or month, for this character
+-- or all of them: income, spending and net, each day's net gold as a bar, and income and
+-- spending by source. Reads Ledger.lua's roll-ups, and its raw entries for the daily bars.
 local _, ns = ...
 local Ledger = ns.Ledger
 
 local L = {}
 ns.LedgerView = L
 
-local TABLE_ROWS, TABLE_WIDTH, CHART_HEIGHT, GUTTER = 9, 362, 110, 66
-local GREY = ns.COLOR.GREY
+local TABLE_ROWS, TABLE_WIDTH, BARS_HEIGHT, BAR_GAP = 9, 362, 56, 4
+local GREY, WARN, GAIN, LOSS = ns.COLOR.GREY, ns.COLOR.WARN, ns.COLOR.GAIN, ns.COLOR.LOSS
 local LAST = { other = 1, offline = 2 }   -- these sources list last, in this order
 local TOTAL_TINT = { 0.96, 0.77, 0.09, 0.10 }
 
@@ -64,15 +65,16 @@ function L.Roll(books, kind, key)
   return sum
 end
 
--- Table rows for one side of a roll-up, largest first, then Other (always shown) and offline
--- changes, then the total: { { source, label, copper }, ... }
+-- Table rows for one side of a roll-up, largest first, then Other and Unrecorded (gold that
+-- changed while MarketWall wasn't running), then the total: { { source, label, copper }, ... }.
+-- Sources with nothing in the period are left out.
 function L.Rows(side)
   local rows, total = {}, 0
-  local amounts = { other = 0 }
-  for source, copper in pairs(side) do amounts[source] = copper end
-  for source, copper in pairs(amounts) do
-    rows[#rows + 1] = { source = source, label = Ledger.LABELS[source] or source, copper = copper }
-    total = total + copper
+  for source, copper in pairs(side) do
+    if copper ~= 0 then
+      rows[#rows + 1] = { source = source, label = Ledger.LABELS[source] or source, copper = copper }
+      total = total + copper
+    end
   end
   table.sort(rows, function(a, b)
     local x, y = LAST[a.source] or 0, LAST[b.source] or 0
@@ -84,39 +86,54 @@ function L.Rows(side)
   return rows
 end
 
-local function Net(roll)
-  local net = 0
-  for _, copper in pairs(roll and roll.income or {}) do net = net + copper end
-  for _, copper in pairs(roll and roll.spending or {}) do net = net - copper end
-  return net
+local function Sum(side)
+  local total = 0
+  for _, copper in pairs(side) do total = total + copper end
+  return total
 end
 
--- The books' gold at the end of each period with a change or an opening, a point { t, w }
--- each; t is the period's end, or now for the current one. A book counts from the period it
--- opened in.
-function L.Balance(books, kind, now)
-  local field, keys, seen = FIELD[kind], {}, {}
-  local function Add(key)
-    if not seen[key] then seen[key] = true keys[#keys + 1] = key end
-  end
+-- The summary of a roll-up: income, spending, net and the unrecorded part of spending
+function L.Summary(roll)
+  local income, spending = Sum(roll.income), Sum(roll.spending)
+  return { income = income, spending = spending, net = income - spending, unrecorded = roll.spending.offline or 0 }
+end
+
+-- The orange note beside the summary, nil when no spending is unrecorded
+function L.UnrecordedText(summary)
+  if summary.unrecorded <= 0 then return nil end
+  return WARN .. ns.MoneyShort(summary.unrecorded) .. " of spending is unrecorded|r" .. GREY
+    .. ": gold that changed while MarketWall wasn't running.|r"
+end
+
+-- Net gold of each day in the period, from the books' raw entries: { { day =, net = }, ... } in
+-- day order, a day with no change at 0. Raw entries are kept Ledger.KEEP_DAYS, so a day not
+-- wholly inside that window has net nil, unknown rather than 0.
+function L.Days(books, kind, key, now)
+  local function Midday(period) return ns.DayOf(L.PeriodStart(kind, period) + 43200) end   -- clear of clock changes
+  local first = Midday(key)
+  local count = Midday(L.Step(kind, key, 1)) - first
+  local kept = ns.DayOf(now - Ledger.KEEP_DAYS * 86400) + 1   -- the first whole day still kept
+  local days = {}
+  for i = 1, count do days[i] = { day = first + i - 1, net = first + i - 1 >= kept and 0 or nil } end
   for _, book in ipairs(books) do
-    Add(L.PeriodOf(kind, book.opening[1]))
-    for key in pairs(book[field]) do Add(key) end
-  end
-  table.sort(keys)
-  local balances, series = {}, {}
-  for _, key in ipairs(keys) do
-    local total = 0
-    for i, book in ipairs(books) do
-      balances[i] = (balances[i] or book.opening[2]) + Net(book[field][key])
-      if L.PeriodOf(kind, book.opening[1]) <= key then total = total + balances[i] end
+    for _, entry in ipairs(book.entries) do
+      local day = days[ns.DayOf(entry[1]) - first + 1]
+      if day and day.net then day.net = day.net + entry[2] end
     end
-    series[#series + 1] = { t = math.min(now, L.PeriodStart(kind, L.Step(kind, key, 1))), w = total }
   end
-  return series
+  return days
 end
 
--- The opening balance line
+-- A day bar's label: the weekday in a week, every fifth date and the first in a month
+function L.DayLabel(kind, day)
+  local t = ns.DayStart(day) + 43200
+  if kind == "week" then return date("%a", t) end
+  local n = tonumber(date("%d", t))
+  if n == 1 or n % 5 == 0 then return tostring(n) end
+  return ""
+end
+
+-- The line under the tables: the opening balance and when recording began
 function L.OpeningText(books)
   if #books == 0 then return "" end
   local first, total = math.huge, 0
@@ -125,33 +142,123 @@ function L.OpeningText(books)
     total = total + book.opening[2]
   end
   local whose = #books == 1 and "Opening balance" or ("Opening balances of " .. #books .. " characters")
-  return string.format("%s, recorded from %s: %s. Gold changes that can't be attributed go to Other, so the ledger always matches your gold.",
-    whose, date("%b %d, %Y", first), ns.Money(total))
+  return string.format("%s %s, recorded from %s.", whose, ns.Money(total), date("%b %d, %Y", first))
 end
 
 -------------------------------------------------------------------------------
 -- Panel
 -------------------------------------------------------------------------------
 
-local function Toggle(panel, previous, label, width, onClick)
-  local button = ns.widgets.MakeButton(panel, label, width)
-  if previous then button:SetPoint("LEFT", previous, "RIGHT", 4, 0) else button:SetPoint("TOPLEFT", 12, -34) end
-  button:SetScript("OnClick", function()
-    onClick()
-    panel:Refresh()
-  end)
-  return button
-end
-
-local function Highlight(button, on)
-  if on then button:LockHighlight() else button:UnlockHighlight() end
-end
-
+-- A table of sources that scrolls when they don't all fit, with its total pinned below it
 local function Table(panel, title, tip)
-  local list = ns.widgets.CreateList(panel, TABLE_ROWS)
-  list:SetSize(TABLE_WIDTH, ns.widgets.ListHeight(TABLE_ROWS))
+  local w = ns.widgets
+  local list = w.CreateList(panel, TABLE_ROWS)
+  list:SetSize(TABLE_WIDTH, w.ListHeight(TABLE_ROWS))
   list.title, list.tip = title, tip
+  local total = CreateFrame("Frame", nil, panel)
+  total:SetSize(TABLE_WIDTH, 20)
+  total:SetPoint("TOPLEFT", list, "BOTTOMLEFT", 0, -16)   -- below the list's row count
+  local tint = total:CreateTexture(nil, "BACKGROUND")
+  tint:SetAllPoints()
+  tint:SetColorTexture(TOTAL_TINT[1], TOTAL_TINT[2], TOTAL_TINT[3], TOTAL_TINT[4])
+  local label = w.MakeText(total, "GameFontHighlightSmall")
+  label:SetPoint("LEFT", 30, 0)   -- in line with the rows' first cells
+  label:SetText("Total")
+  total.value = w.MakeText(total, "GameFontHighlightSmall", "RIGHT")
+  total.value:SetPoint("RIGHT", -8, 0)
+  total:EnableMouse(true)
+  total:SetScript("OnEnter", function(self) if self.exact then w.ShowTip(self, self.exact) end end)
+  total:SetScript("OnLeave", w.HideTip)
+  list.total = total
   return list
+end
+
+-- One summary figure: a gold label over a large value
+local function Figure(panel, x, label)
+  local w = ns.widgets
+  local key = w.MakeText(panel, "GameFontNormalSmall")
+  key:SetPoint("TOPLEFT", x, -64)
+  key:SetText(label)
+  local value = w.MakeText(panel, "GameFontHighlightLarge")
+  value:SetPoint("TOPLEFT", key, "BOTTOMLEFT", 0, -3)
+  return value
+end
+
+-- Each day's net gold as a bar from the baseline: green for a gain, red for a loss, today
+-- outlined in gold. Bars are scaled to the period's largest day, so one day of data fills it.
+local function CreateBars(parent, width)
+  local bars = CreateFrame("Frame", nil, parent)
+  bars:SetSize(width, BARS_HEIGHT)
+  local base = bars:CreateTexture(nil, "BORDER")
+  base:SetColorTexture(1, 1, 1, 0.2)
+  base:SetHeight(1)
+  base:SetPoint("BOTTOMLEFT")
+  base:SetPoint("BOTTOMRIGHT")
+  bars.bars, bars.labels = {}, {}
+  bars.outline = {}
+  for i = 1, 4 do
+    bars.outline[i] = bars:CreateTexture(nil, "OVERLAY")
+    bars.outline[i]:SetColorTexture(1, 0.82, 0, 0.9)
+  end
+
+  local function Outline(bar)
+    local top, bottom, left, right = unpack(bars.outline)
+    top:ClearAllPoints() top:SetHeight(1)
+    top:SetPoint("BOTTOMLEFT", bar, "TOPLEFT", -1, 0) top:SetPoint("BOTTOMRIGHT", bar, "TOPRIGHT", 1, 0)
+    bottom:ClearAllPoints() bottom:SetHeight(1)
+    bottom:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", -1, 0) bottom:SetPoint("TOPRIGHT", bar, "BOTTOMRIGHT", 1, 0)
+    left:ClearAllPoints() left:SetWidth(1)
+    left:SetPoint("TOPRIGHT", bar, "TOPLEFT", 0, 1) left:SetPoint("BOTTOMRIGHT", bar, "BOTTOMLEFT", 0, -1)
+    right:ClearAllPoints() right:SetWidth(1)
+    right:SetPoint("TOPLEFT", bar, "TOPRIGHT", 0, 1) right:SetPoint("BOTTOMLEFT", bar, "BOTTOMRIGHT", 0, -1)
+  end
+
+  bars.note = ns.widgets.MakeText(bars, "GameFontDisableSmall", "CENTER")
+  bars.note:SetPoint("CENTER")
+  bars.note:SetText(string.format("Daily detail is kept for %d days.", Ledger.KEEP_DAYS))
+
+  -- days: L.Days; today: the day to outline; kind: week or month, for the labels. A day with
+  -- no detail left has no bar, and the note says why.
+  function bars:Draw(days, today, kind)
+    local most, unknown = 0, false
+    for _, day in ipairs(days) do
+      if day.net then most = math.max(most, math.abs(day.net)) else unknown = true end
+    end
+    self.note:SetShown(unknown)
+    local slot = width / math.max(1, #days)
+    local outlined = false
+    for i = 1, math.max(#days, #self.bars) do
+      local day = days[i]
+      local bar, label = self.bars[i], self.labels[i]
+      if not bar then
+        bar = self:CreateTexture(nil, "ARTWORK")
+        label = ns.widgets.MakeText(self, "GameFontDisableSmall", "CENTER")
+        self.bars[i], self.labels[i] = bar, label
+      end
+      bar:SetShown(day ~= nil and day.net ~= nil)
+      label:SetShown(day ~= nil)
+      if day and not day.net then
+        label:ClearAllPoints()
+        label:SetPoint("TOP", self, "BOTTOMLEFT", (i - 0.5) * slot, -3)
+        label:SetText(L.DayLabel(kind, day.day))
+      elseif day then
+        local height = most > 0 and math.max(1, math.abs(day.net) / most * (BARS_HEIGHT - 2)) or 1
+        if day.net < 0 then bar:SetColorTexture(0.88, 0.38, 0.38, 0.8) else bar:SetColorTexture(0.31, 0.76, 0.42, 0.8) end
+        bar:ClearAllPoints()
+        bar:SetPoint("BOTTOMLEFT", (i - 1) * slot + BAR_GAP / 2, 1)
+        bar:SetSize(math.max(1, slot - BAR_GAP), height)
+        label:ClearAllPoints()
+        label:SetPoint("TOP", bar, "BOTTOM", 0, -3)
+        label:SetText(L.DayLabel(kind, day.day))
+        if day.day == today then
+          Outline(bar)
+          outlined = true
+        end
+      end
+    end
+    for _, edge in ipairs(self.outline) do edge:SetShown(outlined) end
+  end
+  return bars
 end
 
 -- The Ledger panel, filling parent below the window heading
@@ -162,12 +269,18 @@ function L.Build(parent)
   panel.all, panel.kind = false, "week"
   panel.period = nil   -- the period shown, nil for the current one
 
-  panel.charButton = Toggle(panel, nil, "This character", 110, function() panel.all = false end)
-  panel.allButton = Toggle(panel, panel.charButton, "All characters", 110, function() panel.all = true end)
-  local function Kind(kind) return function() panel.kind, panel.period = kind, nil end end
-  panel.weekButton = Toggle(panel, panel.allButton, "Week", 64, Kind("week"))
-  panel.weekButton:SetPoint("LEFT", panel.allButton, "RIGHT", 16, 0)
-  panel.monthButton = Toggle(panel, panel.weekButton, "Month", 64, Kind("month"))
+  panel.whose = w.MakeSwitch(panel, { { key = false, label = "This character" }, { key = true, label = "All characters" } },
+    function(all)
+      panel.all = all
+      panel:Refresh()
+    end)
+  panel.whose:SetPoint("TOPLEFT", 12, -36)
+  panel.kindSwitch = w.MakeSwitch(panel, { { key = "week", label = "Week" }, { key = "month", label = "Month" } },
+    function(kind)
+      panel.kind, panel.period = kind, nil
+      panel:Refresh()
+    end)
+  panel.kindSwitch:SetPoint("LEFT", panel.whose, "RIGHT", 16, 0)
 
   panel.nextButton = w.MakeButton(panel, ">", 28)
   panel.nextButton:SetPoint("TOPRIGHT", -16, -34)
@@ -187,48 +300,66 @@ function L.Build(parent)
   panel.prevButton:SetScript("OnClick", Move(-1))
   panel.nextButton:SetScript("OnClick", Move(1))
 
-  panel.chart = w.CreateChart(panel)
-  panel.chart:SetSize(736 - GUTTER, CHART_HEIGHT)
-  panel.chart:SetPoint("TOPLEFT", 12 + GUTTER, -68)
-  panel.chart.legend:Hide()
+  panel.incomeText = Figure(panel, 14, "Income")
+  panel.spendingText = Figure(panel, 150, "Spending")
+  panel.netText = Figure(panel, 286, "Net")
+  panel.unrecorded = w.MakeText(panel, "GameFontHighlightSmall")
+  panel.unrecorded:SetPoint("TOPLEFT", 422, -70)
+  panel.unrecorded:SetPoint("RIGHT", -16, 0)
+  panel.unrecorded:SetWordWrap(true)
+
+  panel.bars = CreateBars(panel, 732)
+  panel.bars:SetPoint("TOPLEFT", 14, -106)
 
   panel.income = Table(panel, "Income", "Gold received, by where it came from.")
-  panel.income:SetPoint("TOPLEFT", 12, -200)
-  panel.spending = Table(panel, "Spending", "Gold spent, by what it went on.")
-  panel.spending:SetPoint("TOPLEFT", 12 + TABLE_WIDTH + 12, -200)
+  panel.income:SetPoint("TOPLEFT", 12, -184)
+  panel.spending = Table(panel, "Spending", "Gold spent, by what it went on. Unrecorded is gold that changed while MarketWall wasn't running.")
+  panel.spending:SetPoint("TOPLEFT", 12 + TABLE_WIDTH + 12, -184)
 
   panel.opening = w.MakeText(panel, "GameFontDisableSmall")
   panel.opening:SetPoint("BOTTOMLEFT", 14, 12)
   panel.opening:SetPoint("RIGHT", -14, 0)
-  panel.opening:SetWordWrap(true)
 
-  local function Fill(list, side, periodText)
-    list:SetColumns({ { list.title, 240, nil, list.tip }, { periodText, 122, "RIGHT", "Copper in the period shown.", money = true } })
+  -- The pinned total is green for income and red for spending; Unrecorded is orange. A coloured
+  -- amount is text, so the row's hover gives its exact value.
+  local function Fill(list, side, totalColor)
+    list:SetColumns({ { list.title, 240, nil, list.tip }, { "", 122, "RIGHT", "Copper in the period shown.", money = true } })
     local data = {}
     for _, row in ipairs(L.Rows(side)) do
-      local total = row.source == "total"
-      data[#data + 1] = { cells = { row.label, row.copper }, tint = total and TOTAL_TINT or nil }
+      if row.source == "total" then
+        list.total.value:SetText(totalColor .. ns.MoneyShort(row.copper) .. "|r")
+        list.total.exact = ns.Money(row.copper)
+      else
+        local unrecorded = row.source == "offline"
+        data[#data + 1] = {
+          cells = { unrecorded and (WARN .. row.label .. "|r") or row.label,
+            unrecorded and (WARN .. ns.MoneyShort(row.copper) .. "|r") or row.copper },
+          tip = unrecorded and ns.Money(row.copper) or nil,
+        }
+      end
     end
     list:SetData(data)
   end
 
   function panel:Refresh()
-    Highlight(self.charButton, not self.all)
-    Highlight(self.allButton, self.all)
-    Highlight(self.weekButton, self.kind == "week")
-    Highlight(self.monthButton, self.kind == "month")
+    self.whose:Select(self.all)
+    self.kindSwitch:Select(self.kind)
     local now = time()
     local key = self.period or L.PeriodOf(self.kind, now)
     self.nextButton:SetEnabled(self.period ~= nil)
-    local periodText = L.PeriodText(self.kind, key, now)
-    self.periodText:SetText(periodText)
+    self.periodText:SetText(L.PeriodText(self.kind, key, now))
 
     local books = L.Books(MarketWallDB.ledger, ns.Recording.CharacterKey(), self.all)
-    self.chart:SetShown(#books > 0)
-    self.chart:Draw(L.Balance(books, self.kind, now))
     local roll = L.Roll(books, self.kind, key)
-    Fill(self.income, roll.income, periodText)
-    Fill(self.spending, roll.spending, periodText)
+    local summary = L.Summary(roll)
+    self.incomeText:SetText(GAIN .. ns.MoneyShort(summary.income) .. "|r")
+    self.spendingText:SetText(LOSS .. ns.MoneyShort(summary.spending) .. "|r")
+    self.netText:SetText((summary.net < 0 and "-" or "") .. ns.MoneyShort(math.abs(summary.net)))
+    self.unrecorded:SetText(L.UnrecordedText(summary) or "")
+    self.bars:SetShown(#books > 0)
+    self.bars:Draw(L.Days(books, self.kind, key, now), ns.DayOf(now), self.kind)
+    Fill(self.income, roll.income, GAIN)
+    Fill(self.spending, roll.spending, LOSS)
     self.opening:SetText(#books > 0 and L.OpeningText(books)
       or (GREY .. "No gold recorded yet. The ledger opens with this character's gold at its next login.|r"))
   end
