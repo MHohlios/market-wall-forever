@@ -77,6 +77,30 @@ describe("Professions", function()
       assert.is_nil(Saved().recipes[FOREVER_MANTLE])
     end)
 
+    it("saves the average of a made range", function()
+      Stub("GetTradeSkillNumMade", function(i) if i == 2 then return 2, 4 end return 1, 1 end)
+      fire("TRADE_SKILL_SHOW")
+      assert.equal(3, Saved().recipes[BOLT].made)
+    end)
+
+    it("keeps the saved recipe while a reagent count or the number of reagents reads nil", function()
+      fire("TRADE_SKILL_SHOW")
+      local saved = Saved().recipes[BOLT]
+      Stub("GetTradeSkillReagentInfo", function() return "Reagent", "icon", nil, 0 end)
+      fire("TRADE_SKILL_UPDATE")
+      assert.equal(saved, Saved().recipes[BOLT])
+      Stub("GetTradeSkillNumReagents", function() return nil end)
+      fire("TRADE_SKILL_UPDATE")
+      assert.equal(saved, Saved().recipes[BOLT])
+      assert.same({ { SILK, 3 } }, Saved().recipes[BOLT].reagents)
+    end)
+
+    it("reads nothing, without an error, when the client lacks a profession window call", function()
+      Stub("GetTradeSkillNumReagents", nil)
+      fire("TRADE_SKILL_SHOW")
+      assert.same({}, MarketWallDB.crafting)
+    end)
+
     it("keeps recipes a later read no longer shows, as a collapsed header hides them", function()
       fire("TRADE_SKILL_SHOW")
       rows = { rows[1], rows[3] }

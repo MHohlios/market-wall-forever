@@ -46,9 +46,9 @@ end
 
 -- Market ------------------------------------------------------------------------------------
 
--- Deep needs twice the units the default "supplied" rule asks for (minSupply, 20), so a few crafts
--- sold a day leave the market supplied, and a record on 5 of the last 7 days, so the listings come
--- back nearly every day you scan rather than once.
+-- Deep needs a fixed 40 units listed, twice the default minSupply of 20 (it does not follow that
+-- setting), so a few crafts sold a day leave the market supplied, and a record on 5 of the last 7
+-- days, so the listings come back nearly every day you scan rather than once.
 local DEEP_UNITS, DEEP_DAYS, WINDOW_DAYS = 40, 5, 7
 local D_UNITS = 4   -- in a daily record, see Data.lua
 

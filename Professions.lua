@@ -32,13 +32,27 @@ local COLOURS = {
 
 -- Reading -----------------------------------------------------------------------------------
 
--- One recipe row of the open window: its product and recipe, nil while the product or a reagent
--- is not cached yet
+-- Every profession window call the reader makes
+local TRADE_SKILL_API = {
+  "GetTradeSkillLine", "GetNumTradeSkills", "GetTradeSkillInfo", "GetTradeSkillItemLink", "GetTradeSkillNumMade",
+  "GetTradeSkillNumReagents", "GetTradeSkillReagentInfo", "GetTradeSkillReagentItemLink",
+}
+
+local function HasTradeSkillAPI()
+  for _, name in ipairs(TRADE_SKILL_API) do
+    if type(_G[name]) ~= "function" then return false end
+  end
+  return true
+end
+
+-- One recipe row of the open window: its product and recipe, nil while the product, the reagent
+-- count or a reagent is not readable yet
 local function ReadRecipe(index, name, difficulty)
   local product = ns.ItemID(GetTradeSkillItemLink(index))
-  if not product then return nil end
+  local reagentCount = GetTradeSkillNumReagents(index)
+  if not (product and reagentCount) then return nil end
   local reagents = {}
-  for r = 1, GetTradeSkillNumReagents(index) or 0 do
+  for r = 1, reagentCount do
     local id = ns.ItemID(GetTradeSkillReagentItemLink(index, r))
     local count = select(3, GetTradeSkillReagentInfo(index, r))
     if not (id and count) then return nil end
@@ -52,7 +66,7 @@ end
 -- The open profession window: its name, rank, maximum rank and { [product] = recipe } for the
 -- rows readable now. Nil when no profession is open or the client lacks the API.
 function Professions.ReadWindow()
-  if not (GetTradeSkillLine and GetNumTradeSkills) then return nil end
+  if not HasTradeSkillAPI() then return nil end
   local name, rank, maxRank = GetTradeSkillLine()
   if type(name) ~= "string" or name == "" or name == "UNKNOWN" then return nil end
   local recipes = {}
