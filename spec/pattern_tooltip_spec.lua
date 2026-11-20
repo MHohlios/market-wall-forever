@@ -29,11 +29,12 @@ describe("pattern tooltip", function()
     fire("ADDON_LOADED", addon.ADDON)
     _G.C_Item = {}
     _G.UnitGUID = function(unit) return unit == "player" and GUID or nil end
+    _G.IsShiftKeyDown = function() return false end
     Wall(FELCLOTH, 1000)
   end)
 
   after_each(function()
-    _G.C_Item, _G.UnitGUID = nil, nil
+    _G.C_Item, _G.UnitGUID, _G.IsShiftKeyDown = nil, nil, nil
   end)
 
   it("shows what a pattern teaches, its profit, market and payback at its wall, not known", function()
