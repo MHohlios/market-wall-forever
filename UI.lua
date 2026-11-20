@@ -1267,17 +1267,22 @@ end
 -- or on leaving the box, shows the stored value again, then calls onSaved if given
 function ui.SettingEdit(parent, def, onSaved)
   local edit = MakeEdit(parent, SETTING_EDIT_W)
-  local function Apply(self)
+  local function Save(self)
     local value = ParseSetting(def, self:GetText() or "")
     if value ~= nil then SaveSetting(def.key, value) end
+    return value ~= nil
+  end
+  -- Shown only once the typed text is saved, so the rounded display is never saved again
+  local function Show(self, saved)
     self:SetText(FormatSetting(def))
-    if value ~= nil and onSaved then onSaved() end
+    if saved and onSaved then onSaved() end
   end
   edit:SetScript("OnEnterPressed", function(self)
-    Apply(self)
-    self:ClearFocus()
+    local saved = Save(self)
+    self:ClearFocus()   -- leaving the box saves the same typed text again
+    Show(self, saved)
   end)
-  edit:SetScript("OnEditFocusLost", Apply)
+  edit:SetScript("OnEditFocusLost", function(self) Show(self, Save(self)) end)
   TipOnHover(edit, def)
   return edit
 end

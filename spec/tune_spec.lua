@@ -155,6 +155,16 @@ describe("tuning the deal lists", function()
       assert.equal(0, ui.list.offset)   -- the list re-filters from its top
     end)
 
+    it("keeps the typed value, not its rounded display, when Enter also leaves the box", function()
+      local discount = Edit(2)
+      function discount.GetText() return discount.text end
+      function discount.ClearFocus(self) self.scripts.OnEditFocusLost(self) end   -- as the game does
+      discount.text = "25.55%"
+      discount.scripts.OnEnterPressed(discount)
+      assert.near(0.2555, MarketWallDB.cfg.minSnipeDiscount, 1e-12)
+      assert.equal("25.6%", discount.text)
+    end)
+
     it("keeps the setting when the text does not read", function()
       MarketWallDB.cfg.minSnipeProfit = 30
       local profit = Edit(1)
