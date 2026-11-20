@@ -19,6 +19,7 @@
 --   Professions.Context(profession)        game prices and rank, read once for a whole list
 --   Professions.Evaluate(recipe, context)  Crafting.Evaluate at those prices
 --   Professions.Guide(profession)          every recipe evaluated and ranked (Crafting.Rank)
+--   Professions.Diagnose()                 /mw professions: what reading the window finds on this client
 local _, ns = ...
 local Crafting = ns.Crafting
 
@@ -34,23 +35,36 @@ local COLOURS = {
 }
 
 -- Reading -----------------------------------------------------------------------------------
+-- A client has one of two profession window APIs: the Classic GetTradeSkill* calls, or
+-- C_TradeSkillUI, which clients with the modern API surface, Forever among them, have instead.
 
--- Every profession window call the reader makes
-local TRADE_SKILL_API = {
+-- The window's events across both APIs. Each may bring recipes that were still loading.
+Professions.EVENTS = { "TRADE_SKILL_SHOW", "TRADE_SKILL_UPDATE", "TRADE_SKILL_LIST_UPDATE",
+  "TRADE_SKILL_DATA_SOURCE_CHANGED" }
+
+-- Every call each reader makes
+local CLASSIC_API = {
   "GetTradeSkillLine", "GetNumTradeSkills", "GetTradeSkillInfo", "GetTradeSkillItemLink", "GetTradeSkillNumMade",
   "GetTradeSkillNumReagents", "GetTradeSkillReagentInfo", "GetTradeSkillReagentItemLink",
 }
+local MODERN_API = { "GetBaseProfessionInfo", "GetAllRecipeIDs", "GetRecipeInfo", "GetRecipeSchematic" }
 
-local function HasTradeSkillAPI()
-  for _, name in ipairs(TRADE_SKILL_API) do
-    if type(_G[name]) ~= "function" then return false end
+-- The names a table of calls lacks
+local function Missing(calls, names)
+  local missing = {}
+  for _, name in ipairs(names) do
+    if type(calls) ~= "table" or type(calls[name]) ~= "function" then missing[#missing + 1] = name end
   end
-  return true
+  return missing
 end
 
--- One recipe row of the open window: its product and recipe, nil while the product, the reagent
--- count or a reagent is not readable yet
-local function ReadRecipe(index, name, difficulty)
+local function Has(calls, names)
+  return #Missing(calls, names) == 0
+end
+
+-- Classic: one recipe row of the open window, its product and recipe. Nil while the product, the
+-- reagent count or a reagent is not readable yet.
+local function ReadClassicRecipe(index, name, difficulty)
   local product = ns.ItemID(GetTradeSkillItemLink(index))
   local reagentCount = GetTradeSkillNumReagents(index)
   if not (product and reagentCount) then return nil end
@@ -66,21 +80,91 @@ local function ReadRecipe(index, name, difficulty)
   return product, { name = name, made = (low + (high or low)) / 2, reagents = reagents, colour = COLOURS[difficulty] }
 end
 
--- The open profession window: its name, rank, maximum rank and { [product] = recipe } for the
--- rows readable now. Nil when no profession is open or the client lacks the API.
-function Professions.ReadWindow()
-  if not HasTradeSkillAPI() then return nil end
+local function ReadClassicWindow()
   local name, rank, maxRank = GetTradeSkillLine()
   if type(name) ~= "string" or name == "" or name == "UNKNOWN" then return nil end
   local recipes = {}
   for index = 1, GetNumTradeSkills() or 0 do
     local recipeName, kind = GetTradeSkillInfo(index)
     if kind and kind ~= "header" and kind ~= "subheader" then
-      local product, recipe = ReadRecipe(index, recipeName, kind)
+      local product, recipe = ReadClassicRecipe(index, recipeName, kind)
       if product then recipes[product] = recipe end
     end
   end
   return name, rank, maxRank, recipes
+end
+
+-- C_TradeSkillUI's relative difficulty (Enum.TradeskillRelativeDifficulty) as skill colours
+local RELATIVE_COLOURS = { [0] = Crafting.ORANGE, [1] = Crafting.YELLOW, [2] = Crafting.GREEN, [3] = Crafting.GREY }
+
+-- A schematic's required reagents as { id, count }, nil while one is not readable
+local function ReadReagents(schematic)
+  local reagents = {}
+  for _, slot in ipairs(schematic.reagentSlotSchematics or {}) do
+    if slot.required ~= false then
+      local reagent = type(slot.reagents) == "table" and slot.reagents[1]
+      local id, count = reagent and reagent.itemID, slot.quantityRequired
+      if not (id and count) then return nil end
+      reagents[#reagents + 1] = { id, count }
+    end
+  end
+  return reagents
+end
+
+-- Modern: one recipe. Its product and recipe when learned and readable; nil when not learned or
+-- while its schematic loads; false when it makes no item, such as an enchant.
+local function ReadModernRecipe(recipeID)
+  local info = C_TradeSkillUI.GetRecipeInfo(recipeID)
+  if type(info) ~= "table" or not info.learned then return nil end
+  local schematic = C_TradeSkillUI.GetRecipeSchematic(recipeID, false)
+  if type(schematic) ~= "table" then return nil end
+  local product = schematic.outputItemID
+  if not product then return false end
+  local reagents = ReadReagents(schematic)
+  if not reagents then return nil end
+  local low = schematic.quantityMin or 1
+  return product, { name = info.name, made = (low + (schematic.quantityMax or low)) / 2, reagents = reagents,
+    colour = RELATIVE_COLOURS[info.relativeDifficulty] }
+end
+
+-- Like ReadWindow; false when every learned recipe read makes no item
+local function ReadModernWindow()
+  local changing = C_TradeSkillUI.IsDataSourceChanging
+  if type(changing) == "function" and changing() then return nil end
+  local profession = C_TradeSkillUI.GetBaseProfessionInfo()
+  local name = type(profession) == "table" and profession.professionName
+  if type(name) ~= "string" or name == "" then return nil end
+  local recipes, itemless = {}, false
+  for _, recipeID in ipairs(C_TradeSkillUI.GetAllRecipeIDs() or {}) do
+    local product, recipe = ReadModernRecipe(recipeID)
+    if product then recipes[product] = recipe end
+    itemless = itemless or product == false
+  end
+  if itemless and not next(recipes) then return false end
+  return name, profession.skillLevel, profession.maxSkillLevel, recipes
+end
+
+-- True when the window shows another player's, a guild's or an NPC's recipes, through either API
+local function ShowsOthersRecipes()
+  for _, name in ipairs({ "IsTradeSkillLinked", "IsTradeSkillGuild", "IsNPCCrafting" }) do
+    for _, calls in pairs({ _G, C_TradeSkillUI }) do
+      if type(calls) == "table" and type(calls[name]) == "function" and calls[name]() then return true end
+    end
+  end
+  return false
+end
+
+-- The open profession window: its name, rank, maximum rank and { [product] = recipe } for the
+-- recipes readable now. Classic first; C_TradeSkillUI when the Classic calls read no recipe.
+-- False for a window skipped on purpose: another's recipes, or recipes that make no item. Nil
+-- when no profession is open or readable yet, or the client lacks both APIs.
+function Professions.ReadWindow()
+  if ShowsOthersRecipes() then return false end
+  if Has(_G, CLASSIC_API) then
+    local name, rank, maxRank, recipes = ReadClassicWindow()
+    if name and next(recipes) then return name, rank, maxRank, recipes end
+  end
+  if Has(C_TradeSkillUI, MODERN_API) then return ReadModernWindow() end
 end
 
 -- This character's saved professions, nil before its first read
@@ -89,17 +173,21 @@ local function CharacterBook()
   return key and MarketWallDB.crafting[key]
 end
 
--- Saves the open window into this character's book
+-- Saves the open window into this character's book: "saved", "skipped" for a window skipped on
+-- purpose, else nil. A read with no recipe readable yet, as while the window loads, saves
+-- nothing, and a later event reads again.
 function Professions.Read()
   local name, rank, maxRank, recipes = Professions.ReadWindow()
-  local key = name and ns.Recording.CharacterKey()
-  if not key then return end
+  if name == false then return "skipped" end
+  local key = name and next(recipes) and ns.Recording.CharacterKey()
+  if not key then return nil end
   local book = MarketWallDB.crafting[key] or {}
   MarketWallDB.crafting[key] = book
   local saved = book[name] or { recipes = {} }
   saved.rank, saved.maxRank, saved.t = rank, maxRank, time()
   for product, recipe in pairs(recipes) do saved.recipes[product] = recipe end
   book[name] = saved
+  return "saved"
 end
 
 -- Lookups -----------------------------------------------------------------------------------
@@ -198,8 +286,77 @@ function Professions.Guide(profession)
   return Crafting.Rank(evaluations)
 end
 
+-- Reading in game -----------------------------------------------------------------------------
+
+local seen, unregistered = {}, {}   -- profession window events: [event] = count, and those the client lacks
+-- The open window's reads so far: nil before any, "unread", or "saved" or "skipped" once one was
+local window
+local lastError, noted
+
+-- Once a session, when the player's own profession window closes with no read saving from it
+local function NoteUnread()
+  if noted then return end
+  noted = true
+  ns.Print("couldn't read recipes from that profession window. /mw professions shows why.")
+end
+
+local function OnEvent(_, event)
+  seen[event] = (seen[event] or 0) + 1
+  if event == "TRADE_SKILL_CLOSE" then
+    if window == "unread" then NoteUnread() end
+    window = nil
+    return
+  end
+  local ok, result = pcall(Professions.Read)
+  if not ok then lastError = tostring(result) end
+  if ok and result then window = result elseif window == nil then window = "unread" end
+end
+
 local frame = CreateFrame("Frame")
-frame:SetScript("OnEvent", Professions.Read)
-for _, event in ipairs({ "TRADE_SKILL_SHOW", "TRADE_SKILL_UPDATE" }) do
-  pcall(frame.RegisterEvent, frame, event)   -- a client without the Classic profession window lacks them
+frame:SetScript("OnEvent", OnEvent)
+for _, event in ipairs(Professions.EVENTS) do
+  if not pcall(frame.RegisterEvent, frame, event) then unregistered[#unregistered + 1] = event end
+end
+pcall(frame.RegisterEvent, frame, "TRADE_SKILL_CLOSE")
+
+local function Listed(names)
+  return #names == 0 and "all present" or "missing " .. table.concat(names, ", ")
+end
+
+local function EventCounts()
+  local counts = {}
+  for _, event in ipairs(Professions.EVENTS) do counts[#counts + 1] = event .. " " .. (seen[event] or 0) end
+  return table.concat(counts, ", ")
+end
+
+local function Count(t)
+  local n = 0
+  for _ in pairs(t) do n = n + 1 end
+  return n
+end
+
+-- /mw professions: which profession window API and events this client has and what a read finds
+-- now. Names nothing but the profession.
+function Professions.Diagnose()
+  ns.Print("reading the profession window on this client:")
+  print("  Classic calls: " .. Listed(Missing(_G, CLASSIC_API)))
+  print("  C_TradeSkillUI calls: " .. Listed(Missing(C_TradeSkillUI, MODERN_API)))
+  print("  Events seen: " .. EventCounts())
+  if #unregistered > 0 then print("  Events the client lacks: " .. table.concat(unregistered, ", ")) end
+  if Has(C_TradeSkillUI, MODERN_API) then
+    local ok, ids = pcall(C_TradeSkillUI.GetAllRecipeIDs)
+    print("  C_TradeSkillUI lists " .. (ok and type(ids) == "table" and #ids or "no") .. " recipe IDs")
+  end
+  local ok, name, _, _, recipes = pcall(Professions.ReadWindow)
+  if not ok then
+    print("  Reading now failed: " .. tostring(name))
+  elseif name then
+    print("  Reading now: " .. name .. ", " .. Count(recipes) .. " recipes readable")
+  elseif name == false then
+    print("  Reading now: skipped, as the window shows another's recipes or recipes that make no item")
+  else
+    print("  Reading now: no profession window readable. Open one and type /mw professions again.")
+  end
+  print("  Character key: " .. (ns.Recording.CharacterKey() and "found" or "missing"))
+  if lastError then print("  Last read error: " .. lastError) end
 end

@@ -22,7 +22,7 @@ read_globals = {
   -- Lua extensions WoW exposes as globals
   "date", "time", "strtrim",
   -- Namespaces and enums
-  "C_AuctionHouse", "C_Container", "C_Item", "C_Timer", "C_UnitAuras",
+  "C_AuctionHouse", "C_Container", "C_Item", "C_Timer", "C_TradeSkillUI", "C_UnitAuras",
   "Enum", "ItemLocation", "SOUNDKIT", "TooltipDataProcessor", "ChatFrameUtil",
   -- Functions
   "CreateFrame", "GetBindingKey", "GetBuildInfo", "GetItemInfo", "GetMoney", "GetNormalizedRealmName", "GetRealmName",

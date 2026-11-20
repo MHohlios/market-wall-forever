@@ -402,6 +402,8 @@ SlashCmdList["MARKETWALL"] = function(msg)
     ns.ProbeCommand(rest)
   elseif cmd == "session" then
     ns.Sessions.Command(rest)
+  elseif cmd == "professions" then
+    ns.Professions.Diagnose()
   else
     Print("Open the auction house and use the Market tab. Commands:")
     print("  /mw add <item link, id or name>   watch an item")
@@ -414,5 +416,6 @@ SlashCmdList["MARKETWALL"] = function(msg)
     print("  /mw search                        open the item search window")
     print("  /mw minimap                       hide or show the minimap button")
     print("  /mw session start <label>|stop|pause|resume   a farm session; /mw session shows the running one")
+    print("  /mw professions                   check reading recipes from the open profession window")
   end
 end
