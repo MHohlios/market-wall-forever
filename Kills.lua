@@ -164,12 +164,12 @@ end
 
 -- The tracker's state lives in memory only; settled kills reach saved data through Mobs.lua.
 -- emit: Recording.Emit. canLoot(guid): "empty", "theirs", "mine" or nil. itemOf(guid): the item ID
--- of an opened container's "Item-..." GUID, or nil when it cannot be known.
-function Kills.NewTracker(emit, canLoot, itemOf)
+-- of an opened container's "Item-..." GUID, or nil when it cannot be known. nameOf(npcID): the
+-- creature's name (Creatures.lua), or nil.
+function Kills.NewTracker(emit, canLoot, itemOf, nameOf)
   local tracker = {
     pending = {},   -- [guid] = { guid, npc, t, looted, check, coin, drops, gather }
     corpses = {},   -- [guid] = { t =, loot = nil, "partial", "emptied" or "gathered" }
-    names = {},     -- [npcID] = name, from units you targeted or hovered
     window = {},    -- corpse guids in the open loot window
     items = {},     -- [item guid] = { t = } for item loot open now or closed with loot left
     itemWindow = {},   -- item guids in the open loot window
@@ -178,11 +178,15 @@ function Kills.NewTracker(emit, canLoot, itemOf)
     lastGather = nil,
   }
 
+  local function NameOf(npc)
+    return nameOf and nameOf(npc)
+  end
+
   local function Settle(kill, outcome, via)
     tracker.pending[kill.guid] = nil
     tracker.paths[via] = tracker.paths[via] + 1
     emit({ t = kill.t, kind = "kill", source = SourceOf("npc", kill.npc), guid = kill.guid, npc = kill.npc,
-      name = tracker.names[kill.npc], outcome = outcome, via = via,
+      name = NameOf(kill.npc), outcome = outcome, via = via,
       coin = outcome == Kills.LOOTED and kill.coin or nil, drops = outcome == Kills.LOOTED and kill.drops or nil,
       gather = kill.gather })
   end
@@ -195,11 +199,6 @@ function Kills.NewTracker(emit, canLoot, itemOf)
     local kill = { guid = guid, npc = npc, t = t }
     self.pending[guid] = kill
     return kill
-  end
-
-  function tracker:SawUnit(guid, name)
-    local kind, npc = Kills.ParseGUID(guid)
-    if kind == "npc" and type(name) == "string" then self.names[npc] = name end
   end
 
   function tracker:Cast(spellID, t)
@@ -294,7 +293,7 @@ function Kills.NewTracker(emit, canLoot, itemOf)
         self.corpses[guid] = corpse
         local npc = kind == "npc" and id or nil
         emit({ t = t, kind = "loot", source = SourceOf(kind, id), window = window, guid = guid, npc = npc,
-          name = npc and tracker.names[npc], coin = share.coin, drops = share.drops })
+          name = npc and NameOf(npc), coin = share.coin, drops = share.drops })
         if kill then
           kill.looted, kill.coin, kill.drops = true, share.coin, share.drops
           Settle(kill, Kills.LOOTED, "loot")
@@ -357,11 +356,7 @@ end
 
 -- In game -----------------------------------------------------------------------------------
 
-local function Readable(v)
-  local check = _G.issecretvalue
-  if check and check(v) then return nil end
-  return v
-end
+local Readable = ns.Readable
 
 local function Pack(...)
   return { n = select("#", ...), ... }
@@ -411,21 +406,15 @@ if C_Container and C_Container.UseContainerItem and hooksecurefunc then
   end)
 end
 
-local tracker = Kills.NewTracker(function(event) ns.Recording.Emit(event) end, ReadCanLoot, resolver.ItemOf)
+local tracker = Kills.NewTracker(function(event) ns.Recording.Emit(event) end, ReadCanLoot, resolver.ItemOf,
+  function(npc) return ns.Creatures.Name(npc) end)
 Kills.tracker = tracker
 Kills.paths = tracker.paths   -- /dump MarketWall.Kills.paths shows which rule settled each kill
 
 local looting, slotCount, cleared = false, 0, {}
 
-local function SawUnit(unit)
-  local guid = Readable(UnitGUID(unit))
-  if guid then tracker:SawUnit(guid, Readable(UnitName(unit))) end
-end
-
 local HANDLERS = {
   PARTY_KILL = function(_, victim) tracker:Kill(Readable(victim), time()) end,
-  PLAYER_TARGET_CHANGED = function() SawUnit("target") end,
-  UPDATE_MOUSEOVER_UNIT = function() SawUnit("mouseover") end,
   UNIT_SPELLCAST_SUCCEEDED = function(unit, _, spellID)
     if unit == "player" then tracker:Cast(Readable(spellID), time()) end
   end,

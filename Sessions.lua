@@ -2,7 +2,7 @@
 -- Saved in MarketWallDB, shared by every character:
 --   sessions = { session, ... }, oldest first; only the last can still be running
 --   sessionGroups = { [activity name] = group name }, renames and merges that apply to every session
---   creatures = { [npcID] = { name =, family = } }, from units you targeted or hovered
+-- It reads MarketWallDB.creatures (Creatures.lua) for each mob's name and family.
 -- A session is {
 --   label, start, stop,         stop is nil while it runs
 --   char, name,                 the GUID (Recording.CharacterKey) and name of who started it;
@@ -411,11 +411,6 @@ local function Record(event)
     local key = Sessions.ActivityOf(event)
     lootWindow.shown[key] = (lootWindow.shown[key] or 0) + (event.coin or 0)
   end
-  if event.npc and event.name then
-    local creature = MarketWallDB.creatures[event.npc] or {}
-    creature.name = event.name
-    MarketWallDB.creatures[event.npc] = creature
-  end
 end
 for _, kind in ipairs({ "loot", "gather", "fish", "quest" }) do ns.Recording.On(kind, Record) end
 
@@ -426,20 +421,9 @@ ns.Recording.On("money", function(event)
   Sessions.AddLootCoin(s, lootWindow.shown, event.delta, event.t)
 end)
 
-local function SawUnit(unit)
-  local kind, npc = ns.Kills.ParseGUID(UnitGUID(unit))
-  if kind ~= "npc" then return end
-  local creature = MarketWallDB.creatures[npc] or {}
-  creature.name = UnitName(unit) or creature.name
-  creature.family = UnitCreatureFamily(unit) or creature.family
-  MarketWallDB.creatures[npc] = creature
-end
-
 local entered = false
 
 local HANDLERS = {
-  PLAYER_TARGET_CHANGED = function() SawUnit("target") end,
-  UPDATE_MOUSEOVER_UNIT = function() SawUnit("mouseover") end,
   PLAYER_LOGOUT = function()   -- also fires on a UI reload
     local s = Running()
     if s then Sessions.PauseAt(s, time(), true) end
