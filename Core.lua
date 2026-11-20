@@ -133,8 +133,8 @@ function ns.MoneyFaded(c)
 end
 
 -- For table cells and chart labels: at most two coins, from the largest, so gold amounts are
--- rounded to the nearest silver (5g 4s 73c shows 5g 5s, 9g 99s 88c shows 10g). Hovering such a
--- cell shows the exact ns.Money amount.
+-- rounded to the nearest silver (5g 4s 73c shows 5g 5s, 9g 99s 88c shows 10g). A list's money
+-- cell shows the exact ns.Money amount on hover; chart labels have no hover.
 function ns.MoneyShort(c)
   return JoinCoins(c, function(unit) return COIN_ICON[unit] end, true)
 end
