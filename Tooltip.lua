@@ -126,6 +126,8 @@ local function LowDataFlag(add, id)
   if flag then add(ROW .. ORANGE .. flag .. "|r", "") end
 end
 
+local LAST_SEEN_AFTER_DAYS = 3   -- an item's latest recorded day older than this is called out
+
 local function MarketContextLines(add, id)
   local wall, day = ns.LatestWall(id)
   if not wall then return end
@@ -140,6 +142,9 @@ local function MarketContextLines(add, id)
   local PV = ns.PriceView
   local week = PV.Summary(PV.InRange(ns.Series(id), 7, time()))
   FadedRow(add, "7-day trend", week and week.trend and PV.TrendText(week.trend) or missing)
+
+  local daysAgo = ns.Today() - day
+  if daysAgo > LAST_SEEN_AFTER_DAYS then FadedRow(add, "Last seen", daysAgo .. " days ago") end
 
   local entry = ns.R().watch[id]
   if entry and entry.buy then

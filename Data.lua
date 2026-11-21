@@ -290,34 +290,34 @@ function ns.Record(id, ladder, total, t)
     return nil, nil
   end
 
-  if watched or total >= ns.Cfg("minRecordSupply") then
-    local days = r.days[id]
-    if not days then days = {} r.days[id] = days end
-    local today = ns.DayOf(t)
-    local d = days[today]
-    if not d then
-      days[today] = { wall, wall, wall, total, minPrice }
-    else
-      d[D_WALL] = wall
-      if wall < d[D_LOW] then d[D_LOW] = wall end
-      if wall > d[D_HIGH] then d[D_HIGH] = wall end
-      d[D_UNITS] = total
-      d[D_MIN] = minPrice
+  -- every item with a wall gets a day, however few units are listed: thin items are priced
+  -- by these days (ns.ValuationWall)
+  local days = r.days[id]
+  if not days then days = {} r.days[id] = days end
+  local today = ns.DayOf(t)
+  local d = days[today]
+  if not d then
+    days[today] = { wall, wall, wall, total, minPrice }
+  else
+    d[D_WALL] = wall
+    if wall < d[D_LOW] then d[D_LOW] = wall end
+    if wall > d[D_HIGH] then d[D_HIGH] = wall end
+    d[D_UNITS] = total
+    d[D_MIN] = minPrice
+  end
+  -- wall price per part of the day, for day/night and weekday patterns
+  d = days[today]
+  local parts = d[D_PARTS]
+  if not parts then parts = {} d[D_PARTS] = parts end
+  parts[PartOf(t)] = wall
+  cycleCache[id] = nil
+  if watched then
+    local cutoff = today - 365
+    for day in pairs(days) do
+      if day < cutoff then days[day] = nil end
     end
-    -- wall price per part of the day, for day/night and weekday patterns
-    d = days[today]
-    local parts = d[D_PARTS]
-    if not parts then parts = {} d[D_PARTS] = parts end
-    parts[PartOf(t)] = wall
-    cycleCache[id] = nil
-    if watched then
-      local cutoff = today - 365
-      for day in pairs(days) do
-        if day < cutoff then days[day] = nil end
-      end
-    else
-      ns.FoldWeeks(id, today - ns.Cfg("retainDays"))
-    end
+  else
+    ns.FoldWeeks(id, today - ns.Cfg("retainDays"))
   end
 
   if watched then
@@ -472,6 +472,26 @@ function ns.LatestWall(id)
     if not latestDay or day > latestDay then latestDay = day end
   end
   if latestDay then return days[latestDay][D_WALL], latestDay end
+end
+
+local THIN_PRICE_DAYS = 30
+
+-- The wall MarketWall's valuations price an item at, and whether its market is supplied
+-- (r.supplied). A supplied item is priced at its latest wall. A thin one is priced at the
+-- median of its daily walls over the last 30 days, so one hopeful listing does not set its
+-- price, or at its latest wall when it has no day that recent. Nil without history.
+function ns.ValuationWall(id)
+  local r = ns.R()
+  local supplied = r.supplied[id] == true
+  local latest = ns.LatestWall(id)
+  if not latest or supplied then return latest, supplied end
+  local from = ns.Today() - THIN_PRICE_DAYS
+  local walls = {}
+  for day, d in pairs(r.days[id]) do
+    if day > from then walls[#walls + 1] = d[D_WALL] end
+  end
+  if #walls == 0 then return latest, false end
+  return ns.Round(Median(walls)), false
 end
 
 -- How a price compares with the item's median wall: the difference (-0.1 is 10% under)

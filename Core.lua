@@ -19,7 +19,6 @@ ns.cfgDefaults = {
   baselineDays = 14,       -- days used for the normal price
   retainDays = 30,         -- daily history kept for unwatched items
   retainWeeks = 52,        -- weekly points kept for unwatched items, folded from their expired days
-  minRecordSupply = 5,     -- unwatched items with fewer units are not recorded
   maxSnaps = 400,          -- per-scan snapshots kept per watched item
   sound = true,
   autoScan = true,         -- start the daily full scan when the auction house opens

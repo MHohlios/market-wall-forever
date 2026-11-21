@@ -28,9 +28,11 @@ A World of Warcraft (Forever) auction house addon. It adds a Market tab with:
 
 Every recommendation, from the tooltip's best outlet to the Sell page's groups, mob values
 and farm sessions, counts the cut and a one-unit deposit at your Sell page duration. A thin
-market, with fewer units listed than the Minimum supply setting (20 by default), still counts
-at its wall: the tooltip's Market row says "(thin market)" and the Sell page notes how few are
-listed, so you know the price rests on a few listings. Away
+market, with fewer units listed than the Minimum supply setting (20 by default), still counts,
+at the median of its daily walls over the last 30 days, so one hopeful listing doesn't set
+its price: the tooltip's Market row says "(thin market)" and the Sell page notes how few are
+listed, so you know the price rests on a few listings. With Shift held, the tooltip of an
+item last seen more than 3 days ago says when. Away
 from the auction house the deposit is estimated from the vendor price, at the rate the
 game's own deposits on the Sell page last showed (15% per 12 hours until then).
 
@@ -54,6 +56,10 @@ and Horde characters on one realm each have their own. History saved before this
 the realm name alone, moves once to the faction of the first character to log in, and
 MarketWall says so in chat. The ledger and sessions stay per character; mobs and crafting
 read prices from your faction's history.
+
+Every item a scan or search finds listed gets a day in its price history, however few units
+are up, so rare gear gets a rough price too. An unwatched item's days older than 30 fold
+into weekly points, kept for a year; a watched item keeps a year of days.
 
 At the neutral auction house (Gadgetzan, Booty Bay, Everlook) MarketWall saves nothing and
 its scan, search, buy and post buttons are off; the game's own auction house window works
