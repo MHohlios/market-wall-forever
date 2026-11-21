@@ -105,7 +105,8 @@ function P.BaitMatch(f)
 end
 
 -- The warnings that apply to posting at a price, each one line. f: price; totals (P.Totals);
--- stats (ns.StatsFor); bait (the Bait Detect record); outlet (Outlet.Values for the item).
+-- stats (ns.StatsFor); bait (the Bait Detect record); outlet (Outlet.Values for the item); listed
+-- (the units listed with its latest wall, needed when the outlet is a thin market).
 function P.Warnings(f)
   local warnings = {}
   local function add(text) warnings[#warnings + 1] = text end
@@ -123,15 +124,15 @@ function P.Warnings(f)
   if bait then add(bait) end
   local outlet = f.outlet
   local group = outlet and P.Group(outlet)
-  if group == Outlet.NO_DATA and outlet.auction then
-    add("No reliable price: the market is too thin to price.")
+  if group == Outlet.AUCTION and outlet.thin then
+    add(string.format("Thin market: only %d listed.", f.listed))
+  elseif group == Outlet.NO_DATA and outlet.auction then
+    add("No reliable price: the auction house nets nothing after the cut and deposit.")
   elseif group == Outlet.DISENCHANT then
     add(string.format("Best outlet is disenchanting: %s each after fees, more than the auction house or a vendor.",
       ns.Money(outlet.disenchant)))
   elseif group == Outlet.VENDOR then
-    add(outlet.thin
-      and "Best outlet is a vendor: the market is too thin to trust."
-      or string.format("Best outlet is a vendor: %s each, at least what the auction house pays after fees.", ns.Money(outlet.vendor)))
+    add(string.format("Best outlet is a vendor: %s each, at least what the auction house pays after fees.", ns.Money(outlet.vendor)))
   end
   return warnings
 end
@@ -181,8 +182,8 @@ function P.AuctionNote(tier, wall, bait, price)
 end
 
 -- The bag group for an item: its best outlet, except that an item a vendor won't buy never goes
--- to Vendor. Outlet.Values picks Vendor for it only when the market is thin or the auction house
--- nets nothing, so it has no reliable price and joins the items with no market data.
+-- to Vendor. Outlet.Values picks Vendor for it only when the auction house nets nothing, so it
+-- has no reliable price and joins the items with no market data.
 function P.Group(values)
   if values.outlet == Outlet.VENDOR and values.vendor <= 0 then return Outlet.NO_DATA end
   return values.outlet

@@ -1150,7 +1150,7 @@ local SETTING_GROUPS = {
     { key = "minHistoryDays", label = "Days before data is reliable", kind = "int", min = 1, max = ns.cfgDefaults.baselineDays + 1, note = "Fewer days get the orange badge",
       tip = "Items with fewer days of scans than this get an orange low-data flag. It only sets the flag; nothing is hidden. 1 to " .. (ns.cfgDefaults.baselineDays + 1) .. "." },
     { key = "minSupply", label = "Minimum supply", kind = "int", note = "Thinner markets are left out",
-      tip = "Items with fewer units listed than this are left out of Snipes and Dips, because thin markets give unreliable prices." .. ON_LAST_SCAN },
+      tip = "Items with fewer units listed than this are left out of Snipes and Dips, because thin markets give unreliable prices. Tooltips and the Sell page call such a market thin but still use its price." .. ON_LAST_SCAN },
   } },
   { title = "Snipes and Dips", column = 1, settings = {
     { key = "minSnipeProfit", label = "Minimum snipe profit", kind = "money", note = "After the cut",

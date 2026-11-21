@@ -51,8 +51,8 @@ local function DisenchantLines(add, id)
 end
 
 -- What one input nets as its share of the product (Outlet.CONVERSIONS), after the cut and the
--- product's deposit, and whether the product's market is too thin to trust. False when the
--- product has no scanned wall.
+-- product's deposit, and whether the product's market is thin. False when the product has no
+-- scanned wall.
 local function ConversionValue(conversion, prices, cut)
   local wall, supplied = prices.wall(conversion.product)
   if not wall then return false end
@@ -61,9 +61,10 @@ end
 
 -- The bright row and what one unit nets there. It follows the Sell page's bag-group rule, except
 -- that an item with no market data goes to the better of vendor and disenchanting (counted only
--- when that setting is on). A conversion is best when it pays more. NO_DATA when nothing pays.
-local function BestOutlet(values, converted, convertedThin)
-  if converted and not convertedThin and converted > values.best then return CONVERSION, converted end
+-- when that setting is on). A conversion is best when it pays more, thin product market or not.
+-- NO_DATA when nothing pays.
+local function BestOutlet(values, converted)
+  if converted and converted > values.best then return CONVERSION, converted end
   local best = ns.SellPricing.Group(values)
   if best == Outlet.NO_DATA then
     if values.disenchant and values.disenchant > math.max(values.vendor, 0) then
@@ -84,7 +85,7 @@ local function OutletLines(add, id, count, details)
   local conversion = Outlet.CONVERSIONS[id]
   local converted, convertedThin
   if conversion then converted, convertedThin = ConversionValue(conversion, prices, opts.cut) end
-  local best, bestValue = BestOutlet(values, converted, convertedThin)
+  local best, bestValue = BestOutlet(values, converted)
 
   OutletRow(add, "Market", Outlet.AUCTION, best, values.auction or "no price", values.thin and "(thin market)" or nil)
 

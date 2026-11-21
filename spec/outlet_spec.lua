@@ -39,9 +39,14 @@ describe("Outlet", function()
       assert.equal(O.AUCTION, Values({ vendor = 100, wall = 1000, supplied = true, disenchant = nil }).outlet)
     end)
 
-    it("sends an item to a vendor when the market is too thin to trust", function()
-      local v = Values({ vendor = 10, wall = 1000, supplied = false })
-      assert.same({ O.VENDOR, true, 950, 10, 10 }, { v.outlet, v.thin, v.auction, v.market, v.best })
+    it("trusts a thin market at its net, flagged thin, against vendor and disenchanting", function()
+      local v = Values({ vendor = 9500, wall = 20000, supplied = false, disenchant = 8900 })   -- 2g, 95s, 89s
+      assert.same({ O.AUCTION, true, 19000, 19000, 19000 }, { v.outlet, v.thin, v.auction, v.market, v.best })
+    end)
+
+    it("sends a thin market that nets under the vendor price to a vendor", function()
+      local v = Values({ vendor = 1000, wall = 1000, supplied = false })
+      assert.same({ O.VENDOR, true, 950, 1000 }, { v.outlet, v.thin, v.market, v.best })
     end)
 
     it("has no market data without any wall history, but still values the other outlets", function()

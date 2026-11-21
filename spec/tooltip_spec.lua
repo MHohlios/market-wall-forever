@@ -148,12 +148,12 @@ describe("item tooltip lines", function()
       assert.is_true(Has("  " .. FADED .. "Stack of 20|r|" .. FADED .. ns.MoneyFaded(950 * 20)))   -- the wall after the 5% cut
     end)
 
-    it("shows nothing without a best outlet, such as a thin market and no vendor price", function()
+    it("counts a thin market with no vendor price at its net", function()
       ns.R().supplied[ID] = nil
       tooltip = NewTooltip(BagSlot({ itemID = ID, stackCount = 20 }))
       ns.TooltipLines.Add(tooltip, ID)
-      assert.is_false(Has("Stack of"))
-      assert.same({}, BrightRows())
+      assert.is_true(Has("Stack of 20|r|" .. FADED .. ns.MoneyFaded(950 * 20)))
+      assert.same({ "Market" }, BrightRows())
     end)
 
     it("shows nothing for a stack of 1", function()
@@ -330,14 +330,13 @@ describe("item tooltip lines", function()
       assert.truthy(Find("Opens to"))
     end)
 
-    it("notes a thin market on the Market row when a vendor is best beside a higher wall", function()
-      items[ID].vendor = 400
-      Wall(ID, 500)
+    it("marks a thin market best when it nets most, and says it is thin", function()
+      items[ID].vendor = 9500
+      Wall(ID, 20000)   -- 2g against a 95s vendor price and 89s from disenchanting
       ns.R().supplied[ID] = nil   -- no real supply behind the wall
-      MarketWallDB.cfg.mobDisenchant = "never"
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(Find("Market|r " .. FADED .. "(thin market)|r|"))
-      assert.same({ "Vendor" }, BrightRows())
+      assert.truthy(Find("  " .. BRIGHT .. "Market|r " .. FADED .. "(thin market)|r|" .. WHITE))
+      assert.same({ "Market" }, BrightRows())
 
       tooltip = NewTooltip()
       ns.R().supplied[ID] = true
@@ -534,14 +533,14 @@ describe("item tooltip lines", function()
         assert.is_nil(Find("as bars"))
       end)
 
-      it("notes a thin product market and keeps it from the bright row and the stack", function()
-        Wall(IRON_BAR, 600)   -- 540 per ore, above the ore's 365, but no real supply behind it
+      it("notes a thin product market and still brightens it when it pays most", function()
+        Wall(IRON_BAR, 600)   -- 540 per ore, above the ore's 365, with no real supply behind it
         ns.R().supplied[IRON_BAR] = nil
         InStack(20)
         ns.TooltipLines.Add(tooltip, IRON_ORE)
-        assert.truthy(Find("Make Iron Bar|r " .. FADED .. "(thin market)|r|" .. FADED .. ns.MoneyFaded(540)))
-        assert.same({ "Market" }, BrightRows())
-        assert.truthy(Find("Stack of 20|r|" .. FADED .. ns.MoneyFaded(365 * 20)))
+        assert.truthy(Find("Make Iron Bar|r " .. FADED .. "(thin market)|r|" .. WHITE .. ns.Money(540)))
+        assert.same({ "Make Iron Bar" }, BrightRows())
+        assert.truthy(Find("Stack of 20 (as bars)|r|" .. FADED .. ns.MoneyFaded(540 * 20)))
       end)
 
       it("splits the product's net across the cloth it takes", function()

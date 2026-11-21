@@ -463,7 +463,8 @@ function ns.Cycle(id)
   return result
 end
 
--- The most recent recorded wall price and its day, or nil when the item has no history
+-- The most recent recorded wall price, its day and the units listed then, or nil when the item
+-- has no history
 function ns.LatestWall(id)
   local days = ns.R().days[id]
   if not days then return nil end
@@ -471,7 +472,10 @@ function ns.LatestWall(id)
   for day in pairs(days) do
     if not latestDay or day > latestDay then latestDay = day end
   end
-  if latestDay then return days[latestDay][D_WALL], latestDay end
+  if latestDay then
+    local d = days[latestDay]
+    return d[D_WALL], latestDay, d[D_UNITS]
+  end
 end
 
 -- How a price compares with the item's median wall: the difference (-0.1 is 10% under)
