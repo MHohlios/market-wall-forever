@@ -138,9 +138,7 @@ local function Warnings(item, price, quantity, totals)
     totals = totals or Totals(item, price, quantity),
     stats = ns.StatsFor(item.id),
     bait = ns.R().bait[item.id],
-    outlet = item.values,
-    listed = select(3, ns.LatestWall(item.id)),
-  })
+    outlet = item.values,  })
 end
 
 local function ShowAnswer(answer)

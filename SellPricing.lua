@@ -105,8 +105,7 @@ function P.BaitMatch(f)
 end
 
 -- The warnings that apply to posting at a price, each one line. f: price; totals (P.Totals);
--- stats (ns.StatsFor); bait (the Bait Detect record); outlet (Outlet.Values for the item); listed
--- (the units listed with its latest wall, needed when the outlet is a thin market).
+-- stats (ns.StatsFor); bait (the Bait Detect record); outlet (Outlet.Values for the item).
 function P.Warnings(f)
   local warnings = {}
   local function add(text) warnings[#warnings + 1] = text end
@@ -125,7 +124,7 @@ function P.Warnings(f)
   local outlet = f.outlet
   local group = outlet and P.Group(outlet)
   if group == Outlet.AUCTION and outlet.thin then
-    add(string.format("Thin market: only %d listed.", f.listed))
+    add(string.format("Thin market: fewer than %d listed.", ns.Cfg("minSupply")))
   elseif group == Outlet.NO_DATA and outlet.auction then
     add("No reliable price: the auction house nets nothing after the cut and deposit.")
   elseif group == Outlet.DISENCHANT then

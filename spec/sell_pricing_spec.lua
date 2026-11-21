@@ -153,11 +153,13 @@ describe("Sell page pricing", function()
       assert.same({}, Warnings({ price = 1000, outlet = O.Values({ vendor = 10, cut = 0.05 }) }))
     end)
 
-    it("notes how few are listed when the best outlet is a thin market", function()
+    it("notes a thin market under the Minimum supply setting when it is the best outlet", function()
       local thin = O.Values({ vendor = 9500, wall = 20000, supplied = false, disenchant = 8900, cut = 0.05 })
-      assert.same({ "Thin market: only 2 listed." }, Warnings({ price = 20000, outlet = thin, listed = 2 }))
+      assert.same({ "Thin market: fewer than 20 listed." }, Warnings({ price = 20000, outlet = thin }))
+      MarketWallDB.cfg.minSupply = 8
+      assert.same({ "Thin market: fewer than 8 listed." }, Warnings({ price = 20000, outlet = thin }))
       local supplied = O.Values({ vendor = 9500, wall = 20000, supplied = true, cut = 0.05 })
-      assert.same({}, Warnings({ price = 20000, outlet = supplied, listed = 40 }))
+      assert.same({}, Warnings({ price = 20000, outlet = supplied }))
     end)
 
     it("never sends an item with no vendor price to a vendor", function()
