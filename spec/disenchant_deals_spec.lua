@@ -45,7 +45,7 @@ describe("FindDisenchantDeals", function()
     assert.near(399, d.value, 1e-6)
     assert.near(99, d.profit, 1e-6)
     assert.near(0.33, d.pct, 1e-6)
-    assert.equal("classic table", d.odds)
+    assert.equal("Classic table", d.odds)
     assert.equal(1, d.skill)
   end)
 
@@ -89,6 +89,16 @@ describe("FindDisenchantDeals", function()
     local d = ns.FindDisenchantDeals({ [LOW_CRAFT_ID] = 1 }, CUT, NO_DEPOSITS)[1]
     assert.equal("Forever estimate", d.odds)
     assert.equal(50, d.skill)
+  end)
+
+  it("names your own disenchants after the table they blend with", function()
+    Item(1001, UNCOMMON, 10, ARMOR)
+    local key = ns.DisenchantLog.SampleKey(1001, UNCOMMON, 10, ARMOR, false)
+    _G.MarketWallDB = { cfg = {}, disenchants = { samples = {
+      [key] = { count = 34, materials = { [STRANGE_DUST] = { hits = 34, total = 51 } } } } } }
+    local d = ns.FindDisenchantDeals({ [1001] = 1 }, CUT, NO_DEPOSITS)[1]
+    _G.MarketWallDB = nil
+    assert.equal("Classic table + your 34 disenchants", d.odds)
   end)
 
   it("puts the most profit first", function()
