@@ -17,7 +17,7 @@ function Outlet.Net(listed, cut, deposit)
 end
 
 -- One unit's worth through each outlet, and the best of them.
--- p: vendor (copper or nil), wall (the last recorded wall, nil without history), supplied (the
+-- p: vendor (copper or nil), wall (in game ns.ValuationWall's, nil without history), supplied (the
 -- wall has real supply behind it), disenchant (its materials' walls, nil when not counted),
 -- disenchantDeposit (the deposits to list those materials), cut, deposit (per unit). Deposits
 -- are 0 when left out.

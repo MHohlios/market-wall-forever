@@ -259,9 +259,7 @@ function Mobs.GamePrices()
   end
   return {
     vendor = function(id) return ItemInfo(id, 11) end,
-    wall = function(id)
-      return ns.LatestWall(id), ns.R().supplied[id] == true
-    end,
+    wall = ns.ValuationWall,
     deposit = Deposit,
     disenchant = function(id)
       local level = ItemInfo(id, 4)

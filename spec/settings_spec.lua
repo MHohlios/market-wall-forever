@@ -12,7 +12,7 @@ end)
 describe("the Settings page", function()
   -- Defaults the Settings page leaves out: tuning constants, and choices made on other pages
   local NOT_ON_PAGE = {
-    wallMinUnits = true, baselineDays = true, retainDays = true, retainWeeks = true, minRecordSupply = true,
+    wallMinUnits = true, baselineDays = true, retainDays = true, retainWeeks = true,
     maxSnaps = true, disenchantShowAll = true, sellDuration = true,
   }
 
