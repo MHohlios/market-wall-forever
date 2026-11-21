@@ -15,7 +15,8 @@ A World of Warcraft (Forever) auction house addon. It adds a Market tab with:
   cut and deposit, against a vendor, and notes anything that looks like a mistake above the
   bags. It asks Yes or No before a post only when the price is far under the low end of the
   item's normal range (more than 30% under up to 1g, sliding toward 70% under for dearer
-  items, as Auctionator does) or matches a bait price.
+  items, as Auctionator does) or matches a bait price. "No reliable price" holds items your scans
+  have never priced.
 - **Item search**: an MW button on the minimap opens a window, anywhere in the world,
   to look up any item MarketWall has seen. See below.
 - **Tooltips**: what one unit nets through a vendor, the market and disenchanting, after
@@ -26,7 +27,10 @@ A World of Warcraft (Forever) auction house addon. It adds a Market tab with:
   7-day trend. Hovering a mob shows its value per kill. See below.
 
 Every recommendation, from the tooltip's best outlet to the Sell page's groups, mob values
-and farm sessions, counts the cut and a one-unit deposit at your Sell page duration. Away
+and farm sessions, counts the cut and a one-unit deposit at your Sell page duration. A thin
+market, with fewer units listed than the Minimum supply setting (20 by default), still counts
+at its wall: the tooltip's Market row says "(thin market)" and the Sell page notes how few are
+listed, so you know the price rests on a few listings. Away
 from the auction house the deposit is estimated from the vendor price, at the rate the
 game's own deposits on the Sell page last showed (15% per 12 hours until then).
 

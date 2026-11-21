@@ -147,16 +147,24 @@ describe("Sell page pricing", function()
       local vendor = O.Values({ vendor = 100, wall = 100, supplied = true, cut = 0.05 })
       assert.same({ "Best outlet is a vendor: 1s each, at least what the auction house pays after fees." },
         Warnings({ price = 1000, outlet = vendor }))
-      local thin = O.Values({ vendor = 10, wall = 1000, supplied = false, cut = 0.05 })
-      assert.same({ "Best outlet is a vendor: the market is too thin to trust." }, Warnings({ price = 1000, outlet = thin }))
+      local thinUnderVendor = O.Values({ vendor = 1000, wall = 1000, supplied = false, cut = 0.05 })
+      assert.same({ "Best outlet is a vendor: 10s each, at least what the auction house pays after fees." },
+        Warnings({ price = 1000, outlet = thinUnderVendor }))
       assert.same({}, Warnings({ price = 1000, outlet = O.Values({ vendor = 10, cut = 0.05 }) }))
     end)
 
+    it("notes a thin market under the Minimum supply setting when it is the best outlet", function()
+      local thin = O.Values({ vendor = 9500, wall = 20000, supplied = false, disenchant = 8900, cut = 0.05 })
+      assert.same({ "Thin market: fewer than 20 listed." }, Warnings({ price = 20000, outlet = thin }))
+      MarketWallDB.cfg.minSupply = 8
+      assert.same({ "Thin market: fewer than 8 listed." }, Warnings({ price = 20000, outlet = thin }))
+      local supplied = O.Values({ vendor = 9500, wall = 20000, supplied = true, cut = 0.05 })
+      assert.same({}, Warnings({ price = 20000, outlet = supplied }))
+    end)
+
     it("never sends an item with no vendor price to a vendor", function()
-      local reliable = { "No reliable price: the market is too thin to price." }
+      local reliable = { "No reliable price: the auction house nets nothing after the cut and deposit." }
       for _, vendor in ipairs({ 0, false }) do
-        local thin = O.Values({ vendor = vendor or nil, wall = 1000, supplied = false, cut = 0.05 })
-        assert.same(reliable, Warnings({ price = 1000, outlet = thin }))
         local nothingNet = O.Values({ vendor = vendor or nil, wall = 10, supplied = true, deposit = 9.5, cut = 0.05 })
         assert.same(reliable, Warnings({ price = 10, outlet = nothingNet }))   -- 9.5 after the cut, minus 9.5
       end
@@ -284,6 +292,11 @@ describe("Sell page pricing", function()
       assert.equal("AH 1s 79c after cut and deposit · Vendor 40c · Disenchant —", Plain(P.OutletLine(v)))
       assert.equal("AH — · Vendor — · Disenchant 1s 90c", Plain(P.OutletLine(O.Values({ disenchant = 200, cut = 0.05 }))))
     end)
+
+    it("says when the auction house price is a thin market", function()
+      local v = O.Values({ vendor = 40, wall = 205, supplied = false, deposit = 15.75, cut = 0.05 })
+      assert.equal("AH 1s 79c after cut and deposit (thin market) · Vendor 40c · Disenchant —", Plain(P.OutletLine(v)))
+    end)
   end)
 
   describe("bag groups", function()
@@ -330,13 +343,19 @@ describe("Sell page pricing", function()
       assert.same({ { O.AUCTION, 0, {} }, { O.VENDOR, 5, { 1 } } }, Summary(groups))
     end)
 
-    it("puts an item with no vendor price and no reliable market under No reliable price", function()
-      local thin = O.Values({ wall = 1000, supplied = false, cut = 0.05 })
+    it("puts an item with no vendor price whose auction house nets nothing under No reliable price", function()
       local nothingNet = O.Values({ vendor = 0, wall = 10, supplied = true, deposit = 20, cut = 0.05 })
-      assert.same({ O.VENDOR, O.VENDOR }, { thin.outlet, nothingNet.outlet })   -- Outlet's own values are unchanged
-      local groups = P.Groups({ Item(1, 1, thin), Item(2, 1, nothingNet) })
-      assert.same({ O.NO_DATA, 2 }, { groups[3].outlet, #groups[3].items })
+      assert.equal(O.VENDOR, nothingNet.outlet)   -- Outlet's own values are unchanged
+      local groups = P.Groups({ Item(1, 1, nothingNet) })
+      assert.same({ O.NO_DATA, 1 }, { groups[3].outlet, #groups[3].items })
       assert.same({ 0, 0 }, { #groups[1].items, #groups[2].items })
+    end)
+
+    it("puts a thin market that pays most in the auction house group, with or without a vendor price", function()
+      local thin = O.Values({ vendor = 9500, wall = 20000, supplied = false, disenchant = 8900, cut = 0.05 })
+      local thinNoVendor = O.Values({ wall = 1000, supplied = false, cut = 0.05 })
+      assert.same({ { O.AUCTION, 19000 + 950, { 1, 2 } }, { O.VENDOR, 0, {} } },
+        Summary(P.Groups({ Item(1, 1, thin), Item(2, 1, thinNoVendor) })))
     end)
   end)
 end)

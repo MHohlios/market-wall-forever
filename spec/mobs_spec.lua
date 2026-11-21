@@ -120,13 +120,14 @@ describe("Mobs", function()
       assert.same({ 105, 130 }, { stats.market.median, stats.market.average })
     end)
 
-    it("prices a thin market at vendor and flags items with no market price", function()
+    it("prices a thin market at its wall in Market and Optimal, and flags items with no market price", function()
       local stats = M.Stats(Mob({
         { K.LOOTED, 0, { [FANG] = 1 } }, { K.LOOTED, 0, { [FANG] = 1 } }, { K.LOOTED, 0, { [DUSTLESS] = 1 } },
       }), Prices(), opts)
-      assert.equal(50, stats.market.median)            -- FANG has thin supply
+      assert.equal(190, stats.market.median)           -- FANG has thin supply: 200 after the cut, over its 50c vendor price
+      assert.equal(190, stats.optimal.median)
       assert.same({ [DUSTLESS] = true }, stats.market.unpriced)
-      assert.near(100 / 3, stats.market.average, 1e-9)  -- DUSTLESS counts 0c
+      assert.near(380 / 3, stats.market.average, 1e-9)  -- DUSTLESS counts 0c
     end)
 
     it("uses disenchanting in Optimal only when it is on", function()

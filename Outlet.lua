@@ -22,15 +22,14 @@ end
 -- disenchantDeposit (the deposits to list those materials), cut, deposit (per unit). Deposits
 -- are 0 when left out.
 -- Returns vendor; auction, the wall after the cut and deposit (nil without a wall); market, the
--- Market lens (auction, or the vendor price when the market is too thin to trust); gathered, the
--- better of vendor and market; disenchant after the cut and deposits on its materials; best;
--- outlet; and thin.
+-- Market lens (auction, 0 without a wall); gathered, the better of vendor and market; disenchant
+-- after the cut and deposits on its materials; best; outlet; and thin, true when the wall has no
+-- real supply behind it. A thin market is still trusted; callers that show it say it is thin.
 function Outlet.Values(p)
   local vendor = p.vendor or 0
   local auction = p.wall and Outlet.Net(p.wall, p.cut, p.deposit or 0)
   local thin = auction ~= nil and not p.supplied
-  local market = 0
-  if auction then market = thin and vendor or auction end
+  local market = auction or 0
   local gathered = math.max(vendor, market)
   local disenchant = p.disenchant and Outlet.Net(p.disenchant, p.cut, p.disenchantDeposit or 0) or nil
   local best = disenchant and math.max(gathered, disenchant) or gathered

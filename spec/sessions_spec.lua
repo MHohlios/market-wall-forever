@@ -4,7 +4,7 @@ local TURTLE, SNAPPER, BANDIT = 1001, 1002, 2001
 local SCALE, FISH, ORE = 10, 20, 30
 local T0 = 1000000
 
--- SCALE sells to vendors for 10 and on the market for 100; FISH has no market; ORE no thin market
+-- SCALE sells to vendors for 10 and on the market for 100; FISH has no market; ORE a thin one
 local PRICES = {
   vendor = function(id) return ({ [SCALE] = 10, [FISH] = 5, [ORE] = 20 })[id] end,
   wall = function(id)
@@ -171,22 +171,22 @@ describe("Sessions", function()
 
     it("prices the same gains under each lens", function()
       local s = Farm()
-      -- coin 550; vendor 3 x 10 + 10 x 5 + 20; market 3 x 95 + 0 + 20 (thin); optimal 3 x 95 + 10 x 5 + 20
-      assert.same({ vendor = 650, market = 855, optimal = 905 }, S.Values(s, lenses))
+      -- coin 550; vendor 3 x 10 + 10 x 5 + 20; market 3 x 95 + 0 + 285 (thin); optimal 3 x 95 + 10 x 5 + 285
+      assert.same({ vendor = 650, market = 1120, optimal = 1170 }, S.Values(s, lenses))
     end)
 
     it("breaks a session into groups with share, gold per hour and top items", function()
       local s = Farm()
       local creatures = { [TURTLE] = { family = "Turtle" }, [SNAPPER] = { family = "Turtle" } }
       local report = S.Report(s, lenses.optimal, function(key) return S.ActivityName(key, creatures) end, T0 + 9999)
-      assert.same({ 1800, 905, 550, 1810 }, { report.duration, report.value, report.coin, report.perHour })
+      assert.same({ 1800, 1170, 550, 2340 }, { report.duration, report.value, report.coin, report.perHour })
       local turtles = report.groups[1]
       assert.same({ "Turtle", 435, 870 }, { turtles.name, turtles.value, turtles.perHour })
-      assert.near(435 / 905, turtles.share, 1e-9)
+      assert.near(435 / 1170, turtles.share, 1e-9)
       assert.same({ { id = SCALE, qty = 3, value = 285 } }, turtles.top)
       local names = {}
       for i, group in ipairs(report.groups) do names[i] = group.name end
-      assert.same({ "Turtle", "Quests", "Fishing", "Mining" }, names)
+      assert.same({ "Turtle", "Quests", "Mining", "Fishing" }, names)
     end)
 
     it("keeps its value at the moment it ended beside the value at current prices", function()
@@ -196,7 +196,7 @@ describe("Sessions", function()
         deposit = PRICES.deposit, disenchant = PRICES.disenchant }, { cut = 0.05 }, {})
       local report = S.Report(s, cheaper.optimal, tostring, T0 + 9999)
       assert.equal(650, report.value)
-      assert.equal(905, report.ended.optimal)
+      assert.equal(1170, report.ended.optimal)
     end)
   end)
 

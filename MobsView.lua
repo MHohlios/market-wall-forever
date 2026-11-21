@@ -23,7 +23,7 @@ local DROP_COLUMNS = {
   { "% of kills", 90, "RIGHT", "The share of looted and empty kills it dropped in." },
   { "Avg quantity", 90, "RIGHT", "How many drop at once, on average, when it drops." },
   { "Vendor", 100, "RIGHT", "One unit's vendor price.", money = true },
-  { "Market", 100, "RIGHT", "One unit's wall price after the cut, or vendor when the market is thin.", money = true },
+  { "Market", 100, "RIGHT", "One unit's wall price after the cut and deposit, thin markets included.", money = true },
   { "Optimal", 100, "RIGHT", "The best of vendor, market and, when included, disenchanting.", money = true },
 }
 

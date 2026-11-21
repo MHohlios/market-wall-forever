@@ -329,7 +329,7 @@ local function Finalize(maps, names, stamp)
   for id, name in pairs(names) do r.names[id] = name end
   local snipes, dips = {}, {}
   local gearPrices = {}   -- cheapest buyout of each weapon and armor item, for disenchant deals
-  local supplied = {}     -- items with at least minSupply units listed, for mob values
+  local supplied = {}     -- items with at least minSupply units listed; the rest are thin markets
   local cut = ns.Cfg("ahCut")
   local minSupply = ns.Cfg("minSupply")
   local index = 1
