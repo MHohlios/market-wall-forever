@@ -1,20 +1,27 @@
 -- MarketWall: expected disenchant value, priced from MarketWall's own material walls.
--- Outcome data adapted from Disenchantry (MIT, see LICENSES/Disenchantry.txt). Where an item's
--- odds come from, best first:
---   1. your own disenchants, from MarketWall's disenchant log (DisenchantLog.lua), once there
---      are 20 of them: for the item itself when Forever estimates it, otherwise for its kind
---   2. Forever estimates: specific new crafted items, and new rares (IDs from 200000)
---   3. the classic disenchanting tables (original-era item levels, which Forever uses)
+-- Outcome data adapted from Disenchantry (MIT, see LICENSES/Disenchantry.txt). An item's odds
+-- start from a prior: a Forever estimate (specific new crafted items, and new rares with IDs from
+-- 200000) or else the classic disenchanting tables (original-era item levels, which Forever
+-- uses). Your own disenchants, from MarketWall's disenchant log (DisenchantLog.lua), are blended
+-- in as they come: for the item itself when Forever estimates it, otherwise for its kind.
 local _, ns = ...
 
 local WEAPON, ARMOR = 2, 4
 local UNCOMMON, RARE, EPIC = 2, 3, 4
 local NEW_ITEM_ID = 200000      -- Forever's own items start here
-local MIN_SAMPLES = 20          -- Disenchantry's threshold for trusting your own results
+-- The prior counts as this many disenchants: 20 of your own would measure a 75% chance only
+-- to about ±20% and barely sample a 5% shard
+local PRIOR_WEIGHT = 50
+local MIN_SAMPLES = 20          -- with no prior, your own results alone count from this many
 local SALVAGER_BUFF = 1283701   -- Forever buff that raises disenchant yields
 local SALVAGER_MODES = { auto = true, on = true, off = true }
+local NO_RESULTS = { hits = 0, total = 0 }
 
--- Each outcome: { materialID, chance (0-1), average quantity }
+-- One material from a disenchant: its chance (0-1), average quantity when it drops, and the
+-- fewest and most in one disenchant, nil when only the average is known
+local function Outcome(id, chance, quantity, min, max)
+  return { id = id, chance = chance, quantity = quantity, min = min, max = max }
+end
 
 -- Uncommon (green) gear: { minLevel, maxLevel, dust, essence, shard, armorDust%, armorEssence%,
 -- weaponDust%, weaponEssence%, dustMin, dustMax, essenceMin, essenceMax }. Shards take the rest.
@@ -47,7 +54,8 @@ local NO_DISENCHANT = {
   [247789] = true, [249144] = true, [249234] = true, [249232] = true, [249237] = true, [249385] = true,
 }
 
--- Forever's new low- and mid-level crafts, estimated by Disenchantry's author
+-- Forever's new low- and mid-level crafts, estimated by Disenchantry's author, each material as
+-- { materialID, chance, average quantity }
 local LOW_CRAFT = { { 10940, 0.80, 2.5 }, { 10938, 0.20, 2.5 } }
 local MID_CRAFT = { { 10940, 0.75, 3.5 }, { 10939, 0.20, 2.5 }, { 10978, 0.05, 2 } }
 local CRAFT_ESTIMATES = {}
@@ -94,20 +102,27 @@ local function ClassicTable(quality, level, weapon)
     -- Forever: uncommon weapons of item level 21-30 give Greater Magic Essence
     if weapon and level >= 21 and level <= 30 then essenceID = 10939 end
     local out = {
-      { row[3], dust / 100, (row[10] + row[11]) / 2 },
-      { essenceID, essence / 100, (row[12] + row[13]) / 2 },
+      Outcome(row[3], dust / 100, (row[10] + row[11]) / 2, row[10], row[11]),
+      Outcome(essenceID, essence / 100, (row[12] + row[13]) / 2, row[12], row[13]),
     }
-    if row[5] then out[3] = { row[5], (100 - dust - essence) / 100, 1 } end
+    if row[5] then out[3] = Outcome(row[5], (100 - dust - essence) / 100, 1, 1, 1) end
     return out
   elseif quality == RARE then
     local row = Find(RARE_ROWS, level)
     if not row then return nil end
-    if row[4] then return { { row[3], 0.995, 1 }, { row[4], 0.005, 1 } } end
-    return { { row[3], 1, 1 } }
+    if row[4] then return { Outcome(row[3], 0.995, 1, 1, 1), Outcome(row[4], 0.005, 1, 1, 1) } end
+    return { Outcome(row[3], 1, 1, 1, 1) }
   elseif quality == EPIC then
     local row = Find(EPIC_ROWS, level)
-    if row then return { { row[3], 1, (row[4] + row[5]) / 2 } } end
+    if row then return { Outcome(row[3], 1, (row[4] + row[5]) / 2, row[4], row[5]) } end
   end
+end
+
+-- An estimate's materials as outcomes: averages only
+local function Estimated(estimate)
+  local out = {}
+  for i, e in ipairs(estimate) do out[i] = Outcome(e[1], e[2], e[3]) end
+  return out
 end
 
 local function HasSalvagerBuff()
@@ -137,77 +152,112 @@ function ns.HasForeverEstimate(id, quality)
   return CRAFT_ESTIMATES[id] ~= nil or (quality == RARE and id >= NEW_ITEM_ID)
 end
 
--- Your own results for the item, under the current Salvager setting
-local function Observed(id, quality, level, classID)
-  local sample = ns.DisenchantLog.Sample(id, quality, level, classID, SalvagerActive())
-  if not sample or sample.count < MIN_SAMPLES then return nil end
-  local out = {}
-  for materialID, m in pairs(sample.materials) do
-    if m.hits > 0 then out[#out + 1] = { materialID, m.hits / sample.count, m.total / m.hits } end
+-- The prior's outcomes and its name, nil when the item has neither an estimate nor a table row
+local function Prior(id, quality, level, classID)
+  if CRAFT_ESTIMATES[id] then return Estimated(CRAFT_ESTIMATES[id]), "Forever estimate" end
+  if classID ~= WEAPON and classID ~= ARMOR then return nil end
+  local weapon = classID == WEAPON
+  if quality == RARE and id >= NEW_ITEM_ID then
+    local estimate = NewRareEstimate(level, weapon)
+    if estimate then return Estimated(estimate), "Forever estimate" end
+    return nil
   end
-  if #out > 0 then return out, sample.count end
+  local classic = ClassicTable(quality, level, weapon)
+  if classic then return classic, "Classic table" end
 end
 
--- The outcomes and where they came from: "observed" (with the sample count), "estimate" or "table"
+-- The prior's quantities with the Salvager bonus, as your own Salvager results already have it
+local function Scaled(outcomes, scale)
+  local out = {}
+  for i, o in ipairs(outcomes) do
+    out[i] = Outcome(o.id, o.chance, o.quantity * scale, o.min and o.min * scale, o.max and o.max * scale)
+  end
+  return out
+end
+
+-- Materials only your results have, each at hits / denominator, with their recorded range
+local function AddOwnOnly(out, materials, denominator, known)
+  for id, m in pairs(materials) do
+    if m.hits > 0 and not known[id] then
+      out[#out + 1] = Outcome(id, m.hits / denominator, m.total / m.hits, m.min, m.max)
+    end
+  end
+end
+
+-- The prior counted as PRIOR_WEIGHT disenchants, plus your n. A material's chance is its share of
+-- all those disenchants, and its average quantity the mean over every time it dropped. Your
+-- fewest and most widen the prior's range; a prior with no range (an estimate) keeps none.
+local function Blend(prior, materials, n)
+  local out, known = {}, {}
+  for i, p in ipairs(prior) do
+    local own = materials[p.id] or NO_RESULTS
+    local weight = PRIOR_WEIGHT * p.chance
+    local min = p.min and math.min(p.min, own.min or p.min)
+    local max = p.max and math.max(p.max, own.max or p.max)
+    out[i] = Outcome(p.id, (weight + own.hits) / (PRIOR_WEIGHT + n),
+      (weight * p.quantity + own.total) / (weight + own.hits), min, max)
+    known[p.id] = true
+  end
+  AddOwnOnly(out, materials, PRIOR_WEIGHT + n, known)
+  return out
+end
+
+local function Disenchants(n)
+  return n .. (n == 1 and " disenchant" or " disenchants")
+end
+
+-- The outcomes, with any Salvager bonus in their quantities, and where they came from:
+-- "Classic table", "Forever estimate", either with " + your 34 disenchants", or "Your 34
+-- disenchants" for an item with no prior. Your own results are for the item, under the current
+-- Salvager setting.
 local function Outcomes(id)
   if NO_DISENCHANT[id] or not C_Item.GetItemInfo then return nil end
   local _, _, quality, level, _, _, _, _, _, _, _, classID = C_Item.GetItemInfo(id)
   if not (quality and level and classID) then return nil end
 
-  local observed, samples = Observed(id, quality, level, classID)
-  if observed then return observed, "observed", samples end
-  if CRAFT_ESTIMATES[id] then return CRAFT_ESTIMATES[id], "estimate" end
-  if classID ~= WEAPON and classID ~= ARMOR then return nil end
-  local weapon = classID == WEAPON
-  if quality == RARE and id >= NEW_ITEM_ID then
-    local estimate = NewRareEstimate(level, weapon)
-    if estimate then return estimate, "estimate" end
+  local sample = ns.DisenchantLog.Sample(id, quality, level, classID, SalvagerActive())
+  local n = sample and sample.count or 0
+  local materials = sample and sample.materials or {}
+  local prior, name = Prior(id, quality, level, classID)
+  if not prior then
+    if n < MIN_SAMPLES then return nil end
+    local out = {}
+    AddOwnOnly(out, materials, n, {})
+    if #out > 0 then return out, "Your " .. Disenchants(n) end
     return nil
   end
-  local classic = ClassicTable(quality, level, weapon)
-  if classic then return classic, "table" end
+  local blended = Blend(Scaled(prior, 1 + SalvagerBonus()), materials, n)
+  if n == 0 then return blended, name end
+  return blended, name .. " + your " .. Disenchants(n)
 end
 
--- Expected copper from disenchanting one item, at each material's latest wall price, and a
--- short note on the source ("your 34 disenchants", "estimate", or nil for the classic table).
--- Nil when the item cannot be disenchanted; false when a likely material has no price yet.
--- With depositOf(materialID), the one-unit deposit to list a material, it also returns the
--- expected deposits to list the materials; a material with no price counts neither.
+-- Expected copper from disenchanting one item, at each material's latest wall price, and the
+-- name of where its odds come from, as Outcomes gives it. Nil when the item cannot be
+-- disenchanted; false when a likely material has no price yet. With depositOf(materialID), the
+-- one-unit deposit to list a material, it also returns the expected deposits to list the
+-- materials; a material with no price counts neither.
 function ns.DisenchantValue(id, depositOf)
-  local outcomes, source, samples = Outcomes(id)
+  local outcomes, source = Outcomes(id)
   if not outcomes then return nil end
   local total, deposits = 0, depositOf and 0
   for _, o in ipairs(outcomes) do
-    local price = ns.LatestWall(o[1])
+    local price = ns.LatestWall(o.id)
     if price then
-      total = total + o[2] * o[3] * price
-      if deposits then deposits = deposits + o[2] * o[3] * depositOf(o[1]) end
-    elseif o[2] >= 0.01 then
+      total = total + o.chance * o.quantity * price
+      if deposits then deposits = deposits + o.chance * o.quantity * depositOf(o.id) end
+    elseif o.chance >= 0.01 then
       return false
     end
   end
-  if source == "observed" then
-    return total, "your " .. samples .. " disenchants", deposits   -- already includes any Salvager bonus
-  end
-  local scale = 1 + SalvagerBonus()
-  return total * scale, source == "estimate" and "estimate" or nil, deposits and deposits * scale
+  return total, source, deposits
 end
 
-local SOURCE_NAMES = { estimate = "Forever estimate", table = "classic table" }
-
--- What disenchanting one item gives: a list of { id, chance (0-1), quantity }, the average
--- quantity including any Salvager bonus as DisenchantValue counts it, and the source's name
--- ("your 34 disenchants", "Forever estimate" or "classic table"). Nil when it cannot be
--- disenchanted.
+-- What disenchanting one item gives: a list of { id, chance (0-1), quantity, min, max }, where
+-- quantity is the average when it drops and min and max the fewest and most in one disenchant
+-- (nil when only the average is known), all with any Salvager bonus as DisenchantValue counts
+-- it; and where the odds come from. Nil when it cannot be disenchanted.
 function ns.DisenchantOutcomes(id)
-  local outcomes, source, samples = Outcomes(id)
-  if not outcomes then return nil end
-  local scale = source == "observed" and 1 or 1 + SalvagerBonus()
-  local list = {}
-  for _, o in ipairs(outcomes) do
-    list[#list + 1] = { id = o[1], chance = o[2], quantity = o[3] * scale }
-  end
-  return list, source == "observed" and ("your " .. samples .. " disenchants") or SOURCE_NAMES[source]
+  return Outcomes(id)
 end
 
 -- The Enchanting skill the classic rules ask for before an item can be disenchanted, by item
@@ -216,8 +266,6 @@ function ns.DisenchantSkill(level)
   if level <= 20 then return 1 end
   return math.min(225, 25 * math.ceil((level - 20) / 5))
 end
-
-local ODDS_FROM = { estimate = "Forever estimate" }
 
 -- Gear check that needs no server round trip, for filtering a whole scan cheaply
 function ns.IsGear(id)
@@ -232,14 +280,14 @@ local function Deal(id, price, cut, depositOf)
   local _, _, quality, level, _, _, _, _, _, _, _, classID = C_Item.GetItemInfo(id)
   if not quality then return nil, true end
   if not (quality >= UNCOMMON and (classID == WEAPON or classID == ARMOR)) then return nil end
-  local value, note, deposits = ns.DisenchantValue(id, depositOf)
+  local value, odds, deposits = ns.DisenchantValue(id, depositOf)
   if not value then return nil end
   value = ns.Outlet.Net(value, cut, deposits)
   local profit = value - price
   local pct = profit / price
   if profit <= 0 then return nil end
   return { id = id, price = price, value = value, profit = profit, pct = pct,
-    odds = ODDS_FROM[note] or note or "classic table", skill = ns.DisenchantSkill(level) }
+    odds = odds, skill = ns.DisenchantSkill(level) }
 end
 
 -- prices: { [itemID] = cheapest buyout }; depositOf(materialID): the one-unit deposit to list a

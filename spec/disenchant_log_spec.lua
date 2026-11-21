@@ -111,7 +111,7 @@ describe("DisenchantLog", function()
       assert.same({}, kinds)
       assert.same({}, MarketWallDB.mobs)
       local sample = Log.Sample(BRACERS, UNCOMMON, 28, ARMOR, false)
-      assert.same({ count = 1, materials = { [SOUL_DUST] = { hits = 1, total = 2 } } }, sample)
+      assert.same({ count = 1, materials = { [SOUL_DUST] = { hits = 1, total = 2, min = 2, max = 2 } } }, sample)
     end)
 
     it("never counts a disenchant whose item is unknown as container loot", function()
@@ -167,13 +167,27 @@ describe("DisenchantLog", function()
       assert.equal("2:26-30:4:normal", Log.SampleKey(200002, UNCOMMON, 28, ARMOR, false))   -- a new green: classic
     end)
 
-    it("counts a material's hits and total quantity", function()
-      local event = { kind = "disenchant", item = BRACERS, quality = UNCOMMON, level = 28, classID = ARMOR, salvager = false }
-      event.materials = { [SOUL_DUST] = 2 }
-      ns.Recording.Emit(event)
-      event.materials = { [SOUL_DUST] = 1, [VISION_DUST] = 1 }
-      ns.Recording.Emit(event)
-      assert.same({ count = 2, materials = { [SOUL_DUST] = { hits = 2, total = 3 }, [VISION_DUST] = { hits = 1, total = 1 } } },
+    local function Disenchanted(materials)
+      ns.Recording.Emit({ kind = "disenchant", item = BRACERS, quality = UNCOMMON, level = 28, classID = ARMOR,
+        salvager = false, materials = materials })
+    end
+
+    it("counts a material's hits, total quantity and fewest and most in one disenchant", function()
+      Disenchanted({ [SOUL_DUST] = 2 })
+      Disenchanted({ [SOUL_DUST] = 1, [VISION_DUST] = 1 })
+      Disenchanted({ [SOUL_DUST] = 5 })
+      assert.same({ count = 3, materials = {
+        [SOUL_DUST] = { hits = 3, total = 8, min = 1, max = 5 },
+        [VISION_DUST] = { hits = 1, total = 1, min = 1, max = 1 },
+      } }, Log.Sample(BRACERS, UNCOMMON, 28, ARMOR, false))
+    end)
+
+    it("adds to a sample saved before the fewest and most were recorded", function()
+      MarketWallDB.disenchants.samples = {
+        ["2:26-30:4:normal"] = { count = 10, materials = { [SOUL_DUST] = { hits = 10, total = 30 } } },
+      }
+      Disenchanted({ [SOUL_DUST] = 4 })
+      assert.same({ count = 11, materials = { [SOUL_DUST] = { hits = 11, total = 34, min = 4, max = 4 } } },
         Log.Sample(BRACERS, UNCOMMON, 28, ARMOR, false))
     end)
   end)

@@ -35,10 +35,34 @@ local function Decimal(x)
   return (string.format("%.1f", x):gsub("%.0$", ""))
 end
 
--- One dim line per likely material under the Disenchant row, most likely first: its chance, its
--- name and its latest wall
-local function DisenchantLines(add, id)
-  local outcomes = ns.DisenchantOutcomes(id)
+-- How many of a material one disenchant gives: "2–5", "1", or "~2.5" when only the average is known
+local function Quantity(o)
+  if not o.min then return "~" .. Decimal(o.quantity) end
+  if o.min == o.max then return Decimal(o.min) end
+  return Decimal(o.min) .. "–" .. Decimal(o.max)
+end
+
+-- One disenchant's worst and best outcome after the cut and deposit: the fewest of the cheapest
+-- material up to the most of the dearest. Nil when none of them has a price.
+local function Range(shown, prices, cut)
+  local worst, best
+  for _, o in ipairs(shown) do
+    local wall = ns.LatestWall(o.id)
+    if wall then
+      local deposit = prices.deposit(o.id)
+      local fewest, most = o.min or o.quantity, o.max or o.quantity
+      local low = Outlet.Net(fewest * wall, cut, fewest * deposit)
+      local high = Outlet.Net(most * wall, cut, most * deposit)
+      worst, best = math.min(worst or low, low), math.max(best or high, high)
+    end
+  end
+  return worst, best
+end
+
+-- One dim line per likely material under the Disenchant row, most likely first: its chance, how
+-- many, its name and its latest wall each. Then where the odds come from and one disenchant's range.
+local function DisenchantLines(add, id, prices, cut)
+  local outcomes, source = ns.DisenchantOutcomes(id)
   if not outcomes then return end
   local shown = {}
   for _, o in ipairs(outcomes) do
@@ -46,8 +70,13 @@ local function DisenchantLines(add, id)
   end
   table.sort(shown, function(a, b) return a.chance > b.chance end)
   for _, o in ipairs(shown) do
-    add(DETAIL .. DIM .. Decimal(o.chance * 100) .. "% " .. ns.Name(o.id) .. "|r", Price(ns.LatestWall(o.id), DIM))
+    local wall = ns.LatestWall(o.id)
+    add(DETAIL .. DIM .. Decimal(o.chance * 100) .. "%  " .. Quantity(o) .. "  " .. ns.Name(o.id) .. "|r",
+      Price(wall, DIM) .. (wall and DIM .. " each|r" or ""))
   end
+  local worst, best = Range(shown, prices, cut)
+  local range = worst and " · range " .. ns.MoneyFaded(worst) .. " to " .. ns.MoneyFaded(best) or ""
+  add(DETAIL .. DIM .. source .. range .. "|r", "")
 end
 
 -- What one input nets as its share of the product (Outlet.CONVERSIONS), after the cut and the
@@ -96,7 +125,7 @@ local function OutletLines(add, id, count, details)
   if disenchant ~= nil then
     OutletRow(add, "Disenchant", Outlet.DISENCHANT, best,
       disenchant and Outlet.Net(disenchant, opts.cut, deposits) or "materials not scanned")
-    if details then DisenchantLines(add, id) end
+    if details then DisenchantLines(add, id, prices, opts.cut) end
   end
 
   if conversion then

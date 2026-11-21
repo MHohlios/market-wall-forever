@@ -1,6 +1,6 @@
 -- MarketWall: the disenchant log. Each of your disenchants becomes a "disenchant" event in the
--- recording core, and its materials are added to its sample, which Disenchant.lua prefers over
--- estimates once it has 20 results.
+-- recording core, and its materials are added to its sample, which Disenchant.lua blends with
+-- the estimates and tables.
 --
 -- Pairing a disenchant with its loot: when a Disenchant cast (spell 13262) starts, the item under
 -- it is the one locked in your bags; the cast locks its target however it was aimed (a click, a
@@ -14,8 +14,9 @@
 -- count them twice. (The live Disenchantry file had no samples to import when this was written.)
 --
 -- Saved in MarketWallDB.disenchants, shared by every character:
---   samples  [key] = { count = disenchants, materials = { [itemID] = { hits =, total = } } }
---            keyed by SampleKey
+--   samples  [key] = { count = disenchants, materials = { [itemID] = { hits =, total =, min =, max = } } }
+--            keyed by SampleKey; min and max are the fewest and most in one disenchant, recorded
+--            from the update that added them, so older and imported samples lack them
 --   imported true once Disenchantry has been imported
 local _, ns = ...
 
@@ -53,6 +54,7 @@ local function AddMaterial(sample, id, hits, total)
   local m = sample.materials[id] or { hits = 0, total = 0 }
   m.hits, m.total = m.hits + hits, m.total + total
   sample.materials[id] = m
+  return m
 end
 
 -- Your results for an item, nil before the first one
@@ -66,7 +68,10 @@ local function Add(store, event)
   local key = Log.SampleKey(event.item, event.quality, event.level, event.classID, event.salvager)
   local sample = SampleIn(store.samples, key)
   sample.count = sample.count + 1
-  for id, qty in pairs(event.materials) do AddMaterial(sample, id, 1, qty) end
+  for id, qty in pairs(event.materials) do
+    local m = AddMaterial(sample, id, 1, qty)
+    m.min, m.max = math.min(m.min or qty, qty), math.max(m.max or qty, qty)
+  end
 end
 
 -- What a disenchant needs to know about its item: nil unless it is weapon or armor with known info
@@ -197,7 +202,7 @@ Log.tracker = tracker
 ns.Recording.On("disenchant", function(event)
   local store = Store()
   if store then Add(store, event) end
-  ns.Mobs.Invalidate()   -- a 20th result changes the disenchant value in mobs' Optimal
+  ns.Mobs.Invalidate()   -- each result changes the disenchant value in mobs' Optimal
   ns.SearchChanged()
 end)
 

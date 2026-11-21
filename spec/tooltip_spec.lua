@@ -259,7 +259,8 @@ describe("item tooltip lines", function()
       shift = true
       ns.TooltipLines.Add(tooltip, ID)
       AssertLines({ " ", HEADING .. "MarketWall|r|", "Only 4 days of data", "Market|r", "Vendor|r", "Disenchant|r",
-        "75% Dust", "20% Essence", "5% Shard", "Against median|r", "7-day trend|r", "Your buy / sell|r" })
+        "75%  2–3  Dust", "20%  1–2  Essence", "5%  1  Shard", "Classic table · range",
+        "Against median|r", "7-day trend|r", "Your buy / sell|r" })
     end)
 
     it("hints at Shift only when it would add detail, and not while it is held", function()
@@ -380,7 +381,7 @@ describe("item tooltip lines", function()
       shift = true
       ns.TooltipLines.Add(tooltip, ID)
       assert.truthy(Find("Disenchant|r|" .. WHITE .. ns.Money(558.125 - 17.625)))
-      assert.truthy(Find("75% Dust|r|" .. DIM .. ns.MoneyFaded(100)))
+      assert.truthy(Find("  Dust|r|" .. DIM .. ns.MoneyFaded(100)))
     end)
 
     it("moves the bright row to the vendor once the deposits count", function()
@@ -435,27 +436,52 @@ describe("item tooltip lines", function()
       shift = true
       ns.TooltipLines.Add(tooltip, ID)
       assert.truthy(Find("Disenchant|r|" .. FADED .. "materials not scanned|r"))
-      assert.truthy(Find("5% Shard|r|" .. DIM .. "-|r"))
+      assert.truthy(Find("5%  1  Shard|r|" .. DIM .. "-|r"))
     end)
 
-    it("shows each material's chance, plain name and wall, without its quantity", function()
+    it("shows each material's chance, how many, plain name and wall each", function()
       shift = true
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(Find("      " .. DIM .. "75% Dust|r|" .. DIM .. ns.MoneyFaded(100) .. "|r"))
-      assert.truthy(Find("      " .. DIM .. "20% Essence|r|" .. DIM .. ns.MoneyFaded(1000) .. "|r"))
-      assert.truthy(Find("      " .. DIM .. "5% Shard|r|" .. DIM .. ns.MoneyFaded(2000) .. "|r"))
+      local each = "|r" .. DIM .. " each|r"
+      assert.truthy(Find("      " .. DIM .. "75%  2–3  Dust|r|" .. DIM .. ns.MoneyFaded(100) .. each))
+      assert.truthy(Find("      " .. DIM .. "20%  1–2  Essence|r|" .. DIM .. ns.MoneyFaded(1000) .. each))
+      assert.truthy(Find("      " .. DIM .. "5%  1  Shard|r|" .. DIM .. ns.MoneyFaded(2000) .. each))
       assert.is_nil(Find("×"))
+    end)
+
+    it("ends with where the odds come from and one disenchant's range after the cut and deposit", function()
+      items[DUST].vendor, items[ESSENCE].vendor = 10, 100
+      local depositOf = ns.Mobs.GamePrices().deposit
+      local function Net(count, wall, id) return count * (wall * 0.95 - depositOf(id)) end
+      shift = true
+      ns.TooltipLines.Add(tooltip, ID)
+      -- the fewest dust (2) up to the one shard, which beats the most essence (2) after their deposits
+      assert.is_true(Net(1, 2000, SHARD) > Net(2, 1000, ESSENCE))
+      local range = ns.MoneyFaded(Net(2, 100, DUST)) .. " to " .. ns.MoneyFaded(Net(1, 2000, SHARD))
+      assert.equal(Find("5%  1  Shard") + 1, Find("      " .. DIM .. "Classic table · range " .. range .. "|r|"))
+    end)
+
+    it("shows an estimate's average quantity, as it has no range", function()
+      local NEW_RARE, BRILLIANT = 200001, 14344
+      Item(NEW_RARE, "Rare", { quality = 3, level = 60, classID = ARMOR })
+      Item(BRILLIANT, "Brilliant", { classID = 7 })
+      Wall(BRILLIANT, 3000)
+      shift = true
+      ns.TooltipLines.Add(tooltip, NEW_RARE)
+      assert.truthy(Find(DIM .. "99.5%  ~1  Brilliant|r|"))
+      local each = ns.MoneyFaded(3000 * 0.95 - ns.Mobs.GamePrices().deposit(BRILLIANT))
+      assert.truthy(Find(DIM .. "Forever estimate · range " .. each .. " to " .. each .. "|r|"))
     end)
 
     it("sorts materials by chance, most likely first", function()
       ns.DisenchantOutcomes = function()
         return { { id = SHARD, chance = 0.05, quantity = 1 }, { id = DUST, chance = 0.75, quantity = 2.5 },
-          { id = ESSENCE, chance = 0.2, quantity = 1.5 } }, "classic table"
+          { id = ESSENCE, chance = 0.2, quantity = 1.5 } }, "Classic table"
       end
       shift = true
       ns.TooltipLines.Add(tooltip, ID)
-      assert.is_true(Find("% Dust|") < Find("% Essence|"))
-      assert.is_true(Find("% Essence|") < Find("% Shard|"))
+      assert.is_true(Find(" Dust|") < Find(" Essence|"))
+      assert.is_true(Find(" Essence|") < Find(" Shard|"))
     end)
 
     it("skips materials under 1%", function()
@@ -468,16 +494,18 @@ describe("item tooltip lines", function()
       Wall(NEXUS, 9000)
       shift = true
       ns.TooltipLines.Add(tooltip, NEW_RARE)
-      assert.truthy(Find("99.5% Brilliant"))
+      assert.truthy(Find("99.5%  ~1  Brilliant"))
       assert.is_nil(Find("Nexus"))
     end)
 
-    it("reads the chances from your own disenchants once there are enough", function()
+    it("blends your own disenchants into the chances and the ranges, and names them", function()
       local key = ns.DisenchantLog.SampleKey(ID, UNCOMMON, 18, ARMOR, false)
-      MarketWallDB.disenchants = { samples = { [key] = { count = 25, materials = { [DUST] = { hits = 25, total = 50 } } } } }
+      MarketWallDB.disenchants = { samples = { [key] = { count = 25,
+        materials = { [DUST] = { hits = 25, total = 50, min = 1, max = 3 } } } } }
       shift = true
       ns.TooltipLines.Add(tooltip, ID)
-      assert.truthy(Find("100% Dust"))
+      assert.truthy(Find("83.3%  1–3  Dust"))   -- (50 × 75% + 25) / (50 + 25)
+      assert.truthy(Find(DIM .. "Classic table + your 25 disenchants · range "))
     end)
 
     it("shows no normal range or cheapest / dearest time", function()

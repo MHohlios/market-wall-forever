@@ -639,7 +639,7 @@ local DISENCHANT_COLUMNS = {
   { "Net DE value", 130, "RIGHT", "Expected value of the materials from one disenchant, at their wall prices, after the auction house cut and the deposit to list each material, as the item tooltip's Disenchant (net) shows it.", money = true, grey = true },
   { "Profit", 100, "RIGHT", "Net disenchant value minus the price.", money = true, answer = true },
   { "Profit %", 80, "RIGHT", "Profit as a share of the price." },
-  { "Odds from", 150, nil, "Where the material odds come from: your own disenchants (recorded by MarketWall), a Forever estimate, or the classic disenchanting table.", grey = true },
+  { "Odds from", 150, nil, "Where the material odds come from: the Classic table or a Forever estimate, blended with your own disenchants (recorded by MarketWall) as they add up, as in \"Classic table + your 34 disenchants\".", grey = true },
 }
 local COLUMNS = { watch = WATCH_COLUMNS, snipes = SNIPE_COLUMNS, dips = DIP_COLUMNS, disenchant = DISENCHANT_COLUMNS }
 ui.COLUMNS = COLUMNS   -- for specs
