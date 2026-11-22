@@ -345,9 +345,10 @@ local function FitText(cell, text, suffix)
     Show(plain .. "…")
   end
 end
--- A cell's text: a money column's copper as short money, its coins faded in a grey column
+-- A cell's text: a money column's copper as short money, its coins faded in a grey column, and
+-- a dash for a missing amount
 local function CellText(col, value)
-  if not (col.money and type(value) == "number") then return value or "" end
+  if not col.money or type(value) == "string" then return value or "" end
   return col.grey and ns.MoneyShortFaded(value) or ns.MoneyShort(value)
 end
 ui.CellText = CellText   -- for specs

@@ -64,6 +64,8 @@ describe("money", function()
       assert.equal(ns.MoneyShortFaded(14123), ui.CellText({ money = true, grey = true }, 14123))
       assert.equal(ns.MoneyShort(14123), ui.CellText({ money = true }, 14123))
       assert.equal("-", ui.CellText({ money = true, grey = true }, "-"))
+      assert.equal("-", ui.CellText({ money = true, grey = true }, nil))   -- no price yet
+      assert.equal("-", ui.CellText({ money = true }, nil))
     end)
   end)
 
