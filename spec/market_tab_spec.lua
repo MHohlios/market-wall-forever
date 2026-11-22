@@ -6,6 +6,7 @@ local function Showable(frame)
   frame.shown = true
   function frame:Show() self.shown = true end
   function frame:Hide() self.shown = false end
+  function frame:SetShown(shown) self.shown = shown and true or false end
   function frame:IsShown() return self.shown end
   return frame
 end
@@ -142,6 +143,77 @@ describe("the Market tab", function()
       ShowBuy()
       assert.is_false(MarketPage():IsShown())
       assert.equals(MarketTab(), deselected)
+    end)
+
+    describe("lists with nothing to show", function()
+      local function EmptyOf(view)
+        ns.ui.Show(view)
+        return addon.Plain(ns.ui.list.emptyText)
+      end
+
+      before_each(ClickMarket)
+
+      it("invite a first watchlist item", function()
+        assert.equal("Your watchlist is empty.\nAdd items you buy or sell often, and MarketWall tells you when to buy and when to sell.",
+          EmptyOf("watch"))
+      end)
+
+      it("ask for a full scan before there is one", function()
+        assert.equal("Run a full scan to look for listings priced under the wall.", EmptyOf("snipes"))
+        assert.equal("Run a full scan. Dips compare today's wall price with each item's own history.", EmptyOf("dips"))
+        assert.equal("Run a full scan to look for gear listed under its disenchant value.", EmptyOf("disenchant"))
+      end)
+
+      it("say a full scan this session found none", function()
+        ns.lastFullScan = time()
+        assert.equal("No snipes in the last full scan.", EmptyOf("snipes"))
+        assert.equal("No dips in the last full scan.", EmptyOf("dips"))
+        assert.equal("No disenchant deals in the last full scan.", EmptyOf("disenchant"))
+      end)
+
+      it("say a full scan from an earlier session is not loaded", function()
+        ns.R().lastFull = time() - 7200
+        assert.equal("Results are from this session only.\nRun a full scan to refresh the list. Last full scan: 2h ago.",
+          EmptyOf("snipes"))
+      end)
+    end)
+
+    describe("the watchlist's Add row", function()
+      local printed
+
+      local function Type(text)
+        local box = ns.ui.addBox
+        box.text = text
+        function box:GetText() return self.text end
+        function box:SetText(value) self.text = value end
+      end
+
+      before_each(function()
+        ClickMarket()
+        ns.ui.Show("watch")
+        printed = nil
+        ns.Print = function(text) printed = text end
+      end)
+
+      it("shows only on the watchlist", function()
+        assert.is_true(ns.ui.footer:IsShown())
+        ns.ui.Show("snipes")
+        assert.is_false(ns.ui.footer:IsShown())
+      end)
+
+      it("opens the typed item's page on Enter and clears the box", function()
+        ns.R().names[2589] = "Linen Cloth"
+        Type("linen cloth")
+        ns.ui.addBox.scripts.OnEnterPressed(ns.ui.addBox)
+        assert.same({ "item", 2589, "" }, { ns.ui.view, ns.ui.itemID, ns.ui.addBox.text })
+      end)
+
+      it("keeps the text and says so when no item matches", function()
+        Type("no such item")
+        ns.ui.addBox.scripts.OnEnterPressed(ns.ui.addBox)
+        assert.same({ "watch", "no such item" }, { ns.ui.view, ns.ui.addBox.text })
+        assert.truthy(printed)
+      end)
     end)
   end)
 

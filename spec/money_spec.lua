@@ -53,6 +53,20 @@ describe("money", function()
     end)
   end)
 
+  describe("MoneyShortFaded", function()
+    it("shows the same short amount as MoneyShort, with each coin icon tinted darker", function()
+      assert.equal("1|TInterface\\MoneyFrame\\UI-GoldIcon:0:0:0:0:64:64:0:64:0:64:128:128:128|t "
+        .. "41|TInterface\\MoneyFrame\\UI-SilverIcon:0:0:0:0:64:64:0:64:0:64:128:128:128|t", ns.MoneyShortFaded(14123))
+    end)
+
+    it("fades the coins of a list's grey money columns only", function()
+      local ui = ns.ui
+      assert.equal(ns.MoneyShortFaded(14123), ui.CellText({ money = true, grey = true }, 14123))
+      assert.equal(ns.MoneyShort(14123), ui.CellText({ money = true }, 14123))
+      assert.equal("-", ui.CellText({ money = true, grey = true }, "-"))
+    end)
+  end)
+
   describe("MoneyShort", function()
     it("shows at most two coins, rounding gold amounts to the nearest silver", function()
       assert.equal("5g 5s", Plain(ns.MoneyShort(50473)))

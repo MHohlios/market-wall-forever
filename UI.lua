@@ -345,6 +345,13 @@ local function FitText(cell, text, suffix)
     Show(plain .. "…")
   end
 end
+-- A cell's text: a money column's copper as short money, its coins faded in a grey column
+local function CellText(col, value)
+  if not (col.money and type(value) == "number") then return value or "" end
+  return col.grey and ns.MoneyShortFaded(value) or ns.MoneyShort(value)
+end
+ui.CellText = CellText   -- for specs
+
 -- A cell's text in its column's colour: green for the answer column, grey for supporting
 -- numbers, white otherwise. Text that brings its own colour keeps it.
 local function ColumnColor(col, text)
@@ -559,8 +566,7 @@ local function CreateList(parent, rows)
         for c = 1, #self.columns do
           local suffix = entry.suffixes and entry.suffixes[c]
           local text = entry.cells[c]
-          if self.columns[c].money and type(text) ~= "string" then text = ns.MoneyShort(text) end
-          text = ColumnColor(self.columns[c], text or "")
+          text = ColumnColor(self.columns[c], CellText(self.columns[c], text))
           if suffix then FitText(row.cells[c], text, suffix) else row.cells[c]:SetText(text) end
         end
         row.icon:SetTexture(entry.id and ns.Icon(entry.id) or nil)
@@ -639,7 +645,7 @@ local DISENCHANT_COLUMNS = {
   { "Net DE value", 130, "RIGHT", "Expected value of the materials from one disenchant, at their wall prices, after the auction house cut and the deposit to list each material, as the item tooltip's Disenchant (net) shows it.", money = true, grey = true },
   { "Profit", 100, "RIGHT", "Net disenchant value minus the price.", money = true, answer = true },
   { "Profit %", 80, "RIGHT", "Profit as a share of the price." },
-  { "Odds from", 150, nil, "Where the material odds come from: the Classic table or a Forever estimate, blended with your own disenchants (recorded by MarketWall) as they add up, as in \"Classic table + your 34 disenchants\".", grey = true },
+  { "Odds from", 150, nil, "Where the material odds come from: the Classic table or a Forever estimate, blended with your own disenchants (recorded by MarketWall) as they add up. \"Table + 34 yours\" is the Classic table and your 34 disenchants; hover a cell for its full source.", cellTip = true, grey = true },
 }
 local COLUMNS = { watch = WATCH_COLUMNS, snipes = SNIPE_COLUMNS, dips = DIP_COLUMNS, disenchant = DISENCHANT_COLUMNS }
 ui.COLUMNS = COLUMNS   -- for specs
@@ -666,7 +672,7 @@ local function WatchData()
     end
     local range, exactRange = "building", nil
     if stats.n > 0 then
-      range = ns.MoneyShort(stats.p25) .. " – " .. ns.MoneyShort(stats.p75)
+      range = ns.MoneyShortFaded(stats.p25) .. " – " .. ns.MoneyShortFaded(stats.p75)
       exactRange = ns.Money(stats.p25) .. " to " .. ns.Money(stats.p75)
     end
     local under = cur.under and tostring(cur.under) or "-"
@@ -716,23 +722,37 @@ local function DipData()
 end
 ui.DipData = DipData   -- for specs
 
+-- The Odds from cell's short form of a blended source, which the column is too narrow for:
+-- "Classic table + your 34 disenchants" is "Table + 34 yours"
+local function ShortOdds(source)
+  local prior, n = source:match("^(.-) %+ your (%d+) disenchants?$")
+  if not prior then return source end
+  return (prior == "Classic table" and "Table" or "Estimate") .. " + " .. n .. " yours"
+end
+ui.ShortOdds = ShortOdds   -- for specs
+
 -- Deals that pass the thresholds and this character can disenchant, or all that pass when the
--- box is ticked or the skill is unknown. Also returns the skill and how many passing deals it hides.
+-- box is ticked or the skill is unknown. Also returns the skill, how many passing deals it hides
+-- and how many of the scan's deals it lets the thresholds show.
 local function DisenchantData()
   local skill = ns.EnchantingSkill()
   local showAll = ns.Cfg("disenchantShowAll") or skill == nil
-  local data, hidden = {}, 0
-  for _, d in ipairs(ns.Passing(ns.DisenchantDeals(), ns.PassesDisenchant)) do
-    if showAll or d.skill <= skill then
+  local data, hidden, showable = {}, 0, 0
+  for _, d in ipairs(ns.DisenchantDeals()) do
+    local withinSkill = showAll or d.skill <= skill
+    local passes = ns.PassesDisenchant(d)
+    if withinSkill then showable = showable + 1 end
+    if passes and withinSkill then
       data[#data + 1] = { id = d.id,
-        cells = { ns.ColorName(d.id), d.price, d.value, d.profit, Pct(d.pct), d.odds },
+        cells = { ns.ColorName(d.id), d.price, d.value, d.profit, Pct(d.pct), ShortOdds(d.odds) },
+        cellTips = { [6] = d.odds },
         sort = { ns.Name(d.id), d.price, d.value, d.profit, d.pct, d.odds },
       }
-    else
+    elseif passes then
       hidden = hidden + 1
     end
   end
-  return data, skill, hidden
+  return data, skill, hidden, showable
 end
 ui.DisenchantData = DisenchantData   -- for specs
 
@@ -1150,7 +1170,7 @@ local SETTING_GROUPS = {
     { key = "minHistoryDays", label = "Days before data is reliable", kind = "int", min = 1, max = ns.cfgDefaults.baselineDays + 1, note = "Fewer days get the orange badge",
       tip = "Items with fewer days of scans than this get an orange low-data flag. It only sets the flag; nothing is hidden. 1 to " .. (ns.cfgDefaults.baselineDays + 1) .. "." },
     { key = "minSupply", label = "Minimum supply", kind = "int", note = "Thinner markets are left out",
-      tip = "Items with fewer units listed than this are left out of Snipes and Dips, because thin markets give unreliable prices. Tooltips and the Sell page call such a market thin but still use its price." .. ON_LAST_SCAN },
+      tip = "Items with fewer units listed than this are left out of Snipes and Dips, because thin markets give unreliable prices. Tooltips and the Sell page call such a market thin but still use its price. Applies to Snipes and Dips from the last full scan right away, and can also be set above the Dips list. Thin labels elsewhere, mob values included, change at the next scan." },
   } },
   { title = "Snipes and Dips", column = 1, settings = {
     { key = "minSnipeProfit", label = "Minimum snipe profit", kind = "money", note = "After the cut",
@@ -1268,13 +1288,17 @@ local function TipOnHover(frame, def)
 end
 
 -- A box for one setting, on the Settings page or over a list: it saves what it reads, on Enter
--- or on leaving the box, shows the stored value again, then calls onSaved if given
+-- or on leaving the box, shows the stored value again, then calls onSaved if the value changed
 function ui.SettingEdit(parent, def, onSaved)
   local edit = MakeEdit(parent, SETTING_EDIT_W)
+  -- Returns true only when the setting changed; untouched text is its rounded display
   local function Save(self)
-    local value = ParseSetting(def, self:GetText() or "")
-    if value ~= nil then SaveSetting(def.key, value) end
-    return value ~= nil
+    local text = self:GetText() or ""
+    if text == FormatSetting(def) then return false end
+    local value = ParseSetting(def, text)
+    if value == nil or value == ns.Cfg(def.key) then return false end
+    SaveSetting(def.key, value)
+    return true
   end
   -- Shown only once the typed text is saved, so the rounded display is never saved again
   local function Show(self, saved)
@@ -1391,9 +1415,11 @@ local function SettingDef(key)
   end
 end
 
--- A threshold changed: the list re-filters the last full scan from its top
+-- A threshold changed: the list re-filters the last full scan from its top, and a finished
+-- scan's message gives way to the status line's new count
 local function Retune()
   ui.list.offset = 0
+  ns.statusTime = nil
   ns.RefreshUI()
 end
 
@@ -1551,19 +1577,22 @@ function ui.DisenchantEmptyText(skill, hidden, total)
     body[1] = Count(total, "deal") .. " in the last full scan; lower the values above to see them."
   end
   if skill == 0 then body[#body + 1] = "Your Enchanting is 0, so only items you can't disenchant yet would show." end
-  if hidden > 0 then body[#body + 1] = string.format("%s in the last scan need more skill; tick the box to see them.", Count(hidden, "deal")) end
+  if hidden > 0 then
+    body[#body + 1] = string.format("%s in the last scan %s more skill; tick the box to see them.",
+      Count(hidden, "deal"), hidden == 1 and "needs" or "need")
+  end
   return EmptyText(title, #body > 0 and table.concat(body, "\n") or nil)
 end
 
 local function RefreshDisenchant()
-  local data, skill, hidden = DisenchantData()
+  local data, skill, hidden, showable = DisenchantData()
   local total = #ns.DisenchantDeals()
   -- the status line ends before the scan buttons, so its note stays short; the hint explains
   local skillNote = skill and ("Enchanting " .. ns.COLOR.VALUE .. skill .. "|r") or (WARN .. "Enchanting unknown|r")
   local hint = "Click a row to load live listings before buying."
   if not skill then hint = hint .. " Your Enchanting skill is unknown, so every item is shown." end
   ListView("disenchant", data, ui.DisenchantEmptyText(skill, hidden, total), hint,
-    ui.CountOf(#data, total, "deal") .. " · " .. skillNote)
+    ui.CountOf(#data, showable, "deal") .. " · " .. skillNote)
   ui.showAllBox:SetChecked(ns.Cfg("disenchantShowAll") and true or false)
 end
 
@@ -1612,18 +1641,19 @@ end
 
 -- The idle status line: "Full scan just now · Watchlist scan never · 105 snipes", grey with
 -- the times in white. Bait Detect's list comes from full scans and its own live searches.
+-- At the neutral Auction House, where nothing scans, it leaves out the watchlist and the prompt.
 function ui.StatusLine()
   local r = ns.R()
   local function Value(text) return "|r" .. ns.COLOR.VALUE .. text .. "|r" .. GREY end
   local parts = { "Full scan " .. Value(ns.Ago(r.lastFull)) }
   if ui.view == "bait" then
     parts[1] = parts[1] .. ", updated by live searches"
-  else
+  elseif not ns.neutralAH then
     parts[#parts + 1] = "Watchlist scan " .. Value(ns.Ago(r.lastWatch))
   end
   parts[#parts + 1] = ui.statusNote
   local text = GREY .. table.concat(parts, " · ") .. "|r"
-  if not r.lastFull or ns.DayOf(r.lastFull) ~= ns.Today() then
+  if not ns.neutralAH and (not r.lastFull or ns.DayOf(r.lastFull) ~= ns.Today()) then
     text = text .. GREY .. " · |r" .. WARN .. "No full scan yet today|r"
   end
   return text

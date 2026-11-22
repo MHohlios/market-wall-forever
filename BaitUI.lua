@@ -97,7 +97,7 @@ local function OnSearched(id, state, answered)
   elseif held and held.kind == "item" then
     B.Finished(state, "Not a commodity")
   elseif not (searched[id] and searched[id].bait) then
-    B.Finished(state, "Not confirmed as bait")
+    B.Finished(state, Record(id) and "Not confirmed as bait" or "No bait found")
   elseif B.Found(state, Plan(id), thresholds[id]) and ns.Cfg("sound") and PlaySound then
     PlaySound((SOUNDKIT and SOUNDKIT.READY_CHECK) or 8960, "Master")
   end

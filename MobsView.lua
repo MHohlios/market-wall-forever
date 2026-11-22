@@ -12,7 +12,7 @@ local GREY, WARN = ns.COLOR.GREY, ns.COLOR.WARN
 
 local MOB_COLUMNS = {
   { "Mob", 230, nil, "Every mob you, your pet or your party killed. Click a row for its drop table." },
-  { "Kills", 60, "RIGHT", "Kills whose loot was seen: looted, or empty at 0c. Kills someone else looted are left out, as they are from the values." },
+  { "Kills", 60, "RIGHT", "Kills whose loot was seen: looted, or empty at 0c. Kills someone else looted are left out, as they are from the values. Orange: fewer than Kills before reliable, so the values are rough." },
   { "Per kill", 100, "RIGHT", "The typical kill, the median, under the chosen lens. Kills someone else looted are left out; empty corpses count as 0c. Hover a value for the average without rare drops.",
     money = true, answer = true, cellTip = true },
   { "Average", 100, "RIGHT", "The long-run value per kill under the chosen lens. Well above the median means rare drops carry the value.", money = true, grey = true },
@@ -76,18 +76,14 @@ end
 
 -- Display cells for a mob row, money as copper for the list to format: Mob, Kills, Per kill,
 -- Average, Top drop. An unknown mob's name is grey; a mob with no seen kill has no values and
--- a grey count.
-function V.MobCells(row)
+-- a grey count; the count is orange while the values are rough, like a low-data item's days.
+function V.MobCells(row, reliableKills)
   local name = row.unknown and (GREY .. row.name .. "|r") or row.name
   if not row.median then
     return { name, GREY .. row.kills .. "|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r" }
   end
-  return { name, tostring(row.kills), row.median, row.average, row.top and ns.ColorName(row.top.id) or GREY .. "-|r" }
-end
-
--- The orange note after a mob's name while its values are rough, like a low-data item's
-function V.MobSuffix(row, reliableKills)
-  if Rough(row, reliableKills) then return WARN .. " · " .. row.kills .. (row.kills == 1 and " kill|r" or " kills|r") end
+  local kills = Rough(row, reliableKills) and (WARN .. row.kills .. "|r") or tostring(row.kills)
+  return { name, kills, row.median, row.average, row.top and ns.ColorName(row.top.id) or GREY .. "-|r" }
 end
 
 -- What follows the top drop's name and stays visible when the name is cut short: its share of
@@ -230,8 +226,8 @@ function V.Build(parent)
     local reliableKills = ns.Cfg("mobMinKills")
     local data = {}
     for _, row in ipairs(V.Rows(ns.Mobs.All(), self.lens, self.filter:GetText())) do
-      data[#data + 1] = { npc = row.npc, cells = V.MobCells(row), sort = V.MobSortValues(row),
-        suffixes = { V.MobSuffix(row, reliableKills), [5] = V.TopSuffix(row) }, cellTips = { [3] = V.PerKillTip(row) },
+      data[#data + 1] = { npc = row.npc, cells = V.MobCells(row, reliableKills), sort = V.MobSortValues(row),
+        suffixes = { [5] = V.TopSuffix(row) }, cellTips = { [3] = V.PerKillTip(row) },
         tip = V.MobTip(row, reliableKills) }
     end
     local empty = next(MarketWallDB.mobs) and "No recorded mob matches." or "No kills recorded yet. Loot what you kill and each mob's value shows here."

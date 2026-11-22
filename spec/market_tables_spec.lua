@@ -70,6 +70,15 @@ describe("the Market tab's tables", function()
     it("points to the box when deals need more skill", function()
       assert.equal("No deals at your Enchanting skill.\n2 deals in the last scan need more skill; tick the box to see them.",
         Plain(ui.DisenchantEmptyText(150, 2, 5)))
+      assert.equal("No deals at your Enchanting skill.\n1 deal in the last scan needs more skill; tick the box to see them.",
+        Plain(ui.DisenchantEmptyText(150, 1, 5)))
+    end)
+
+    it("shortens a blended odds source to fit its column, leaving the rest whole", function()
+      assert.equal("Table + 34 yours", ui.ShortOdds("Classic table + your 34 disenchants"))
+      assert.equal("Estimate + 1 yours", ui.ShortOdds("Forever estimate + your 1 disenchant"))
+      assert.equal("Forever estimate", ui.ShortOdds("Forever estimate"))
+      assert.equal("Your 12 disenchants", ui.ShortOdds("Your 12 disenchants"))
     end)
 
     it("says when the last scan's deals all fall under the thresholds", function()
@@ -136,6 +145,15 @@ describe("the Market tab's tables", function()
     it("warns when there has been no full scan today", function()
       ui.view, ui.statusNote = "watch", nil
       assert.equal("Full scan never · Watchlist scan never · No full scan yet today", Plain(ui.StatusLine()))
+    end)
+
+    it("leaves out the watchlist scan and the prompt at the neutral Auction House", function()
+      ns.R().lastFull = time() - 2 * 3600 - 60
+      ns.neutralAH = true
+      ui.view, ui.statusNote = "snipes", "41 of 103 snipes"
+      assert.equal("Full scan 2h ago · 41 of 103 snipes", Plain(ui.StatusLine()))
+      ns.R().lastFull = nil
+      assert.equal("Full scan never · 41 of 103 snipes", Plain(ui.StatusLine()))
     end)
   end)
 end)

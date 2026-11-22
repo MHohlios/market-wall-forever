@@ -26,6 +26,18 @@ local function NewFrame(frames, parent)
   return setmetatable(frame, { __index = function() return noop end })
 end
 
+-- A frame for building a whole panel: unset fields read as nil, as a panel's own fields must;
+-- any other method is a no-op, and any width or height reads 0
+function M.PanelFrame()
+  local zero = function() return 0 end
+  local frame = { scripts = {}, CreateTexture = M.PanelFrame, CreateFontString = M.PanelFrame }
+  function frame:SetScript(name, fn) self.scripts[name] = fn end
+  return setmetatable(frame, { __index = function(_, key)
+    if key:find("^Get.*Width$") or key:find("^Get.*Height$") then return zero end
+    if key:find("^%u") then return noop end
+  end })
+end
+
 -- Files listed in the TOC, in load order
 function M.TocFiles()
   local files = {}

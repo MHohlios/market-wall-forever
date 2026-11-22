@@ -168,9 +168,12 @@ end
 
 -- The prior's quantities with the Salvager bonus, as your own Salvager results already have it
 local function Scaled(outcomes, scale)
+  local EPSILON = 1e-9   -- 10 × 1.1 is a hair over 11 in floating point
   local out = {}
   for i, o in ipairs(outcomes) do
-    out[i] = Outcome(o.id, o.chance, o.quantity * scale, o.min and o.min * scale, o.max and o.max * scale)
+    -- one disenchant gives whole materials, so its range stays whole; the average stays scaled
+    out[i] = Outcome(o.id, o.chance, o.quantity * scale,
+      o.min and math.floor(o.min * scale + EPSILON), o.max and math.ceil(o.max * scale - EPSILON))
   end
   return out
 end

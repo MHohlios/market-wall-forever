@@ -168,6 +168,32 @@ describe("Sessions view", function()
       assert.equal("Its 32 min and 4g 42s of loot leave Sessions. The Ledger and Mobs keep their records.", addon.Plain(detail))
     end)
 
+    it("deletes a session only once its Confirm is accepted, then shows the empty history", function()
+      local s = Stopped("Farm Turt", T0, 32 * 60)
+      MarketWallDB.sessions = { s }
+      _G.CreateFrame = addon.PanelFrame
+      local panel = V.Build(addon.PanelFrame())
+      panel:Refresh()
+      local menu, confirm
+      ns.widgets.ShowMenu = function(items) menu = items end
+      ns.widgets.Confirm = function(question, detail, accept, onAccept)
+        confirm = { question = question, detail = detail, accept = accept, onAccept = onAccept }
+      end
+
+      panel.list.onRightClick({ session = s })
+      for _, item in ipairs(menu) do
+        if item.text == "Delete session..." then item.onClick() end
+      end
+      assert.equal(V.DeleteText(s, 0), confirm.question)
+      assert.equal("Delete", confirm.accept)
+      assert.same({ s }, MarketWallDB.sessions)   -- nothing goes before the Confirm
+
+      confirm.onAccept()
+      assert.same({}, MarketWallDB.sessions)
+      assert.same({}, panel.list.data)
+      assert.equal("No sessions yet. Right-click the minimap button, or /mw session start <label>.", panel.list.emptyText)
+    end)
+
     it("reads a typed duration as minutes or hours:minutes", function()
       assert.same({ 2640, 4320, 4320 }, { V.ParseDuration("44"), V.ParseDuration("1:12"), V.ParseDuration("72") })
       assert.is_nil(V.ParseDuration("0"))

@@ -271,6 +271,16 @@ describe("Crafting view", function()
       assert.is_true(data[1].highlight)
     end)
 
+    it("asks for the profession window while no recipe is read, and says when none matches", function()
+      local panel = V.Build(CreateFrame("Frame"))
+      panel:Refresh()
+      assert.equal("Open your profession window once to read your recipes.\nLearnable lists the bundled recipes meanwhile.",
+        panel.list.emptyText)
+      function panel.filter.GetText() return "no such recipe" end
+      Learnable(panel)
+      assert.same({ {}, "No recipe matches." }, { panel.list.data, panel.list.emptyText })
+    end)
+
     it("evaluates the guide again after each profession window event, even within a second", function()
       local loaded, fire = addon.Load()   -- a load of its own, to fire events at its frames
       _G.MarketWallDB = { version = 1, cfg = {}, realms = {}, mobs = {}, depositRate = {}, crafting = {} }
