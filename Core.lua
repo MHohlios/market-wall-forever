@@ -394,9 +394,9 @@ function ns.ResolveItem(text)
 end
 
 local function RepairDividedWalls()
-  local dropped, items = ns.RepairDividedWalls()
-  if dropped > 0 then
-    Print(string.format("Removed %d daily prices from %d items that were saved at a fraction of their real price.", dropped, items))
+  local repaired, items = ns.RepairDividedWalls()
+  if repaired > 0 then
+    Print(string.format("Repaired %d daily prices on %d items that were saved at a fraction of their real price.", repaired, items))
   end
 end
 
