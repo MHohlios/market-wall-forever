@@ -333,6 +333,108 @@ function ns.Record(id, ladder, total, t)
   return wall, minPrice
 end
 
+-------------------------------------------------------------------------------
+-- One-time repair: live item searches once divided each row's unit price by its quantity, and
+-- recorded those walls into the days. Repairs the days that show it.
+-------------------------------------------------------------------------------
+-- 2026-11-22, the day a divided wall was first seen; low days before it are real full-scan swings
+local REPAIR_FROM_DAY = 20779
+local REPAIR_MIN_OTHERS = 3
+local REPAIR_FRACTION = 1 / 5
+
+-- Under this a wall on the day was divided: a fifth of the median wall of the item's other
+-- days. Nil while fewer than REPAIR_MIN_OTHERS other days remain to compare against.
+local function DividedUnder(days, day)
+  local others = {}
+  for other, d in pairs(days) do
+    if other ~= day then others[#others + 1] = d[D_WALL] end
+  end
+  if #others < REPAIR_MIN_OTHERS then return nil end
+  return Median(others) * REPAIR_FRACTION
+end
+
+-- Removes an item's snapshots from the day with a wall under `under`; all of them when under is nil
+local function DropSnaps(snaps, day, under)
+  if not snaps then return false end
+  local dropped = false
+  for i = #snaps, 1, -1 do
+    local snap = snaps[i]
+    if ns.DayOf(snap[1]) == day and (not under or snap[2] < under) then
+      table.remove(snaps, i)
+      dropped = true
+    end
+  end
+  return dropped
+end
+
+-- Repairs one day: drops it when its wall is divided; otherwise, as a full scan already
+-- corrected the wall, drops its divided day parts and snapshots and resets a divided low.
+-- Returns true when anything changed.
+local function RepairDay(days, snaps, day, under)
+  local d = days[day]
+  if d[D_WALL] < under then
+    days[day] = nil
+    DropSnaps(snaps, day)
+    return true
+  end
+  local changed = DropSnaps(snaps, day, under)
+  local low = d[D_WALL]
+  for part, wall in pairs(d[D_PARTS] or {}) do
+    if wall < under then
+      d[D_PARTS][part] = nil
+      changed = true
+    else
+      low = math.min(low, wall)
+    end
+  end
+  if d[D_LOW] < under then
+    d[D_LOW] = low
+    changed = true
+  end
+  return changed
+end
+
+-- Days from REPAIR_FROM_DAY that saved a divided wall: { [day] = under }. The low is the lowest
+-- wall saved that day, so it shows any divided wall, day part or snapshot.
+local function DividedDays(days)
+  local found = {}
+  for day, d in pairs(days) do
+    local under = day >= REPAIR_FROM_DAY and DividedUnder(days, day)
+    if under and d[D_LOW] < under then found[day] = under end
+  end
+  return found
+end
+
+-- Runs once per realm bucket. Commodities never went through the divided path and are left
+-- alone; an item whose stack size is still loading waits for a later call, at login or when
+-- the auction house opens. Returns the days repaired, and the items they belonged to.
+function ns.RepairDividedWalls()
+  local r = ns.R()
+  if r.dividedWallsRepaired == true then return 0, 0 end
+  local ids = r.dividedWallsRepaired or r.days   -- after the first pass, only the items waiting
+  local waiting, repaired, items = {}, 0, 0
+  for id in pairs(ids) do
+    local days, snaps = r.days[id], r.snaps[id]
+    local divided = days and DividedDays(days) or {}
+    if next(divided) then
+      local commodity = ns.IsCommodity(id)
+      if commodity == nil then
+        waiting[id] = true
+        if C_Item and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(id) end
+      elseif not commodity then
+        local count = 0
+        for day, under in pairs(divided) do
+          if RepairDay(days, snaps, day, under) then count = count + 1 end
+        end
+        cycleCache[id] = nil
+        repaired, items = repaired + count, items + (count > 0 and 1 or 0)
+      end
+    end
+  end
+  r.dividedWallsRepaired = next(waiting) and waiting or true
+  return repaired, items
+end
+
 -- Stackable items trade as commodities: one price per unit, cheapest units sold first.
 -- Nil while the game has not loaded the item's info yet.
 function ns.IsCommodity(id)

@@ -393,6 +393,13 @@ function ns.ResolveItem(text)
   return nil, "Item not found. Shift-click the item into the box, or run a full scan first so names are known."
 end
 
+local function RepairDividedWalls()
+  local repaired, items = ns.RepairDividedWalls()
+  if repaired > 0 then
+    Print(string.format("Repaired %d daily prices on %d items that were saved at a fraction of their real price.", repaired, items))
+  end
+end
+
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("PLAYER_LOGIN")
@@ -421,6 +428,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
       Print("Your auction house history so far now belongs to " .. faction .. " on this realm. Characters of the other faction start their own.")
     end
     ns.R()
+    RepairDividedWalls()
     if ns.InitTooltip then ns.InitTooltip() end
     if ns.InitMinimapButton then ns.InitMinimapButton() end
     if ns.Kills then ns.Kills.Start() end
@@ -428,6 +436,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
   elseif event == "AUCTION_HOUSE_SHOW" then
     ns.ahOpen = true
     ns.neutralAH = ns.IsNeutralAuctioneer(UnitGUID and ns.Readable(UnitGUID("npc")))
+    RepairDividedWalls()   -- items whose stack size was loading at login
     if ns.OnAuctionHouseShow then ns.OnAuctionHouseShow() end
   elseif event == "AUCTION_HOUSE_CLOSED" then
     ns.ahOpen = false
@@ -488,6 +497,9 @@ SlashCmdList["MARKETWALL"] = function(msg)
     ns.Sessions.Command(rest)
   elseif cmd == "professions" then
     ns.Professions.Diagnose()
+  elseif cmd == "debug" then
+    local id = tonumber(string.match(rest, "^search%s+(%d+)$"))
+    if id then ns.DebugSearch(id) else Print("Usage: /mw debug search <itemID>") end
   else
     Print("Open the auction house and use the Market tab. Commands:")
     print("  /mw add <item link, id or name>   watch an item")
@@ -501,5 +513,6 @@ SlashCmdList["MARKETWALL"] = function(msg)
     print("  /mw minimap                       hide or show the minimap button")
     print("  /mw session start <label>|stop|pause|resume   a farm session; /mw session shows the running one")
     print("  /mw professions                   check reading recipes from the open profession window")
+    print("  /mw debug search <itemID>         print the next raw search result for an item")
   end
 end
