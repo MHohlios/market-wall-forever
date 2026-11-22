@@ -99,6 +99,8 @@ local function ReadCommodity(id)
   return map
 end
 
+-- An item search row's buyoutAmount is already the price of one unit: a row of 39 bags at
+-- 61s reads buyoutAmount 61s, quantity 39. (A full scan's buyout is the whole auction's.)
 local function ReadItems(key)
   local map, auctions = {}, {}
   local n = C_AuctionHouse.GetNumItemSearchResults(key) or 0
@@ -107,7 +109,7 @@ local function ReadItems(key)
     if info and info.buyoutAmount and info.buyoutAmount > 0 then
       local qty = info.quantity or 1
       if qty < 1 then qty = 1 end
-      local unit = math.ceil(info.buyoutAmount / qty)
+      local unit = info.buyoutAmount
       map[unit] = (map[unit] or 0) + qty
       auctions[#auctions + 1] = { id = info.auctionID, price = info.buyoutAmount, unit = unit, qty = qty }
     end
@@ -175,7 +177,60 @@ function ns.DisenchantDeals()
   return ns.disenchants
 end
 
+-------------------------------------------------------------------------------
+-- /mw debug search <itemID>: print the next search result the game sends for one item
+-------------------------------------------------------------------------------
+local DEBUG_ROWS = 3
+local debugID
+local debugger = CreateFrame("Frame")
+
+local function DebugRows(event, id, itemKey)
+  local rows = {}
+  if event == "COMMODITY_SEARCH_RESULTS_UPDATED" then
+    for i = 1, math.min(DEBUG_ROWS, C_AuctionHouse.GetNumCommoditySearchResults(id) or 0) do
+      local info = C_AuctionHouse.GetCommoditySearchResultInfo(id, i) or {}
+      rows[i] = string.format("unitPrice=%s quantity=%s", tostring(info.unitPrice), tostring(info.quantity))
+    end
+  else
+    for i = 1, math.min(DEBUG_ROWS, C_AuctionHouse.GetNumItemSearchResults(itemKey) or 0) do
+      local info = C_AuctionHouse.GetItemSearchResultInfo(itemKey, i) or {}
+      rows[i] = string.format("buyoutAmount=%s quantity=%s", tostring(info.buyoutAmount), tostring(info.quantity))
+    end
+  end
+  return rows
+end
+
+-- Prints a search result for the item being debugged, once, with the search active when it came
+local function DebugResult(event, arg1)
+  local id = type(arg1) == "table" and arg1.itemID or arg1
+  if not debugID or id ~= debugID then return end
+  debugID = nil
+  debugger:UnregisterEvent("COMMODITY_SEARCH_RESULTS_UPDATED")
+  debugger:UnregisterEvent("ITEM_SEARCH_RESULTS_UPDATED")
+  local a = state.active
+  ns.Print(string.format("Debug search %d: %s, kind %s, active search %s (%s)", id, event,
+    type(arg1) == "table" and "item" or "commodity",
+    a and tostring(a.id) or "none", a and a.phase or "-"))
+  for i, row in ipairs(DebugRows(event, id, arg1)) do print(string.format("  row %d: %s", i, row)) end
+end
+
+-- While a scan runs, the scanner prints first, before it acts on the result
+debugger:SetScript("OnEvent", function(_, event, arg1)
+  if not state.running then DebugResult(event, arg1) end
+end)
+
+-- Waits, sending nothing, for the next search result for item id
+function ns.DebugSearch(id)
+  debugID = id
+  debugger:RegisterEvent("COMMODITY_SEARCH_RESULTS_UPDATED")
+  debugger:RegisterEvent("ITEM_SEARCH_RESULTS_UPDATED")
+  ns.Print("Waiting for the next search result for item " .. id .. ". Select it on the Sell page or press refresh.")
+end
+
 scanner:SetScript("OnEvent", function(_, event, arg1)
+  if event == "COMMODITY_SEARCH_RESULTS_UPDATED" or event == "ITEM_SEARCH_RESULTS_UPDATED" then
+    DebugResult(event, arg1)
+  end
   if event == "REPLICATE_ITEM_LIST_UPDATE" then
     ns.OnReplicateReady()
     return
