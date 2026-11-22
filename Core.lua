@@ -393,6 +393,13 @@ function ns.ResolveItem(text)
   return nil, "Item not found. Shift-click the item into the box, or run a full scan first so names are known."
 end
 
+local function RepairDividedWalls()
+  local dropped, items = ns.RepairDividedWalls()
+  if dropped > 0 then
+    Print(string.format("Removed %d daily prices from %d items that were saved at a fraction of their real price.", dropped, items))
+  end
+end
+
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("PLAYER_LOGIN")
@@ -421,6 +428,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
       Print("Your auction house history so far now belongs to " .. faction .. " on this realm. Characters of the other faction start their own.")
     end
     ns.R()
+    RepairDividedWalls()
     if ns.InitTooltip then ns.InitTooltip() end
     if ns.InitMinimapButton then ns.InitMinimapButton() end
     if ns.Kills then ns.Kills.Start() end
@@ -428,6 +436,7 @@ frame:SetScript("OnEvent", function(_, event, arg1)
   elseif event == "AUCTION_HOUSE_SHOW" then
     ns.ahOpen = true
     ns.neutralAH = ns.IsNeutralAuctioneer(UnitGUID and ns.Readable(UnitGUID("npc")))
+    RepairDividedWalls()   -- items whose stack size was loading at login
     if ns.OnAuctionHouseShow then ns.OnAuctionHouseShow() end
   elseif event == "AUCTION_HOUSE_CLOSED" then
     ns.ahOpen = false

@@ -333,6 +333,77 @@ function ns.Record(id, ladder, total, t)
   return wall, minPrice
 end
 
+-------------------------------------------------------------------------------
+-- One-time repair: live item searches once divided each row's unit price by its quantity, and
+-- recorded those walls into the days. Drops the days that show it.
+-------------------------------------------------------------------------------
+local REPAIR_DAYS = 30
+local REPAIR_MIN_OTHERS = 3
+local REPAIR_FRACTION = 1 / 5
+
+-- Days in the repair window whose wall is under a fifth of the median of the item's other days
+-- there; none while fewer than REPAIR_MIN_OTHERS other days remain to compare against
+local function DividedDays(days, from)
+  local recent = {}
+  for day, d in pairs(days) do
+    if day > from then recent[day] = d[D_WALL] end
+  end
+  local found = {}
+  for day, wall in pairs(recent) do
+    local others = {}
+    for other, otherWall in pairs(recent) do
+      if other ~= day then others[#others + 1] = otherWall end
+    end
+    if #others >= REPAIR_MIN_OTHERS and wall < Median(others) * REPAIR_FRACTION then
+      found[#found + 1] = day
+    end
+  end
+  return found
+end
+
+-- Drops an item's divided days, and the snapshots taken on them
+local function DropDays(id, dropped)
+  local r = ns.R()
+  local gone = {}
+  for _, day in ipairs(dropped) do
+    r.days[id][day] = nil
+    gone[day] = true
+  end
+  local snaps = r.snaps[id]
+  if snaps then
+    for i = #snaps, 1, -1 do
+      if gone[ns.DayOf(snaps[i][1])] then table.remove(snaps, i) end
+    end
+  end
+  cycleCache[id] = nil
+end
+
+-- Runs once per realm bucket. Commodities never went through the divided path and are left
+-- alone; an item whose stack size is still loading waits for a later call, at login or when
+-- the auction house opens. Returns the days dropped, and the items they belonged to.
+function ns.RepairDividedWalls()
+  local r = ns.R()
+  if r.dividedWallsRepaired == true then return 0, 0 end
+  local ids = r.dividedWallsRepaired or r.days   -- after the first pass, only the items waiting
+  local from = ns.Today() - REPAIR_DAYS
+  local waiting, dropped, items = {}, 0, 0
+  for id in pairs(ids) do
+    local divided = r.days[id] and DividedDays(r.days[id], from) or {}
+    if #divided > 0 then
+      local commodity = ns.IsCommodity(id)
+      if commodity == nil then
+        waiting[id] = true
+        if C_Item and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(id) end
+      elseif not commodity then
+        DropDays(id, divided)
+        dropped, items = dropped + #divided, items + 1
+      end
+    end
+  end
+  r.dividedWallsRepaired = next(waiting) and waiting or true
+  return dropped, items
+end
+
 -- Stackable items trade as commodities: one price per unit, cheapest units sold first.
 -- Nil while the game has not loaded the item's info yet.
 function ns.IsCommodity(id)

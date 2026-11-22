@@ -2,11 +2,11 @@ local addon = require("spec.helpers.addon")
 
 -- Live searches on the Sell page: each ladder belongs to the item searched, at its real unit price
 describe("a live search", function()
-  local ns, fire, rows, printed
+  local ns, fire, frames, rows, printed
 
   local realPrint = print
   before_each(function()
-    ns, fire = addon.Load()
+    ns, fire, frames = addon.Load()
     fire("ADDON_LOADED", addon.ADDON)
     ns.ahOpen = true
     rows, printed = {}, {}
@@ -28,7 +28,9 @@ describe("a live search", function()
       GetCommoditySearchResultInfo = function(id, i) return rows[id][i] end,
     }
   end)
-  after_each(function() _G.C_AuctionHouse, _G.GetTime, _G.print = nil, nil, realPrint end)
+  after_each(function()
+    _G.C_AuctionHouse, _G.GetTime, _G.GetMoney, _G.C_Timer, _G.print = nil, nil, nil, nil, realPrint
+  end)
 
   local function Search(id)
     ns.StartWatchScan({ id })
@@ -44,7 +46,29 @@ describe("a live search", function()
     Search(5764)
     fire("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 5764 })
     assert.same({ { p = 5918, q = 22 }, { p = 6123, q = 39 } }, ns.ladders[5764].ladder)
-    assert.equal(5918, ns.ladders[5764].auctions[1].unit)
+  end)
+
+  -- as Auctionator does on WoW Forever: one bid of the row's buyout buys one unit
+  it("buys one unit from the cheapest row, bidding its buyout", function()
+    rows[5764] = {
+      { auctionID = 1, buyoutAmount = 6123, quantity = 39 },
+      { auctionID = 2, buyoutAmount = 5918, quantity = 22 },
+    }
+    Search(5764)
+    fire("ITEM_SEARCH_RESULTS_UPDATED", { itemID = 5764 })
+    local bids = {}
+    _G.C_AuctionHouse.PlaceBid = function(id, amount) bids[#bids + 1] = { id, amount } end
+    _G.GetMoney = function() return 100000 end
+    _G.C_Timer = { After = function() end }
+    local before = #frames
+    ns.BuyUnder(5764, 6000)
+    local confirm   -- the dialog's first button
+    for i = before + 1, #frames do
+      if frames[i].scripts.OnClick then confirm = frames[i] break end
+    end
+    confirm.scripts.OnClick()
+    assert.same({ { 2, 5918 } }, bids)
+    assert.same({ qty = 1, cost = 5918 }, ns.R().pos[5764])
   end)
 
   it("ignores another item's results arriving while an item is searched", function()

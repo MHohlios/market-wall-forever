@@ -99,22 +99,22 @@ local function ReadCommodity(id)
   return map
 end
 
--- An item search row's buyoutAmount is already the price of one unit: a row of 39 bags at
--- 61s reads buyoutAmount 61s, quantity 39. (A full scan's buyout is the whole auction's.)
+-- An item search row groups auctions of one unit each at one price: buyoutAmount is that
+-- price, and quantity counts the units. A row of 39 bags at 61s reads buyoutAmount 61s,
+-- quantity 39, and a bid of buyoutAmount on its auctionID buys one bag. (A full scan's buyout
+-- is the whole auction's.) auctions: { id, price } per row, cheapest first.
 local function ReadItems(key)
   local map, auctions = {}, {}
   local n = C_AuctionHouse.GetNumItemSearchResults(key) or 0
   for i = 1, n do
     local info = C_AuctionHouse.GetItemSearchResultInfo(key, i)
     if info and info.buyoutAmount and info.buyoutAmount > 0 then
-      local qty = info.quantity or 1
-      if qty < 1 then qty = 1 end
-      local unit = info.buyoutAmount
-      map[unit] = (map[unit] or 0) + qty
-      auctions[#auctions + 1] = { id = info.auctionID, price = info.buyoutAmount, unit = unit, qty = qty }
+      local qty = math.max(info.quantity or 1, 1)
+      map[info.buyoutAmount] = (map[info.buyoutAmount] or 0) + qty
+      auctions[#auctions + 1] = { id = info.auctionID, price = info.buyoutAmount }
     end
   end
-  table.sort(auctions, function(x, y) return x.unit < y.unit end)
+  table.sort(auctions, function(x, y) return x.price < y.price end)
   return map, auctions
 end
 

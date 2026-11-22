@@ -172,7 +172,7 @@ function ns.BuyUnder(id, limit)
     ns.StartCommodityPurchase(id, units, cost)
   elseif held.kind == "item" then
     local auction = held.auctions and held.auctions[1]
-    if not auction or auction.unit >= limit then
+    if not auction or auction.price >= limit then
       ns.Print("Nothing is listed under " .. ns.Money(limit) .. ".")
       return
     end
@@ -180,10 +180,10 @@ function ns.BuyUnder(id, limit)
       ns.Print("Not enough gold: that costs " .. ns.Money(auction.price) .. ".")
       return
     end
-    pending = { id = id, qty = auction.qty, maxTotal = auction.price, total = auction.price, kind = "item", auctionID = auction.id }
+    pending = { id = id, qty = 1, maxTotal = auction.price, total = auction.price, kind = "item", auctionID = auction.id }
     local d = GetDialog()
-    d.text:SetText(string.format("Buy %d x %s\nTotal: %s\nThis buys the cheapest single auction.",
-      auction.qty, ns.Name(id), ns.Money(auction.price)))
+    d.text:SetText(string.format("Buy 1 x %s\nTotal: %s\nThis buys the cheapest single auction.",
+      ns.Name(id), ns.Money(auction.price)))
     d.confirm:SetScript("OnClick", function()
       if pending and pending.kind == "item" then
         C_AuctionHouse.PlaceBid(pending.auctionID, pending.maxTotal)
