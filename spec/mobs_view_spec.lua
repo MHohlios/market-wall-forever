@@ -50,8 +50,8 @@ describe("Mobs view", function()
   it("shows a mob the game never named as a grey unknown mob with its ID", function()
     local rows = V.Rows(All(), "optimal", "unknown")
     assert.same({ "Unknown mob (4)" }, Names(rows))
-    assert.equal(GREY .. "Unknown mob (4)|r", V.MobCells(rows[1])[1])
-    assert.equal("Young Panther", V.MobCells(V.Rows(All(), "optimal", "panther")[1])[1])
+    assert.equal(GREY .. "Unknown mob (4)|r", V.MobCells(rows[1], 10)[1])
+    assert.equal("Young Panther", V.MobCells(V.Rows(All(), "optimal", "panther")[1], 10)[1])
   end)
 
   describe("header sort", function()
@@ -113,8 +113,8 @@ describe("Mobs view", function()
 
   it("shows Mob, Kills, Per kill, Average and Top drop, and no values for a mob with no seen kill", function()
     local rows = V.Rows(All(), "optimal", "")
-    assert.same({ "Lashtail Raptor", "58", 80, 160, "item:7" }, V.MobCells(rows[3]))
-    assert.same({ "Jungle Stalker", GREY .. "0|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r" }, V.MobCells(rows[4]))
+    assert.same({ "Lashtail Raptor", "58", 80, 160, "item:7" }, V.MobCells(rows[3], 10))
+    assert.same({ "Jungle Stalker", GREY .. "0|r", GREY .. "-|r", GREY .. "-|r", GREY .. "-|r" }, V.MobCells(rows[4], 10))
   end)
 
   it("follows the top drop with its share and an orange count of unpriced drops", function()
@@ -135,19 +135,48 @@ describe("Mobs view", function()
     assert.is_nil(V.MobTip(V.Rows(All(), "optimal", "Jungle")[1], 10))
   end)
 
+  describe("an empty list", function()
+    local panel
+
+    before_each(function()
+      _G.CreateFrame = addon.PanelFrame
+      panel = V.Build(addon.PanelFrame())
+    end)
+
+    it("says to loot kills before any are recorded", function()
+      ns.Mobs.All = function() return {} end
+      panel:Refresh()
+      assert.equal("No kills recorded yet. Loot what you kill and each mob's value shows here.", panel.list.emptyText)
+    end)
+
+    it("says no recorded mob matches the search", function()
+      MarketWallDB.mobs[1] = {}
+      ns.Mobs.All = function() return {} end
+      panel:Refresh()
+      assert.equal("No recorded mob matches.", panel.list.emptyText)
+    end)
+
+    it("says no drops are seen yet on a mob's drop table", function()
+      ns.Mobs.For = function() return { name = "Young Panther", seen = 0 } end
+      ns.Mobs.GameDropTable = function() return {} end
+      panel.npc = 1
+      panel:Refresh()
+      assert.equal("No drops seen yet.", panel.list.emptyText)
+    end)
+  end)
+
   describe("under the kills before values are reliable", function()
     local panther   -- 11 seen kills
     before_each(function() panther = V.Rows(All(), "optimal", "Panther")[1] end)
 
-    it("shows the values, an orange kill count after the name and a hover saying they are rough", function()
-      local cells = V.MobCells(panther)
-      assert.same({ "11", 400 }, { cells[2], cells[3] })
-      assert.equal(ORANGE .. " · 11 kills|r", V.MobSuffix(panther, 12))
+    it("shows the values, an orange Kills count, the name alone and a hover saying they are rough", function()
+      local cells = V.MobCells(panther, 12)
+      assert.same({ "Young Panther", ORANGE .. "11|r", 400 }, { cells[1], cells[2], cells[3] })
       assert.equal("Fewer than 12 kills; values are rough", V.MobTip(panther, 12))
     end)
 
-    it("shows no note and no hover from the threshold on", function()
-      assert.is_nil(V.MobSuffix(panther, 11))
+    it("shows a plain count and no hover from the threshold on", function()
+      assert.equal("11", V.MobCells(panther, 11)[2])
       assert.is_nil(V.MobTip(panther, 11))
     end)
   end)

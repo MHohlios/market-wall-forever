@@ -225,12 +225,20 @@ describe("DisenchantValue", function()
   it("lists the outcomes with the Salvager bonus in their quantities and ranges, as the value counts it", function()
     Item(1001, UNCOMMON, 10, ARMOR)
     Salvager("on", 50)
+    -- 1 to 2 scaled by 1.5 is 1.5 to 3: the range stays whole, 1 to 3, the average scaled
     assert.same({
-      { { id = STRANGE_DUST, chance = 0.8, quantity = 2.25, min = 1.5, max = 3 },
-        { id = LESSER_MAGIC_ESSENCE, chance = 0.2, quantity = 2.25, min = 1.5, max = 3 } },
+      { { id = STRANGE_DUST, chance = 0.8, quantity = 2.25, min = 1, max = 3 },
+        { id = LESSER_MAGIC_ESSENCE, chance = 0.2, quantity = 2.25, min = 1, max = 3 } },
       CLASSIC,
     }, { ns.DisenchantOutcomes(1001) })
     assert.is_nil(ns.DisenchantOutcomes(11287))
+  end)
+
+  it("widens a scaled range out to whole counts", function()
+    Item(1001, UNCOMMON, 10, ARMOR)
+    Salvager("on", 10)
+    local outcomes = ns.DisenchantOutcomes(1001)
+    assert.same({ 1, 3 }, { outcomes[1].min, outcomes[1].max })   -- 1.1 to 2.2
   end)
 
   it("adds up the deposits to list the materials, at their expected quantities", function()

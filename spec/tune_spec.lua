@@ -91,6 +91,14 @@ describe("tuning the deal lists", function()
       local data, _, hidden = ui.DisenchantData()
       assert.same({ 0, 1 }, { #data, hidden })
     end)
+
+    it("counts only deals within the skill as ones the thresholds could show", function()
+      ns.disenchants[2].skill = 400
+      local data, _, _, showable = ui.DisenchantData()
+      assert.same({ 1, 1 }, { #data, showable })
+      MarketWallDB.cfg.disenchantShowAll = true
+      assert.equal(2, select(4, ui.DisenchantData()))
+    end)
   end)
 
   describe("full scan candidates", function()
@@ -163,6 +171,29 @@ describe("tuning the deal lists", function()
       discount.scripts.OnEnterPressed(discount)
       assert.near(0.2555, MarketWallDB.cfg.minSnipeDiscount, 1e-12)
       assert.equal("25.6%", discount.text)
+    end)
+
+    it("leaves the list where it is when a box is left unchanged", function()
+      MarketWallDB.cfg.minSnipeDiscount = 0.2555
+      local discount = Edit(2)
+      function discount.GetText() return "25.6%" end   -- the rounded display, untouched
+      discount.scripts.OnEditFocusLost(discount)
+      Type(discount, "25.55%")                          -- the same value typed again
+      assert.near(0.2555, MarketWallDB.cfg.minSnipeDiscount, 1e-12)
+      assert.equal(4, ui.list.offset)
+    end)
+
+    it("shows the new count at once, in place of a full scan's just-finished message", function()
+      _G.GetTime = function() return 100 end
+      ns.statusText, ns.statusTime = "Full scan complete: 50 items, 3 snipes, 0 dips", 98
+      Type(Edit(1), "5s")
+      ui.frame, ui.status, ui.bar, ui.neutralNote = CreateFrame("Frame"), CreateFrame("Frame"), CreateFrame("Frame"), CreateFrame("Frame")
+      ui.scanButton, ui.fullButton = CreateFrame("Button"), CreateFrame("Button")
+      local shown
+      function ui.status.SetText(_, text) shown = text end
+      ns.UpdateStatus()
+      _G.GetTime = nil
+      assert.truthy(addon.Plain(shown):find("Full scan never"))
     end)
 
     it("keeps the setting when the text does not read", function()

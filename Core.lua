@@ -138,6 +138,11 @@ function ns.MoneyShort(c)
   return JoinCoins(c, function(unit) return COIN_ICON[unit] end, true)
 end
 
+-- ns.MoneyShort for a list's grey columns, with the coin icons faded as ns.MoneyFaded's
+function ns.MoneyShortFaded(c)
+  return JoinCoins(c, function(unit) return FADED_COIN_ICON[unit] end, true)
+end
+
 -- Letters instead of icons ("1g 41s 23c"), for edit boxes and anything ParseMoney reads back
 function ns.MoneyText(c)
   return JoinCoins(c, function(unit) return unit end)

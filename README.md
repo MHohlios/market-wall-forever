@@ -16,7 +16,8 @@ A World of Warcraft (Forever) auction house addon. It adds a Market tab with:
   bags. It asks Yes or No before a post only when the price is far under the low end of the
   item's normal range (more than 30% under up to 1g, sliding toward 70% under for dearer
   items, as Auctionator does) or matches a bait price. "No reliable price" holds items your scans
-  have never priced.
+  have never priced, and items with no vendor price whose auction house price nets nothing
+  after the cut and deposit.
 - **Item search**: an MW button on the minimap opens a window, anywhere in the world,
   to look up any item MarketWall has seen. See below.
 - **Tooltips**: what one unit nets through a vendor, the market and disenchanting, after

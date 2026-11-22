@@ -455,6 +455,28 @@ describe("Bait", function()
       assert.same({}, purchases)
     end)
 
+    it("asks for a full scan when the list is empty before one, and explains the bar after", function()
+      ns.R().bait[ID] = nil
+      ns.RefreshBait()
+      assert.equal("Run a full scan to look for baited items.", Plain(page.list.emptyText))
+      ns.R().lastFull = time()
+      ns.RefreshBait()
+      assert.truthy(Plain(page.list.emptyText):find("^Nothing looks baited right now.\nAn item shows here when"))
+    end)
+
+    it("says no bait was found when the live search finds none", function()
+      local label
+      page.action.SetText = function(_, text) label = text end
+      page.list.onClick({ id = ID })
+      local ladder, total = W.SortLadder({ [100] = 200 })
+      ns.ladders[ID] = { ladder = ladder, total = total, t = os.time(), kind = "commodity" }
+      ns.R().bait[ID] = nil                       -- as the search's own ns.UpdateBait does
+      pending(true)
+      _G.GetTime = function() return 200 end
+      ns.RefreshBait()
+      assert.equal("No bait found · Search " .. ns.Name(ID), Plain(label))
+    end)
+
     it("buys once the live search confirms a row seen once", function()
       SearchSeenOnce(true)
       ns.BaitPress()
