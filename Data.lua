@@ -341,6 +341,7 @@ end
 local REPAIR_FROM_DAY = 20779
 local REPAIR_MIN_OTHERS = 3
 local REPAIR_FRACTION = 1 / 5
+local REPAIR_SPREAD = 5   -- a day's high at least this many times its low: a correct value beside a divided one
 
 -- Under this a wall on the day was divided: a fifth of the median wall of the item's other
 -- days. Nil while fewer than REPAIR_MIN_OTHERS other days remain to compare against.
@@ -353,54 +354,34 @@ local function DividedUnder(days, day)
   return Median(others) * REPAIR_FRACTION
 end
 
--- Removes an item's snapshots from the day with a wall under `under`; all of them when under is nil
+-- Removes an item's snapshots from the day with a wall under `under`
 local function DropSnaps(snaps, day, under)
-  if not snaps then return false end
-  local dropped = false
-  for i = #snaps, 1, -1 do
-    local snap = snaps[i]
-    if ns.DayOf(snap[1]) == day and (not under or snap[2] < under) then
-      table.remove(snaps, i)
-      dropped = true
-    end
+  for i = #(snaps or {}), 1, -1 do
+    if ns.DayOf(snaps[i][1]) == day and snaps[i][2] < under then table.remove(snaps, i) end
   end
-  return dropped
 end
 
--- Repairs one day: drops it when its wall is divided; otherwise, as a full scan already
--- corrected the wall, drops its divided day parts and snapshots and resets a divided low.
--- Returns true when anything changed.
-local function RepairDay(days, snaps, day, under)
-  local d = days[day]
-  if d[D_WALL] < under then
-    days[day] = nil
-    DropSnaps(snaps, day)
-    return true
-  end
-  local changed = DropSnaps(snaps, day, under)
+-- Repairs one day from the correct value saved beside the divided one, its high. A divided
+-- wall becomes the high, and so does its lowest price, which was divided with it. Divided day
+-- parts and snapshots are dropped, and the low is reset from what remains.
+local function RepairDay(d, snaps, day, under)
+  if d[D_WALL] < under then d[D_WALL], d[D_MIN] = d[D_HIGH], d[D_HIGH] end
+  DropSnaps(snaps, day, under)
   local low = d[D_WALL]
   for part, wall in pairs(d[D_PARTS] or {}) do
-    if wall < under then
-      d[D_PARTS][part] = nil
-      changed = true
-    else
-      low = math.min(low, wall)
-    end
+    if wall < under then d[D_PARTS][part] = nil else low = math.min(low, wall) end
   end
-  if d[D_LOW] < under then
-    d[D_LOW] = low
-    changed = true
-  end
-  return changed
+  d[D_LOW] = low
 end
 
--- Days from REPAIR_FROM_DAY that saved a divided wall: { [day] = under }. The low is the lowest
--- wall saved that day, so it shows any divided wall, day part or snapshot.
+-- Days from REPAIR_FROM_DAY that saved a divided wall beside a correct one: { [day] = under }.
+-- The low, the lowest wall saved that day, is under a fifth of the other days' median, and the
+-- high is at least REPAIR_SPREAD times it. A day with one low observation is a real decline.
 local function DividedDays(days)
   local found = {}
   for day, d in pairs(days) do
     local under = day >= REPAIR_FROM_DAY and DividedUnder(days, day)
-    if under and d[D_LOW] < under then found[day] = under end
+    if under and d[D_LOW] < under and d[D_HIGH] >= REPAIR_SPREAD * d[D_LOW] then found[day] = under end
   end
   return found
 end
@@ -422,12 +403,12 @@ function ns.RepairDividedWalls()
         waiting[id] = true
         if C_Item and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(id) end
       elseif not commodity then
-        local count = 0
         for day, under in pairs(divided) do
-          if RepairDay(days, snaps, day, under) then count = count + 1 end
+          RepairDay(days[day], snaps, day, under)
+          repaired = repaired + 1
         end
         cycleCache[id] = nil
-        repaired, items = repaired + count, items + (count > 0 and 1 or 0)
+        items = items + 1
       end
     end
   end
