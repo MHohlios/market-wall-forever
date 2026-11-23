@@ -209,10 +209,10 @@ local function Disenchants(n)
   return n .. (n == 1 and " disenchant" or " disenchants")
 end
 
--- The outcomes, with any Salvager bonus in their quantities, and where they came from:
+-- The outcomes, with any Salvager bonus in their quantities, where they came from:
 -- "Classic table", "Forever estimate", either with " + your 34 disenchants", or "Your 34
--- disenchants" for an item with no prior. Your own results are for the item, under the current
--- Salvager setting.
+-- disenchants" for an item with no prior, and how many of your own disenchants count (0 when
+-- none). Your own results are for the item, under the current Salvager setting.
 local function Outcomes(id)
   if NO_DISENCHANT[id] or not C_Item.GetItemInfo then return nil end
   local _, _, quality, level, _, _, _, _, _, _, _, classID = C_Item.GetItemInfo(id)
@@ -226,12 +226,12 @@ local function Outcomes(id)
     if n < MIN_SAMPLES then return nil end
     local out = {}
     AddOwnOnly(out, materials, n, {})
-    if #out > 0 then return out, "Your " .. Disenchants(n) end
+    if #out > 0 then return out, "Your " .. Disenchants(n), n end
     return nil
   end
   local blended = Blend(Scaled(prior, 1 + SalvagerBonus()), materials, n)
-  if n == 0 then return blended, name end
-  return blended, name .. " + your " .. Disenchants(n)
+  if n == 0 then return blended, name, 0 end
+  return blended, name .. " + your " .. Disenchants(n), n
 end
 
 -- Expected copper from disenchanting one item, at each material's latest wall price, and the
@@ -258,7 +258,8 @@ end
 -- What disenchanting one item gives: a list of { id, chance (0-1), quantity, min, max }, where
 -- quantity is the average when it drops and min and max the fewest and most in one disenchant
 -- (nil when only the average is known), all with any Salvager bonus as DisenchantValue counts
--- it; and where the odds come from. Nil when it cannot be disenchanted.
+-- it; where the odds come from; and how many of your own disenchants count. Nil when it cannot
+-- be disenchanted.
 function ns.DisenchantOutcomes(id)
   return Outcomes(id)
 end

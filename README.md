@@ -22,11 +22,10 @@ A World of Warcraft (Forever) auction house addon. It adds a Market tab with:
   to look up any item MarketWall has seen. See below.
 - **Tooltips**: what one unit nets through a vendor, the market and disenchanting, after
   the auction house cut and deposit, with the one that pays most marked best; the
-  disenchant materials with their odds, how many you get and their price each, then where the
-  odds come from and what one disenchant can land at after fees, from the fewest of the
-  cheapest material to the most of the dearest. The odds start from the classic table or a
-  Forever estimate, counted as 50 disenchants, and blend in your own disenchants as you make
-  them ("Classic table + your 34 disenchants"); for ore and cloth, what one unit nets
+  disenchant materials as Disenchantry shows them, each with its icon, its name in its
+  quality colour, how many you get, its odds and its price. The odds start from the classic
+  table or a Forever estimate, counted as 50 disenchants, and blend in your own disenchants
+  as you make them (the lines then end with "Includes your 34 disenchants"); for ore and cloth, what one unit nets
   smelted into bars or woven into bolts and sold (Dark Iron takes 8 ore a bar, cloth 2 to 5
   a bolt); a stack's worth at the best of these; then high/low against the median and the
   7-day trend. Hovering a mob shows its value per kill. See below.
