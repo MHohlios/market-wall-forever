@@ -177,6 +177,7 @@ describe("DisenchantValue", function()
     Item(1002, UNCOMMON, 30, ARMOR)   -- same quality, item levels 26-30 and armor
     Observe(1001, 20, { [STRANGE_DUST] = { hits = 20, total = 40 } })
     assert.equal("Classic table + your 20 disenchants", select(2, ns.DisenchantOutcomes(1002)))
+    assert.equal(20, select(3, ns.DisenchantOutcomes(1002)))
   end)
 
   it("keeps weapons, armor and item-level buckets apart", function()
@@ -230,6 +231,7 @@ describe("DisenchantValue", function()
       { { id = STRANGE_DUST, chance = 0.8, quantity = 2.25, min = 1, max = 3 },
         { id = LESSER_MAGIC_ESSENCE, chance = 0.2, quantity = 2.25, min = 1, max = 3 } },
       CLASSIC,
+      0,
     }, { ns.DisenchantOutcomes(1001) })
     assert.is_nil(ns.DisenchantOutcomes(11287))
   end)
